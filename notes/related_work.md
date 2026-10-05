@@ -68,7 +68,7 @@ không mua được robustness); PLD (2511.00091); πRL (2510.25889); ROAD-VLA (
 | Phương pháp | Tín hiệu 3D | Giữ lại lúc inference | Backbone | LIBERO | LIBERO-Plus | Code |
 |---|---|---|---|---|---|---|
 | **Spatial Forcing** (2510.12276) | feature VGGT ↔ token ảnh lớp 24/32, cosine, α=0.5 | không | **OpenVLA-OFT** | 98.5 | không có số đáng tin | code + checkpoint công khai |
-| **ROCKET** (2602.17951) | VGGT, 10 cặp lớp, projector dùng chung | không | **OpenVLA-OFT** | 98.5 | 81.7 (train trên data LIBERO-Plus, không zero-shot) | công khai, có script SF và baseline cùng ngân sách |
+| **ROCKET** (2602.17951) | VGGT, 10 cặp lớp, projector dùng chung | không | **OpenVLA-OFT** | 98.5 | 81.7 so với baseline 80.0; paper không nói rõ zero-shot, baseline 80.0 trùng mức OFT train trên data LIBERO-Plus (79.5) [S] | công khai, có script SF và baseline cùng ngân sách |
 | GaussianWAM (2608.24714) | depth + semantic + alpha render từ trường Gaussian, head trên token lớp cuối, trọng số 0.01/0.01/0.005 | không | FastWAM / Cosmos | 97.6 / 98.6 | **52.05 → 71.29**; direct CLIP+VGGT 69.37 | repo chỉ có README |
 | FOCAL-VLA (2609.21228) | feature VGGT pool theo vùng liên quan subtask | 8+8 query token | π0.5 | 97.9 | không có | không |
 | MVUCF (2608.01826) | **depth GT + calibration** | không | GR00T-N1.6 | 98.9 | 42.8 → 65.2 | không |
@@ -99,6 +99,13 @@ giá 1 trial mỗi task.
 | suite Object | 38.9 | 25.4 | 99.0 | 73.7 | 97.6 | 72.3 | 71.8 | 66.5 |
 | suite Long | 38.7 | 38.2 | 87.0 | 89.4 | 86.8 | 63.5 | 76.9 | 66.4 |
 
+- OFT fine-tune trên data LIBERO-Plus (hơn 20.000 trajectory có nhiễu, 100k bước): tổng **79.5**, Camera 92.8,
+  Light 94.9, Noise 89.3, nhưng **Robot-init vẫn 30.3** và Layout 77.6 [V]. Nhiễu thị giác chữa được bằng data;
+  dịch chuyển trạng thái của robot thì không.
+- OFT chỉ có camera third-person đạt 16.8 ở Camera, so với 59.7 khi có thêm camera cổ tay [V] → khớp với 13–20
+  của teacher 1-camera mà ta đo.
+- 2512.02902 (CVPR 2026) [V]: nhiễu camera / ánh sáng / nền / noise được sửa bằng thích nghi one-shot vài nghìn
+  tham số ở encoder ảnh (π0.5: 48.5 → 87–91 ở góc nhìn mới); không đụng tới Robot-init.
 - Bẫy đã biết: issue #64, `task.language` lấy từ tên file biến thể nên id nhiễu bị dính vào prompt ở 4
   chiều (sửa xong Camera tăng 6.5 điểm trên mẫu con 40%). Phải sửa và ghi rõ.
 - Chưa có bảng zero-shot sạch nào cho {OFT, Spatial Forcing, ROCKET} trên cùng protocol; tự nó đã là đóng góp.
@@ -122,3 +129,53 @@ giá 1 trial mỗi task.
    giải mã 3D sụt đúng ở chỗ student bất đồng với teacher thì có intuition trước khi tốn GPU cho B3/B4.
 6. **Rủi ro phải kiểm soát**: lợi ích của định hình representation thuần có thể nhỏ; so sánh B3 và B4 cần
    cùng ngân sách và nhiều seed; đánh giá trên cùng loại GPU với lúc huấn luyện (cảnh báo của OFT/SF).
+
+## 6. Các paper cùng nhánh dựng benchmark thế nào, và mục tiêu đặt cho paper này
+
+Đọc lại tại nguồn 05/10/2026 (arXiv HTML; các mục "không nói" là paper không ghi).
+
+**Nhánh on-policy distill / post-training**: không bài nào claim vượt SOTA tuyệt đối bằng distill trên benchmark
+đã bão hoà. Họ tạo headroom bằng một student yếu, lấy teacher làm trần, và claim phần khoảng cách thu hẹp được
+cùng chi phí.
+
+| Paper | Cách tạo headroom | Claim chính | Benchmark thứ hai | Robustness | Seed / trial |
+|---|---|---|---|---|---|
+| VLA-OPD | student 1 demo/task trên 4 suite LIBERO (48.9) | 87.4 so với teacher 93.9; ít bước hơn GRPO 3 lần; ít quên task chưa thấy | RoboTwin 2.0, 4 task (45.2 → 71.1, teacher 74.0) | không có | không nói |
+| SimpleVLA-RL | 1 demo/task (48.9 → 96.9) và full data (91 → 99.1) | SOTA LIBERO + hiệu quả khi thiếu data | RoboTwin 1.0 / 2.0, robot thật (sim-to-real) | task chưa thấy | 50 trial/task, chạy 3 lần |
+| RIPT-VLA | 1 demo (3.5 → 97.2), hai backbone | QueST +10.9; OFT 96.7 → 97.5 | LIBERO-90, MetaWorld ML45 | nhiễu init state | 3 seed cho đường few-shot |
+| WAM-OPD | student một bước, yếu (33.8) | 33.8 → 65.7, giữ tốc độ của student | robot thật | không có | 60 trial/task |
+
+**Nhánh 3D**: mọi bài đều claim mức tăng trên **cùng backbone**, chỉ khác thành phần 3D; LIBERO chuẩn chỉ là
+dòng kiểm tra (+1 đến +1.5), trọng lượng nằm ở benchmark robustness / benchmark khó hơn / hiệu quả train / robot
+thật.
+
+| Paper | Backbone | LIBERO chuẩn | Phần tạo khác biệt | Benchmark thứ hai | Robot thật |
+|---|---|---|---|---|---|
+| Spatial Forcing | OFT, π0 | 97.1 → 98.5 | hội tụ nhanh 3.8 lần; 5% data đạt 75.8; probe depth làm động cơ | RoboTwin 2.0 easy / hard | có |
+| ROCKET | OFT, π0.5 | 98.5 với khoảng 4% compute của SF | LIBERO-Plus 80.0 → 81.7 | RoboTwin 2.0 | không |
+| GaussianWAM | FastWAM, Cosmos Policy | 97.6 / 98.6 | LIBERO-Plus zero-shot 52.05 → 71.29 và 71.52 → 77.30 | RoboTwin 2.0 | có |
+| MVUCF | GR00T-N1.6 | 97.4 → 98.9 (3 checkpoint) | LIBERO-Plus zero-shot +22.4 (1 seed) | RoboTwin 38.6 → 61.9 | có |
+| FOCAL-VLA | π0.5 | 96.9 → 97.9 | RoboCasa 55.2 → 63.4 | — | có |
+| GaussianDream++ | π0.5 | 98.6 | LIBERO-Plus 85.5 → 87.8 | — | — |
+
+**Mục tiêu đề xuất** (số của ta đo trên suite Object, xem week1_status.md):
+
+1. *Setting chính = setting của VLA-OPD* (student 1 demo/task, teacher làm trần), vì đó là nơi headroom có sẵn
+   theo cấu trúc và đối thủ trực tiếp là VLA-OPD (Distill 87.4 trung bình; teacher 93.9). Khoảng cách distill →
+   teacher của họ nằm ở **Long (78.9 so với 90.7) và Spatial (84.3 so với 94.2)**; Object chỉ còn 2 điểm
+   (93.8 so với 96.1). Mốc: trung bình 4 suite ≥ 90 không dùng RL, trong đó Long ≥ 85; baseline OPD không-3D
+   của chính ta phải tái lập được trong khoảng 3 điểm quanh số của họ trước đã.
+2. *Headline = robustness trên cùng backbone*: LIBERO-Plus zero-shot, điều chưa paper distill nào báo cáo. Hiện
+   tại OPD không-3D 42.9, teacher 49.8 / 50.0. Mốc: **student vượt chính teacher của nó** (≥ 55 trên Object, tức
+   ≥ +10 so với OPD không-3D), và trong ma trận 2×2 thì 3D trên state của student hơn 3D trên state của teacher
+   một khoảng lớn hơn nhiễu (đánh giá cuối trên toàn bộ 2.576 task Object, sai số chuẩn khoảng 1 điểm).
+3. *Mở rộng sang backbone SOTA (phần thưởng, không phải điều kiện)*: OFT chuẩn trên LIBERO-Plus zero-shot, so
+   với OFT 70.2 và Spatial Forcing 71.9 mà ta đã đo. Đích hợp lý nhất là **Robot-init** (OFT 27, SF 38, kể cả
+   OFT train trên data nhiễu cũng chỉ 30.3): ≥ 50 ở Robot-init và ≥ 75 tổng, LIBERO chuẩn không tụt dưới 97.
+4. *Để thành paper hoàn chỉnh*: thêm RoboTwin 2.0 (cả hai nhánh đều dùng làm benchmark thứ hai), 3 seed cho các
+   so sánh chính, một hình chẩn đoán làm động cơ (như probe depth của Spatial Forcing; của ta là takeover +
+   dung sai gắp).
+
+"Vượt SOTA" theo nghĩa các paper này dùng là vượt đối thủ trực tiếp trong cùng setting và cùng backbone. Bảng xếp
+hạng tuyệt đối của LIBERO-Plus (lớp π0.5, 85–88) nằm ngoài tầm của backbone OFT và không bài nào trong hai nhánh
+lấy làm đích.

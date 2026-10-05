@@ -82,8 +82,9 @@ dạng kết quả đã công bố.
   3D có thể cho student độ bền mà teacher không có.
 - Camera và Light là hai chiều yếu nhất của model 1-camera, cũng là hai chiều mà các paper distill geometry
   (GaussianWAM, MVUCF) tăng mạnh nhất trên backbone khác.
-- Cần xác nhận lại trên L40 (render GPU) trước khi so với số đã công bố: nhiễu ánh sáng và camera có thể nhạy
-  với renderer hơn bản chuẩn. LIBERO-Plus đã cài xong trên L40.
+- Đã xác nhận trên L40 (render GPU), cùng 420 task: teacher **50.0%** (render CPU: 49.8%). Theo loại nhiễu
+  (GPU / CPU): Camera 20 / 13, Light 30 / 30, Noise 40 / 43, Robot 45 / 55, Layout 62 / 58, Background 82 / 73,
+  Language 72 / 75; mọi chênh lệch đều trong sai số của 60 task. Bảng LIBERO-Plus không phụ thuộc renderer.
 
 ## Những gì đã biết (LIBERO-Object, một seed)
 
