@@ -55,8 +55,11 @@ def main():
                 n = len(z["t"])
                 for f in fracs:
                     q = min(int(round(f * (n - 1))), n - 1)
+                    # last gripper command executed before this state: the wait steps open (-1); afterwards the
+                    # policy's gripper output g in [0, 1] (1 = open) was sent to the env as -sign(2g - 1)
+                    cmd = -1.0 if q == 0 else float(-np.sign(2 * z["actions"][q - 1][-1, -1] - 1))
                     jobs.append({"task_id": t, "trial_id": e["trial_id"], "query": q, "frac": f, "logged_success": outcome,
-                                 "t0": int(z["t"][q]), "state": z["sim_state"][q]})
+                                 "t0": int(z["t"][q]), "state": z["sim_state"][q], "gripper_cmd": cmd})
     out_path = os.path.join(args.out, f"takeover_{args.name}.jsonl")
     done = set()
     if os.path.exists(out_path):
@@ -78,7 +81,7 @@ def main():
         if not by_task[t]:
             del by_task[t]
         last[i] = t
-        vec.restore(i, t, job["state"], job["t0"])
+        vec.restore(i, t, job["state"], job["t0"], job["gripper_cmd"])
         slots[i] = {"job": job, "obs": None}
 
     for i in range(args.num_envs):

@@ -115,10 +115,13 @@ class EnvRunner:
         self.t, self.done = 0, False
         return dict(out, t=0, done=False, active=True)
 
-    def restore(self, sim_state, t0: int) -> Dict[str, Any]:
+    def restore(self, sim_state, t0: int, gripper_cmd: float) -> Dict[str, Any]:
         """Continue from a logged mid-episode simulator state at step `t0` (no wait steps).
 
-        The first frame is a forced render of exactly that state; the controller starts fresh, as after a reset.
+        The first frame is a forced render of exactly that state. The arm controller starts fresh, as after a
+        reset, but the gripper does not: robosuite integrates gripper commands into an internal target that is
+        not part of the simulator state, and a reset leaves it half-open, which ruins a restore during the
+        grasp. `gripper_cmd` is the last command executed before this state (-1 open, +1 close).
         """
         robo = self.env.env
         cams = [name for name in robo._observables if name.endswith(("_image", "_depth"))]
@@ -130,6 +133,8 @@ class EnvRunner:
             self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
                            for name in cams}
             self._cameras(False)
+        # PandaGripper.format_action accumulates [-1, 1] * 0.01 * sign(cmd) per substep and saturates within 4 steps
+        robo.robots[0].gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))
         self.t, self.done = t0, False
         return dict(_pack_obs(self.env, obs, self.cfg), t=t0, done=False, active=True)
 
@@ -151,12 +156,12 @@ def _worker(conn, cfg: Dict[str, Any], lock) -> None:
         while True:
             cmd, arg = conn.recv()
             if cmd in ("reset", "restore"):
-                task_id, bddl, state, t0 = arg
+                task_id, bddl, state, t0, gripper_cmd = arg
                 if task_id != cur_task:
                     if runner is not None:
                         runner.close()
                     runner, cur_task = EnvRunner(bddl, cfg, lock), task_id  # imports only the env stack, never torch
-                conn.send(("ok", runner.reset(state) if cmd == "reset" else runner.restore(state, t0)))
+                conn.send(("ok", runner.reset(state) if cmd == "reset" else runner.restore(state, t0, gripper_cmd)))
             elif cmd == "step":
                 conn.send(("ok", runner.step(arg)))
             elif cmd == "close":
@@ -199,11 +204,14 @@ class LiberoVecEnv:
 
     def reset(self, i: int, task_id: int, trial_id: int) -> None:
         """Ask env i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
-        self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0)))
+        self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0, -1.0)))
 
-    def restore(self, i: int, task_id: int, sim_state: np.ndarray, t0: int) -> None:
-        """Ask env i to continue an episode of task `task_id` from a logged simulator state at step `t0`."""
-        self.conns[i].send(("restore", (task_id, self._bddl(task_id), sim_state, t0)))
+    def restore(self, i: int, task_id: int, sim_state: np.ndarray, t0: int, gripper_cmd: float) -> None:
+        """Ask env i to continue an episode of task `task_id` from a logged simulator state at step `t0`.
+
+        `gripper_cmd` is the last gripper command executed before that state (-1 open, +1 close).
+        """
+        self.conns[i].send(("restore", (task_id, self._bddl(task_id), sim_state, t0, gripper_cmd)))
 
     def step(self, i: int, actions: np.ndarray) -> None:
         self.conns[i].send(("step", actions))

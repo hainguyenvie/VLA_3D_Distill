@@ -8,7 +8,7 @@ P="$W/third_party/LIBERO-plus"; L="$P/libero/libero"
 if [ ! -d "$L/assets/new_objects" ]; then
   mkdir -p "$W/data/libero_plus"
   Z="$W/data/libero_plus/assets.zip"
-  [ -s "$Z" ] || curl -sL --retry 5 -C - -o "$Z" https://huggingface.co/datasets/Sylvest/LIBERO-plus/resolve/main/assets.zip || { log ASSETS_FAILED; exit 1; }
+  [ -s "$Z" ] || { curl -sL --retry 5 -o "$Z.part" https://huggingface.co/datasets/Sylvest/LIBERO-plus/resolve/main/assets.zip && mv "$Z.part" "$Z"; } || { log ASSETS_FAILED; exit 1; }
   (cd "$L" && unzip -q -o "$Z") || { log UNZIP_FAILED; exit 1; }
   # the archive carries the authors' absolute path: find the assets folder inside and put it where LIBERO expects it
   A="$(find "$L" -mindepth 2 -type d -name assets -path '*LIBERO-plus-0*' | head -1)"
