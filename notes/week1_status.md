@@ -90,6 +90,36 @@ Student 1-traj trên cùng 420 task: **tổng 21.2%** (Camera 3.3, Noise 6.7, Li
    lệch pipeline, không phải hiện tượng chung.
 5. **Student lệch teacher nhiều hơn ở episode hỏng**: khoảng cách kỳ vọng action 21 bin so với 13.5 bin.
 
+## Teacher tiếp quản từ state của student (L40, render GPU)
+
+`scripts/takeover_eval.py`: khôi phục simulator về state mà student đã đi tới (kèm mục tiêu gripper và bộ điều
+khiển tay máy), rồi để policy khác chạy greedy tới hết horizon. Lấy mẫu phân tầng 6 episode cho mỗi (task, kết
+cục) từ 500 episode của B0.
+
+| Trao quyền tại (% độ dài episode) | 0% | 25% | 50% | 75% |
+|---|---|---|---|---|
+| Teacher, từ episode student **thành công** (n=53) | 96 | 92 | 98 | 100 |
+| Teacher, từ episode student **hỏng** (n=58) | **100** | **7** | 3 | 0 |
+| Đối chứng: student tự tiếp quản, episode thành công | 92 | 91 | 98 | 100 |
+| Đối chứng: student tự tiếp quản, episode hỏng | 17 | 0 | 0 | 0 |
+
+- Đối chứng qua: khôi phục state không làm hỏng episode (student lặp lại được thành công của chính nó).
+- State ban đầu của các episode hỏng không khó (teacher 100%), nhưng sau 25% episode thì teacher gần như không
+  cứu được. Episode hỏng trở thành "không thể cứu" (với teacher này) rất sớm; 77% state on-policy của student
+  nằm trong các episode hỏng, phần lớn sau điểm đó, nên nhãn action của teacher ở đó không dẫn tới thành công.
+- Đang đo mịn hơn ở 5/10/15/20% để định vị điểm không thể cứu.
+
+## LIBERO-Plus của student sau distill (Object, cùng 420 task, render CPU)
+
+| | Tổng | Camera | Light | Noise | Robot | Layout | BG | Lang |
+|---|---|---|---|---|---|---|---|---|
+| Student 1-traj (trước distill) | 21.2 | 3.3 | 13.3 | 6.7 | 18.3 | 33.3 | 35.0 | 38.3 |
+| Student sau distill không-3D (reverse-KL, state teacher, vòng 4; 88% trên bản chuẩn) | 42.9 | 5.0 | **60.0** | 21.7 | 48.3 | 46.7 | 53.3 | 65.0 |
+| Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
+
+Distill không-3D đã kéo student từ 21% lên 43% trên LIBERO-Plus, gần teacher (50%). Riêng Light student vượt
+teacher (60 so với 30; mỗi ô 60 task, sai số chuẩn khoảng 6 điểm), còn Camera và Noise vẫn rất thấp.
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
