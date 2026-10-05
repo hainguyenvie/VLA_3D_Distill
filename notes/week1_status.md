@@ -238,6 +238,7 @@ Chạy lại có lưu state: 71.4% (lần trước 70.2%). 120 episode hỏng:
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 4; 88% trên bản chuẩn) | 42.9 | 5.0 | **60.0** | 21.7 | 48.3 | 46.7 | 53.3 | 65.0 |
 | Student sau distill không-3D (reverse-KL, **state student**, vòng 10; 89% trên bản chuẩn) | 46.9 | 11.7 | 45.0 | 26.7 | 43.3 | 48.3 | 78.3 | 75.0 |
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 8; 90% trên bản chuẩn) | 45.7 | 6.7 | 56.7 | 18.3 | 55.0 | 45.0 | 73.3 | 65.0 |
+| Student sau distill không-3D (reverse-KL, state student, **vòng 20**; 86.2% trên 500 episode chuẩn) | 48.1 | 13.3 | 61.7 | 21.7 | 46.7 | 48.3 | 80.0 | 65.0 |
 | Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
 
 Distill không-3D đã kéo student từ 21% lên 43% trên LIBERO-Plus, gần teacher (50%). Riêng Light student vượt
@@ -277,6 +278,9 @@ Teacher RL của SimpleVLA-RL (`Haozhan72/openvla-oft-libero10-traj1-rl`, cùng 
 95. Thấp hơn paper khoảng 6 điểm, cùng chiều với student Object (51.4 so với 54.9). Vừa qua ngưỡng 85% đã đặt nên
 dùng làm teacher cho Long.
 
+Student 1-traj của Long, eval đầu của run distill (100 episode, greedy): **17%** (paper 17.3); theo task 0 / 20 / 60 /
+10 / 0 / 30 / 30 / 0 / 0 / 20.
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
@@ -289,6 +293,14 @@ dùng làm teacher cho Long.
   theo từng loại nhiễu.
 
 ## Lỗi của chính mình đã gặp (để không lặp lại)
+
+- Thêm tham số `obs` vào giao diện `act` cho policy OFT mà không cập nhật `RebinnedPolicy`: nhánh state-teacher (B3)
+  crash ngay vòng đầu và nằm im một giờ vì hàng đợi không kiểm tra run có qua được vòng 1 hay không. Sau khi khởi
+  động một run từ hàng đợi phải có bước xác nhận nó đã ghi vòng 1.
+- Tính ngân sách bộ nhớ GPU bằng tay, lẫn GiB với "GB" và không tính process của dự án khác trên cùng card: run
+  Long bị OOM ở vòng 1. Đã thay bằng cổng bộ nhớ GPU có khoá trong `run_py.sh`.
+- Dùng `pkill -f <mẫu>` qua ssh, mẫu nằm trong chính dòng lệnh nên tự giết phiên của mình (lần thứ hai). Chỉ kill
+  theo PID sau khi loại `$$`.
 
 - Frame trễ/đen từ episode thứ hai của mỗi worker sau khi tối ưu render: gate chỉ kiểm episode đầu. Đã thêm gate
   nhiều episode liên tiếp. Hậu quả: một kết luận sai về renderer đã được báo rồi phải rút lại.
