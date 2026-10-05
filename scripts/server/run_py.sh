@@ -29,10 +29,12 @@ if [ "$NEED" -gt 0 ]; then
     flock -u 9
     log "waiting for GPU memory: $(gpu_free) GiB free, need $NEED"; sleep $((90 + RANDOM % 60))
   done
-  (sleep "$HOLD"; flock -u 9) &
+  (sleep "$HOLD" 9>&-; flock -u 9) > /dev/null 2>&1 &  # detached from our output; ended early when the job ends
+  HOLD_PID=$!
 fi
 log "start $SCRIPT on gpu $GPU (rev $(cat "$REPO/REVISION" 2>/dev/null), $(avail) GB RAM available)"
 nice -n 10 "$PY" -u "$REPO/$SCRIPT" "$@" 9>&-
 RC=$?
+[ -n "${HOLD_PID:-}" ] && kill "$HOLD_PID" 2>/dev/null  # a finished job no longer needs its reservation
 log "exit $RC"
 exit $RC
