@@ -22,9 +22,22 @@ clone_bg https://github.com/PRIME-RL/SimpleVLA-RL.git SimpleVLA-RL
 
 if [ ! -x "$PY" ]; then
   log "creating conda env"
-  "$HOME/miniconda3/bin/conda" create -y -q -p "$W/envs/oft" -c conda-forge --override-channels python=3.10 pip > /dev/null || die CONDA_FAILED
+  if [ -x "$HOME/miniconda3/bin/conda" ]; then  # L40 machine
+    "$HOME/miniconda3/bin/conda" create -y -q -p "$W/envs/oft" -c conda-forge --override-channels python=3.10 pip > /dev/null || die CONDA_FAILED
+  else  # H200 machine: micromamba
+    "$HOME/.local/bin/micromamba" create -y -q -p "$W/envs/oft" -c conda-forge python=3.10 pip > /dev/null || die CONDA_FAILED
+  fi
 fi
 $PY -m pip --version > /dev/null 2>&1 || $PY -m ensurepip --upgrade > /dev/null || die PIP_FAILED
+# CPU renderer (OSMesa, removed from Mesa >= 25.1) for MUJOCO_GL=osmesa; selected per machine in <workspace>/machine.env
+if [ ! -e "$W/envs/oft/lib/libOSMesa.so" ]; then
+  log "installing OSMesa"
+  if [ -x "$HOME/miniconda3/bin/conda" ]; then
+    "$HOME/miniconda3/bin/conda" install -y -q -p "$W/envs/oft" -c conda-forge --override-channels "mesalib=24" > /dev/null || die OSMESA_FAILED
+  else
+    "$HOME/.local/bin/micromamba" install -y -q -p "$W/envs/oft" -c conda-forge "mesalib=24" > /dev/null || die OSMESA_FAILED
+  fi
+fi
 # the bundled pip 23.0 downloads whole wheels just to resolve; newer pip reads the PEP 658 metadata files
 $PY -c "import pip, sys; sys.exit(int(pip.__version__.split('.')[0]) < 25)" || $PY -m pip install -q --upgrade pip || die PIP_UPGRADE_FAILED
 PIP="$PY -m pip"

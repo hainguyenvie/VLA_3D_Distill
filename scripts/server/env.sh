@@ -20,4 +20,6 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 export TF_NUM_INTRAOP_THREADS=2 TF_NUM_INTEROP_THREADS=2
 export PYTHONPATH="$W/third_party/LIBERO:$W/third_party/openvla-oft:$REPO${PYTHONPATH:+:$PYTHONPATH}"
+# machine-specific settings live next to the repo mirror, outside git (e.g. the CPU renderer on the H200 machine)
+[ -f "$W/machine.env" ] && . "$W/machine.env"
 log() { echo "[$(date +%F\ %T%z)] $*"; }

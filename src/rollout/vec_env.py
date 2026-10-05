@@ -1,9 +1,13 @@
-"""Subprocess-vectorised LIBERO environments.
+"""Vectorised LIBERO environments, one env per worker process.
 
-Each worker owns one OffScreenRenderEnv and follows the SimpleVLA-RL / OpenVLA-OFT episode protocol:
-fixed benchmark initial state, `num_steps_wait` no-op steps, then open-loop execution of action chunks.
-Workers never import TF or CUDA; rendering goes through EGL on the GPU named by MUJOCO_EGL_DEVICE_ID.
+Every env follows the SimpleVLA-RL / OpenVLA-OFT episode protocol: fixed benchmark initial state,
+`num_steps_wait` no-op steps, then open-loop execution of action chunks. Workers never import TF or CUDA.
+Rendering goes through MUJOCO_GL (EGL on the GPU named by MUJOCO_EGL_DEVICE_ID, or OSMesa on the CPU) and
+happens once per action chunk, at exactly the simulator instant at which upstream stepping renders.
+
+One env per process is required: robosuite renders garbage when a process holds two EGL contexts.
 """
+import contextlib
 import multiprocessing as mp
 import os
 import traceback
@@ -33,46 +37,107 @@ def _pack_obs(env, obs, cfg) -> Dict[str, Any]:
     return out
 
 
-def _worker(conn, cfg: Dict[str, Any]) -> None:
-    try:
-        # only the env stack is imported here: `libero.libero.benchmark` would pull torch into every worker
+class EnvRunner:
+    """One LIBERO env that renders only the frames the policy consumes.
+
+    robosuite renders every camera at every control step, but the policy only looks at the observation
+    returned by the last step of each action chunk. Camera observables are therefore disabled for all other
+    steps (physics is unaffected) and enabled just for that step, with their sampling timer restored, so
+    the frame is taken at the same physics substep as in upstream stepping (the 24th of 25, a consequence of
+    the two forced observation updates in `reset` + `set_init_state`).
+    The steps that render run under `lock`, which serialises GPU rendering across worker processes
+    (`lock` is a no-op context for the CPU renderer, where workers render in parallel).
+    """
+
+    def __init__(self, bddl: str, cfg: Dict[str, Any], lock):
         from libero.libero.envs import OffScreenRenderEnv
 
-        env, cur_task, t, done = None, None, 0, False
+        self.cfg, self.lock = cfg, lock
+        with lock:
+            self.env = OffScreenRenderEnv(
+                bddl_file_name=bddl,
+                camera_heights=cfg["resolution"],
+                camera_widths=cfg["resolution"],
+                camera_depths=bool(cfg.get("depth")),
+                camera_names=["agentview"] + (["robot0_eye_in_hand"] if cfg.get("wrist") else []),
+            )
+            self.env.seed(0)  # upstream: the seed affects object positions even with a fixed initial state
+        self.t, self.done = 0, False
+
+    def _cameras(self, enabled: bool) -> None:
+        robo = self.env.env
+        for name, ob in robo._observables.items():
+            if name.endswith(("_image", "_depth")):
+                robo.modify_observable(name, "enabled", enabled)
+                if enabled:  # enabling zeroes the sampling timer; put it back in the phase upstream stepping has
+                    ob._time_since_last_sample, ob._sampled = self._phase[name]
+
+    def _run(self, actions, stop_at_end: bool = True) -> Dict[str, Any]:
+        """Execute actions until the episode ends; only the last one renders."""
+        obs, rendered = None, False
+        for k, a in enumerate(actions):
+            if k == len(actions) - 1:
+                with self.lock:
+                    self._cameras(True)
+                    obs, _, self.done, _ = self.env.step(a)
+                    self._cameras(False)
+                rendered = True
+            else:
+                obs, _, self.done, _ = self.env.step(a)
+            self.t += 1
+            if stop_at_end and (self.done or self.t >= self.cfg["max_steps"]):
+                break
+        if not rendered:  # the episode ended mid-chunk: render its final state (only used for logging)
+            with self.lock:
+                self._cameras(True)
+                obs = self.env.env._get_observations(force_update=True)
+                self._cameras(False)
+        return dict(_pack_obs(self.env, obs, self.cfg), t=self.t, done=bool(self.done),
+                    active=not (self.done or self.t >= self.cfg["max_steps"]))
+
+    def reset(self, init_state) -> Dict[str, Any]:
+        with self.lock:  # a (hard) reset rebuilds the simulator and its render context
+            self.env.reset()
+            self.env.set_init_state(init_state)
+            # sampling-timer state of each camera at the start of a control step (identical at every step)
+            self._phase = {name: (ob._time_since_last_sample, ob._sampled)
+                           for name, ob in self.env.env._observables.items() if name.endswith(("_image", "_depth"))}
+            self._cameras(False)
+        self.t = -self.cfg["num_steps_wait"]
+        out = self._run([DUMMY_ACTION] * self.cfg["num_steps_wait"], stop_at_end=False)  # upstream ignores `done` here
+        self.t, self.done = 0, False
+        return dict(out, t=0, done=False, active=True)
+
+    def step(self, actions) -> Dict[str, Any]:
+        return self._run([a.tolist() for a in actions])  # (k, 7) actions, already gripper-post-processed
+
+    def close(self) -> None:
+        with self.lock:
+            self.env.close()
+
+
+def _worker(conn, cfg: Dict[str, Any], lock) -> None:
+    import faulthandler
+
+    faulthandler.enable()  # a crash inside MuJoCo / EGL otherwise kills the worker without any message
+    try:
+        runner, cur_task = None, None
+        lock = lock if lock is not None else contextlib.nullcontext()
         while True:
             cmd, arg = conn.recv()
             if cmd == "reset":
                 task_id, bddl, init_state = arg
                 if task_id != cur_task:
-                    if env is not None:
-                        env.close()
-                    env = OffScreenRenderEnv(
-                        bddl_file_name=bddl,
-                        camera_heights=cfg["resolution"],
-                        camera_widths=cfg["resolution"],
-                        camera_depths=bool(cfg.get("depth")),
-                    )
-                    env.seed(0)  # upstream: the seed affects object positions even with a fixed initial state
-                    cur_task = task_id
-                env.reset()
-                obs = env.set_init_state(init_state)
-                for _ in range(cfg["num_steps_wait"]):
-                    obs, _, _, _ = env.step(DUMMY_ACTION)
-                t, done = 0, False
-                conn.send(("ok", dict(_pack_obs(env, obs, cfg), t=0, done=False, active=True)))
+                    if runner is not None:
+                        runner.close()
+                    runner, cur_task = EnvRunner(bddl, cfg, lock), task_id  # imports only the env stack, never torch
+                conn.send(("ok", runner.reset(init_state)))
             elif cmd == "step":
-                for a in arg:  # (k, 7) actions, already gripper-post-processed
-                    obs, _, done, _ = env.step(a.tolist())
-                    t += 1
-                    if done or t >= cfg["max_steps"]:
-                        break
-                active = not (done or t >= cfg["max_steps"])
-                conn.send(("ok", dict(_pack_obs(env, obs, cfg), t=t, done=bool(done), active=active)))
+                conn.send(("ok", runner.step(arg)))
             elif cmd == "close":
-                if env is not None:
-                    env.close()
                 conn.send(("ok", None))
-                return
+                conn.close()
+                os._exit(0)  # skip the slow env / EGL teardown
     except Exception:  # surface the traceback in the parent instead of dying silently
         conn.send(("error", traceback.format_exc()))
 
@@ -97,27 +162,30 @@ class LiberoVecEnv:
             task = self.suite.get_task(i)
             self._bddl[i] = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
             self._init[i] = np.asarray(self.suite.get_task_init_states(i))
+        self.num_envs = num_envs
         ctx = mp.get_context("spawn")
+        # GPU rendering is serialised across workers: concurrent EGL rendering from several processes gets them
+        # killed by the driver on the H200 machine (NVRM Xid 31). The CPU renderer needs no lock.
+        lock = ctx.Lock() if os.environ.get("MUJOCO_GL", "egl") == "egl" else None
         self.conns, self.procs = [], []
         for _ in range(num_envs):
             parent, child = ctx.Pipe()
-            p = ctx.Process(target=_worker, args=(child, self.cfg), daemon=True)
+            p = ctx.Process(target=_worker, args=(child, self.cfg, lock), daemon=True)
             p.start()
             child.close()
             self.conns.append(parent)
             self.procs.append(p)
-        self.num_envs = num_envs
-
-    def send(self, i: int, cmd: str, arg: Any = None) -> None:
-        self.conns[i].send((cmd, arg))
 
     def reset(self, i: int, task_id: int, trial_id: int) -> None:
-        """Ask worker i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
-        self.send(i, "reset", (task_id, self._bddl[task_id], self._init[task_id][trial_id]))
+        """Ask env i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
+        self.conns[i].send(("reset", (task_id, self._bddl[task_id], self._init[task_id][trial_id])))
 
-    def recv(self, i: int, timeout: float = 600.0) -> Any:
+    def step(self, i: int, actions: np.ndarray) -> None:
+        self.conns[i].send(("step", actions))
+
+    def recv(self, i: int, timeout: float = 900.0) -> Any:
         if not self.conns[i].poll(timeout):
-            raise TimeoutError(f"env worker {i} did not answer within {timeout}s")
+            raise TimeoutError(f"env {i} did not answer within {timeout}s")
         status, payload = self.conns[i].recv()
         if status != "ok":
             raise RuntimeError(f"env worker {i} failed:\n{payload}")
@@ -127,10 +195,11 @@ class LiberoVecEnv:
         return [(i, self.suite.get_task(i).language, len(self._init[i])) for i in range(self.suite.n_tasks)]
 
     def close(self) -> None:
-        for i, p in enumerate(self.procs):
+        for conn, p in zip(self.conns, self.procs):
             try:
-                self.send(i, "close")
-                self.recv(i, timeout=20)
+                conn.send(("close", None))
+                if conn.poll(20):
+                    conn.recv()
             except Exception:
                 pass
             p.join(timeout=5)

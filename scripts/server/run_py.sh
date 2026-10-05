@@ -5,7 +5,7 @@
 set -uo pipefail
 . "$(dirname "$0")/env.sh"
 GPU="$1"; SCRIPT="$2"; shift 2
-export CUDA_VISIBLE_DEVICES="$GPU" MUJOCO_EGL_DEVICE_ID="$GPU"
+export CUDA_VISIBLE_DEVICES="$GPU" MUJOCO_EGL_DEVICE_ID="${GPU%%,*}"  # <gpu> may be a list; render on the first
 cd "$W"
 # The machine is shared, has no swap, and other users' jobs grow: wait for RAM instead of pushing it into thrashing.
 # A job with two 7B policies and 8 env workers needs about 15 GB; rollouts abort themselves below MIN_FREE_GB_RUN.

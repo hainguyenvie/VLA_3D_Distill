@@ -65,7 +65,7 @@ def main():
             max_diff = max(max_diff, float((ours["logits"][i] - single["logits"][0]).abs().max()))
         env_actions = postprocess_actions(ours["actions"])
         for i in range(2):
-            vec.send(i, "step", env_actions[i])
+            vec.step(i, env_actions[i])
         obs = [vec.recv(i) for i in range(2)]
     vec.close()
     print(f"single-sample forward == upstream predict_action (under autocast) on {2 * args.queries} states")

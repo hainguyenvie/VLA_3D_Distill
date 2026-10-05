@@ -114,7 +114,7 @@ class Collector:
                 s["actions"].append(out["actions"][j].astype(np.float32))
                 for k in self.labelers:
                     s["label_logits"][k].append(label_logits[k][j].numpy().astype(np.float16))
-                self.vec.send(i, "step", env_actions[j])
+                self.vec.step(i, env_actions[j])
             finished = []
             for i in act_idx:
                 obs = self.vec.recv(i)
