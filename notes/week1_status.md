@@ -230,6 +230,45 @@ Chạy lại có lưu state: 71.4% (lần trước 70.2%). 120 episode hỏng:
   tương đối tay kẹp – vật**. Ở student là lệch vài cm trong phân phối; ở OFT là lệch hàng chục cm khi trạng thái
   robot bị dời.
 
+## Teacher 1-camera trên LIBERO-Plus: kiểu lỗi và probe offset chuyển sang cảnh có nhiễu (L40, render GPU)
+
+Chạy lại có lưu state: 49.3% (213 hỏng / 420). Kiểu lỗi: kẹp ở sai chỗ 116 (54%), near miss 36, làm đổ 24, nhầm
+vật 20, rơi / đặt sai 16. "Kẹp ở sai chỗ" chiếm đa số ở Camera (30/51), Light (34/42), Noise (27/35), Robot-init
+(17/32); lệch ngang lúc kẹp của episode hỏng 14–22 cm.
+
+Probe offset fit trên cảnh chuẩn (feature của teacher; sai số 0.4–0.6 cm ở đó) áp nguyên sang các state tiếp cận
+của teacher trên LIBERO-Plus, sai số ngang trung vị (cm), token ảnh / vị trí action:
+
+| Loại nhiễu | Episode thành công | Episode hỏng |
+|---|---|---|
+| Background | 1.1 / 1.4 | 1.6 / 1.7 |
+| Language | 0.7 / 1.4 | 2.0 / **11.7** |
+| Layout | 1.4 / 1.9 | 6.6 / 6.7 |
+| Light | 2.3 / 3.6 | 3.0 / 5.5 |
+| Robot-init | 2.8 / 3.5 | 4.6 / 6.6 |
+| Sensor Noise | 2.3 / 2.7 | 7.8 / 8.0 |
+| Camera | 3.1 / 2.8 | 7.2 / 9.2 |
+
+- Khác hẳn trong phân phối: dưới nhiễu thị giác, hình học đọc được từ feature **hỏng theo** (từ dưới 1 cm lên
+  6–10 cm ở episode hỏng của Camera / Noise / Layout), và episode hỏng có sai số gấp 2–4 lần episode thành công
+  cùng loại nhiễu. Ở đây nhận thức là nút thắt thật, đúng chỗ thước đo chính (LIBERO-Plus) đang đo.
+- Language: token ảnh vẫn định vị đúng vật (2 cm) nhưng feature ở vị trí action chỉ sang chỗ khác (11.7 cm): lỗi
+  hiểu câu lệnh, không phải lỗi nhìn.
+- Dè dặt: probe chỉ được fit trên cảnh chuẩn, nên sai số lớn có thể do probe không bất biến chứ chưa chắc feature
+  mất thông tin; nhưng head action của policy cũng ở đúng hoàn cảnh đó (chỉ học trên cảnh chuẩn).
+
+**Phép thử oracle tiếp cận (chạy thử 24 episode, L40):** thay chuyển động ngang của student bằng servo đặc quyền
+tới tâm vật cho đến lần kẹp đầu. Task 4 (chủ yếu nhầm chỗ): 7/8, so với 6–8% của student. Task 0 và 3 (near miss /
+làm đổ): 0/8, tệ hơn student (22% và 2%), tức servo tới tâm vật chưa phải cận trên sạch cho các task này (cần
+đúng cả độ cao / điểm kẹp). Chưa chạy bản đầy đủ.
+
+## LIBERO-Long: student trên hai renderer
+
+Student 1-traj của Long, 100 episode đầu, greedy: **27%** trên L40 (render GPU) so với **16–17%** trên H200 (render
+CPU); paper 17.3. Ở Object hai renderer khớp nhau (51.4 / 52.6), ở Long thì lệch khoảng 10 điểm (cỡ 2 lần sai số
+chuẩn của hiệu). Mọi run Long đang chạy trên H200 nên so sánh nội bộ vẫn cùng renderer; cần đo lại 500 episode ở
+cả hai máy trước khi so với số đã công bố.
+
 ## LIBERO-Plus của student sau distill (Object, cùng 420 task, render CPU)
 
 | | Tổng | Camera | Light | Noise | Robot | Layout | BG | Lang |
@@ -239,6 +278,7 @@ Chạy lại có lưu state: 71.4% (lần trước 70.2%). 120 episode hỏng:
 | Student sau distill không-3D (reverse-KL, **state student**, vòng 10; 89% trên bản chuẩn) | 46.9 | 11.7 | 45.0 | 26.7 | 43.3 | 48.3 | 78.3 | 75.0 |
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 8; 90% trên bản chuẩn) | 45.7 | 6.7 | 56.7 | 18.3 | 55.0 | 45.0 | 73.3 | 65.0 |
 | Student sau distill không-3D (reverse-KL, state student, **vòng 20**; 86.2% trên 500 episode chuẩn) | 48.1 | 13.3 | 61.7 | 21.7 | 46.7 | 48.3 | 80.0 | 65.0 |
+| Student sau distill không-3D (reverse-KL, state teacher, vòng 20; 73.2% trên 500 episode chuẩn) | 39.0 | 5.0 | 50.0 | 15.0 | 48.3 | 38.3 | 63.3 | 53.3 |
 | Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
 
 Distill không-3D đã kéo student từ 21% lên 43% trên LIBERO-Plus, gần teacher (50%). Riêng Light student vượt
