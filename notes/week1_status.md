@@ -178,6 +178,55 @@ của student thì teacher thành công 95% (n=62); **sau** lần kẹp đó ch�
   hội giúp. Gợi ý cho phương pháp (chưa kiểm chứng): đặt giám sát 3D và trọng số distill vào các state tiền
   tiếp xúc mà student thực sự đi qua, thay vì các state "recovery" sau khi đã hỏng.
 
+## Probe offset tay kẹp → vật đích trên feature đóng băng của student (`scripts/probe_offset.py`)
+
+Câu hỏi: lúc student kẹp lệch vài cm, representation của nó có "biết" vật ở đâu so với tay kẹp không? Probe nhỏ
+(attention pooling + MLP) hồi quy vector tay kẹp → vật đích từ feature đóng băng, chỉ trên state **trước lần kẹp
+đầu tiên** của 500 episode B0; fit trên trial 0–39, đo trên trial 40–49 (100 episode, 748 state). "Thuộc lòng" là
+mốc không nhìn ảnh: offset trung bình của cùng task và cùng thứ tự query.
+
+| Sai số ngang trung vị (cm) | Token ảnh lớp 24 | Hidden state ở 56 vị trí action (lớp cuối) | Thuộc lòng |
+|---|---|---|---|
+| Mọi state tiếp cận, episode thành công | 0.61 | 0.86 | 1.77 |
+| Mọi state tiếp cận, episode hỏng | 0.78 | 1.02 | 2.15 |
+| Hai query cuối trước khi kẹp, thành công | 0.50 | 0.67 | 1.84 |
+| Hai query cuối trước khi kẹp, hỏng | 0.81 | 1.05 | 2.75 |
+| … riêng near miss | 0.68 | 0.95 | 2.73 |
+| … riêng nhầm vật / nhầm chỗ | 0.85 | 1.69 | 4.32 |
+
+- **Thông tin hình học có sẵn và đủ chính xác**: ngay trên episode hỏng, feature vẫn cho vị trí vật so với tay
+  kẹp với sai số khoảng 1 cm, trong khi cú kẹp thật lệch trung vị 7.2 cm (near miss 3.5 cm) và dung sai gắp là
+  2.5 cm. Thông tin này còn nguyên ở chính các vị trí mà action được giải mã ra.
+- **Cú kẹp trượt đi theo quỹ đạo thuộc lòng, không theo vị trí vật**: trên episode hỏng, vector lệch của cú kẹp
+  tương quan r = 0.79 với độ lệch của cảnh hiện tại so với offset trung bình lúc train (mốc "thuộc lòng"), và chỉ
+  r = 0.11 với sai số của probe trên token ảnh. Episode thành công: r = 0.28.
+- Kết luận tạm (một seed, 100 episode held-out, probe phi tuyến): lỗi chính của student **không phải thiếu nhận
+  thức 3D**, mà là action không dùng thông tin hình học đã có; student phát lại quỹ đạo của 1 demo thay vì bám
+  theo vật. Khớp với probe depth (mục 3 ở trên) và với việc nhánh có loss depth chưa cho khác biệt.
+
+## Failure của OFT chuẩn trên LIBERO-Plus theo loại nhiễu (H200, cùng 420 task, có lưu state)
+
+Chạy lại có lưu state: 71.4% (lần trước 70.2%). 120 episode hỏng:
+
+| Loại nhiễu | Hỏng / 60 | Nhầm vật hoặc nhầm chỗ | Làm đổ vật | Nhấc được rồi rơi / đặt sai | Near miss | Lệch ngang lúc kẹp (trung vị, episode hỏng) |
+|---|---|---|---|---|---|---|
+| Robot-init | 43 | **31** | 7 | 4 | 1 | 18.6 cm |
+| Camera | 31 | 4 | 12 | **14** | 1 | 4.6 cm |
+| Layout | 20 | 11 | 4 | 1 | 4 | 13.7 cm |
+| Noise | 17 | 6 | 2 | 5 | 4 | 5.1 cm |
+| Light | 6 | 3 | 0 | 2 | 1 | 12.9 cm |
+| Language / Background | 3 | 0 | 0 | 3 | 0 | — |
+| **Tổng** | 120 | 55 (46%) | 25 (21%) | 29 (24%) | 11 (9%) | 10.2 cm |
+
+- Model SOTA hỏng theo kiểu khác student: không còn là lệch vài cm, mà **đưa tay tới sai chỗ** (lệch 10–20 cm).
+  Riêng Robot-init, 31/43 failure là kẹp ở chỗ khác hẳn vật đích: khi tư thế xuất phát bị dời, policy vẫn thực
+  hiện chuyển động quen thuộc thay vì hướng tới vật.
+- Camera hỏng muộn hơn: gắp được rồi làm rơi / đặt trượt giỏ (14), hoặc làm đổ vật (12).
+- Lần kẹp đầu vẫn ở bước 40–48 cho cả thành công lẫn hỏng: lỗi vẫn được quyết định ở pha tiếp cận.
+- Hai phân tích cùng chỉ một hướng: **policy phát lại chuyển động đã học thay vì đóng vòng điều khiển trên vị trí
+  tương đối tay kẹp – vật**. Ở student là lệch vài cm trong phân phối; ở OFT là lệch hàng chục cm khi trạng thái
+  robot bị dời.
+
 ## LIBERO-Plus của student sau distill (Object, cùng 420 task, render CPU)
 
 | | Tổng | Camera | Light | Noise | Robot | Layout | BG | Lang |
