@@ -16,5 +16,8 @@ export PYOPENGL_PLATFORM=egl
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export TOKENIZERS_PARALLELISM=false
 export PYTHONUNBUFFERED=1
+# 96 cores, shared: without these every process starts ~96 BLAS / OpenMP / TF threads (load average in the hundreds)
+export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMBA_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+export TF_NUM_INTRAOP_THREADS=2 TF_NUM_INTEROP_THREADS=2
 export PYTHONPATH="$W/third_party/LIBERO:$W/third_party/openvla-oft:$REPO${PYTHONPATH:+:$PYTHONPATH}"
 log() { echo "[$(date +%F\ %T%z)] $*"; }

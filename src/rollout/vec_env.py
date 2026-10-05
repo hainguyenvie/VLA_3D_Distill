@@ -35,20 +35,17 @@ def _pack_obs(env, obs, cfg) -> Dict[str, Any]:
 
 def _worker(conn, cfg: Dict[str, Any]) -> None:
     try:
-        from libero.libero import benchmark, get_libero_path
+        # only the env stack is imported here: `libero.libero.benchmark` would pull torch into every worker
         from libero.libero.envs import OffScreenRenderEnv
 
-        suite = benchmark.get_benchmark_dict()[cfg["suite"]]()
-        env, cur_task, init_states, t, done = None, None, None, 0, False
+        env, cur_task, t, done = None, None, 0, False
         while True:
             cmd, arg = conn.recv()
             if cmd == "reset":
-                task_id, trial_id = arg
+                task_id, bddl, init_state = arg
                 if task_id != cur_task:
                     if env is not None:
                         env.close()
-                    task = suite.get_task(task_id)
-                    bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
                     env = OffScreenRenderEnv(
                         bddl_file_name=bddl,
                         camera_heights=cfg["resolution"],
@@ -56,10 +53,9 @@ def _worker(conn, cfg: Dict[str, Any]) -> None:
                         camera_depths=bool(cfg.get("depth")),
                     )
                     env.seed(0)  # upstream: the seed affects object positions even with a fixed initial state
-                    init_states = suite.get_task_init_states(task_id)
                     cur_task = task_id
                 env.reset()
-                obs = env.set_init_state(init_states[trial_id])
+                obs = env.set_init_state(init_state)
                 for _ in range(cfg["num_steps_wait"]):
                     obs, _, _, _ = env.step(DUMMY_ACTION)
                 t, done = 0, False
@@ -72,8 +68,6 @@ def _worker(conn, cfg: Dict[str, Any]) -> None:
                         break
                 active = not (done or t >= cfg["max_steps"])
                 conn.send(("ok", dict(_pack_obs(env, obs, cfg), t=t, done=bool(done), active=active)))
-            elif cmd == "task_info":
-                conn.send(("ok", [(i, suite.get_task(i).language, len(suite.get_task_init_states(i))) for i in range(suite.n_tasks)]))
             elif cmd == "close":
                 if env is not None:
                     env.close()
@@ -83,11 +77,26 @@ def _worker(conn, cfg: Dict[str, Any]) -> None:
         conn.send(("error", traceback.format_exc()))
 
 
+def mem_available_gb() -> float:
+    for line in open("/proc/meminfo"):
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) / 1e6
+    return float("inf")
+
+
 class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
                  depth: bool = False, wrist: bool = False):
+        from libero.libero import benchmark, get_libero_path
+
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
                         depth=depth, wrist=wrist)
+        self.suite = benchmark.get_benchmark_dict()[suite]()
+        self._bddl, self._init = {}, {}
+        for i in range(self.suite.n_tasks):
+            task = self.suite.get_task(i)
+            self._bddl[i] = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
+            self._init[i] = np.asarray(self.suite.get_task_init_states(i))
         ctx = mp.get_context("spawn")
         self.conns, self.procs = [], []
         for _ in range(num_envs):
@@ -102,6 +111,10 @@ class LiberoVecEnv:
     def send(self, i: int, cmd: str, arg: Any = None) -> None:
         self.conns[i].send((cmd, arg))
 
+    def reset(self, i: int, task_id: int, trial_id: int) -> None:
+        """Ask worker i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
+        self.send(i, "reset", (task_id, self._bddl[task_id], self._init[task_id][trial_id]))
+
     def recv(self, i: int, timeout: float = 600.0) -> Any:
         if not self.conns[i].poll(timeout):
             raise TimeoutError(f"env worker {i} did not answer within {timeout}s")
@@ -111,8 +124,7 @@ class LiberoVecEnv:
         return payload
 
     def task_info(self) -> List[Tuple[int, str, int]]:
-        self.send(0, "task_info")
-        return self.recv(0)
+        return [(i, self.suite.get_task(i).language, len(self._init[i])) for i in range(self.suite.n_tasks)]
 
     def close(self) -> None:
         for i, p in enumerate(self.procs):

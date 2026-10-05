@@ -34,7 +34,7 @@ def main():
     print("tasks", tasks, "prompt lengths", [lens[t] for t in tasks])
     descs = [info[t][1] for t in tasks]
     for i, t in enumerate(tasks):
-        vec.send(i, "reset", (t, 0))
+        vec.reset(i, t, 0)
     obs = [vec.recv(i) for i in range(2)]
 
     max_diff, n_tok, n_same, n_plain, n_plain_same = 0.0, 0, 0, 0, 0

@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from src.policy.token_policy import TokenPolicy
-from src.rollout.vec_env import LiberoVecEnv, postprocess_actions
+from src.rollout.vec_env import LiberoVecEnv, mem_available_gb, postprocess_actions
 
 STEP_KEYS = ("rgb", "depth", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "sim_state")
 
@@ -34,6 +34,7 @@ class Collector:
                  sample: bool = False, temperature: float = 1.0, seed: int = 7):
         self.vec, self.policy, self.labelers = vec, policy, labelers or {}
         self.sample, self.temperature = sample, temperature
+        self.min_free_gb = float(os.environ.get("MIN_FREE_GB_RUN", 4))
         self.gen = torch.Generator(device=policy.device).manual_seed(seed)
         self.tasks = {i: (lang, n) for i, lang, n in vec.task_info()}
 
@@ -79,7 +80,7 @@ class Collector:
             if ep is None:
                 slots[i] = None
                 return
-            self.vec.send(i, "reset", ep)
+            self.vec.reset(i, ep[0], ep[1])
             slots[i] = {"task_id": ep[0], "trial_id": ep[1], "steps": {k: [] for k in STEP_KEYS}, "t": [],
                         "bins": [], "logits": [], "actions": [], "label_logits": {k: [] for k in self.labelers},
                         "obs": None, "t0": time.time()}
@@ -90,7 +91,12 @@ class Collector:
             if s is not None:
                 s["obs"] = self.vec.recv(i)
 
+        rounds = 0
         while any(s is not None for s in slots):
+            rounds += 1
+            if rounds % 20 == 0 and mem_available_gb() < self.min_free_gb:
+                # shared machine without swap: stop before we push it into thrashing; finished episodes are saved
+                raise MemoryError(f"only {mem_available_gb():.1f} GB RAM available on the machine, aborting the rollout")
             act_idx = [i for i, s in enumerate(slots) if s is not None]
             images = [slots[i]["obs"]["rgb"] for i in act_idx]
             descs = [self.tasks[slots[i]["task_id"]][0] for i in act_idx]
