@@ -1,0 +1,20 @@
+# Source this at the top of every job script on the server: . "$(dirname "$0")/env.sh"
+# Layout: <workspace>/repo is the rsync mirror of this git repo; envs, weights, data, logs, outputs sit next to it.
+# Everything (caches, configs, weights) stays inside the workspace; nothing is written to the shared home.
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+W="$(dirname "$REPO")"
+export W REPO
+export PY="$W/envs/oft/bin/python"
+export HF_HOME="$W/checkpoints/hf"
+export TORCH_HOME="$W/checkpoints/torch"
+export PIP_CACHE_DIR="$W/.cache/pip"
+export XDG_CACHE_HOME="$W/.cache"
+export TFDS_DATA_DIR="$W/data/tfds"
+export LIBERO_CONFIG_PATH="$W/.libero"
+export MUJOCO_GL=egl
+export PYOPENGL_PLATFORM=egl
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export TOKENIZERS_PARALLELISM=false
+export PYTHONUNBUFFERED=1
+export PYTHONPATH="$W/third_party/LIBERO:$W/third_party/openvla-oft:$REPO${PYTHONPATH:+:$PYTHONPATH}"
+log() { echo "[$(date +%F\ %T%z)] $*"; }

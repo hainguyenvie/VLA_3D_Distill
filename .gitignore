@@ -1,0 +1,22 @@
+# infra identity — never commit (node/host/path/alias)
+infra.env
+# heavy / rebuildable
+data/
+outputs/
+logs/
+checkpoints/
+third_party/
+trajectories/
+cache/
+envs/
+.venv*/
+__pycache__/
+*.pyc
+*.pt
+*.pth
+*.ply
+*.zip
+*.mp4
+*.hdf5
+# reference papers (copyrighted PDFs) — local/server only
+papers/
