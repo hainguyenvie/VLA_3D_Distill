@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 . ./infra.env
 # results record which code produced them: commit hash, plus "-dirty" when the tree has uncommitted changes
-REV="$(git rev-parse --short HEAD)$([ -n "$(git status --porcelain)" ] && echo -dirty)"
+REV="$(git rev-parse --short HEAD)$([ -n "$(git status --porcelain)" ] && echo -dirty || true)"
 push() {  # push <ssh alias> <remote root, relative to the remote home>
   [ -n "$1" ] && [ -n "$2" ] || return 0
   ssh -n "$1" "mkdir -p $2/repo"
