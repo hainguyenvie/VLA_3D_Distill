@@ -62,6 +62,21 @@ OFT chuẩn (checkpoint chính thức, 2 camera + proprio) đo trong harness c�
 toàn bộ suite Object; trên LIBERO-Object chuẩn nó đạt 96.8% (paper 98.4). Harness LIBERO-Plus vì vậy tái lập được
 dạng kết quả đã công bố.
 
+**Spatial Forcing** (cùng backbone OFT, căn feature theo VGGT lúc train; checkpoint đã công bố) trên cùng 420 task:
+**71.9%**, chỉ hơn OFT 1.7 điểm.
+
+| | Tổng | Camera | Robot | Noise | Layout | Light | BG | Lang |
+|---|---|---|---|---|---|---|---|---|
+| OFT chuẩn | 70.2 | 48.3 | 26.7 | 65.0 | 66.7 | 90.0 | 98.3 | 96.7 |
+| Spatial Forcing | 71.9 | 56.7 | 38.3 | **41.7** | 70.0 | 100 | 96.7 | 100 |
+| Chỉ SF đúng / chỉ OFT đúng / cả hai hỏng (số task) | 34 / 27 / 91 | 11 / 6 / 20 | 10 / 3 / 34 | 1 / 15 / 20 | 3 / 1 / 17 | 6 / 0 / 0 | 1 / 2 / 0 | 2 / 0 / 0 |
+
+- So cặp trên cùng task: SF hơn rõ ở Light (6–0), có xu hướng hơn ở Robot-init (10–3) và Camera (11–6), nhưng
+  **kém hẳn ở Sensor Noise (1–15)**. Tổng thể 34–27 là chưa phân biệt được với nhiễu.
+- **91/420 task (22%) cả hai model SOTA đều hỏng**, dồn vào Robot-init (34/60), Camera (20/60), Noise (20/60),
+  Layout (17/60). Đây là headroom còn nguyên ngay cả với phương pháp 3D mạnh nhất có checkpoint công khai.
+- Theo mức khó, SF: 96 / 88 / 73 / 63 / 47 (L1→L5); OFT: 92 / 85 / 74 / 70 / 40.
+
 Đọc bảng này:
 - Headroom thật nằm ở đây: ngay cả teacher cũng chỉ đạt một nửa, và trần **không** bị teacher chặn, vì giám sát
   3D có thể cho student độ bền mà teacher không có.
