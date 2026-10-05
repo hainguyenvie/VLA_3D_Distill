@@ -10,6 +10,7 @@ One env per process is required: robosuite renders garbage when a process holds 
 import contextlib
 import multiprocessing as mp
 import os
+import re
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -82,8 +83,8 @@ class EnvRunner:
                     obs, _, self.done, _ = self.env.step(a)
                     self._cameras(False)
                 rendered = True
-            else:
-                obs, _, self.done, _ = self.env.step(a)
+            else:  # robosuite-level step: the LIBERO-Plus wrapper post-processes the frame, which is absent here
+                obs, _, self.done, _ = self.env.env.step(a)
             self.t += 1
             if stop_at_end and (self.done or self.t >= self.cfg["max_steps"]):
                 break
@@ -181,11 +182,7 @@ class LiberoVecEnv:
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
                         depth=depth, wrist=wrist)
         self.suite = benchmark.get_benchmark_dict()[suite]()
-        self._bddl, self._init = {}, {}
-        for i in range(self.suite.n_tasks):
-            task = self.suite.get_task(i)
-            self._bddl[i] = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-            self._init[i] = np.asarray(self.suite.get_task_init_states(i))
+        self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs
         ctx = mp.get_context("spawn")
         # GPU rendering is serialised across workers: concurrent EGL rendering from several processes gets them
@@ -202,11 +199,11 @@ class LiberoVecEnv:
 
     def reset(self, i: int, task_id: int, trial_id: int) -> None:
         """Ask env i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
-        self.conns[i].send(("reset", (task_id, self._bddl[task_id], self._init[task_id][trial_id], 0)))
+        self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0)))
 
     def restore(self, i: int, task_id: int, sim_state: np.ndarray, t0: int) -> None:
         """Ask env i to continue an episode of task `task_id` from a logged simulator state at step `t0`."""
-        self.conns[i].send(("restore", (task_id, self._bddl[task_id], sim_state, t0)))
+        self.conns[i].send(("restore", (task_id, self._bddl(task_id), sim_state, t0)))
 
     def step(self, i: int, actions: np.ndarray) -> None:
         self.conns[i].send(("step", actions))
@@ -223,8 +220,31 @@ class LiberoVecEnv:
             raise RuntimeError(f"env worker {i} failed:\n{payload}")
         return payload
 
+    def _bddl(self, task_id: int) -> str:
+        task = self.suite.get_task(task_id)
+        return os.path.join(self._bddl_root, task.problem_folder, task.bddl_file)
+
+    def init_states(self, task_id: int) -> np.ndarray:
+        if task_id not in self._init_cache:
+            self._init_cache[task_id] = np.asarray(self.suite.get_task_init_states(task_id))
+        return self._init_cache[task_id]
+
+    def task_language(self, task_id: int) -> str:
+        """Instruction for the prompt.
+
+        LIBERO-Plus derives `task.language` from the file name, so the perturbation id ("table 1", "view 0 0 100
+        2 4 initstate 0", "light 3", ...) leaks into the instruction (LIBERO-plus issue #64). Those suffixes are
+        stripped here; only the "language" perturbations keep their rewritten instruction.
+        """
+        task = self.suite.get_task(task_id)
+        if "_language_" in task.name:
+            return task.language
+        base = re.sub(r"_(table|tb|add|light|level)_?\d+.*$|_view_.*$", "", task.name)
+        return task.language if base == task.name else " ".join(base.split("_"))
+
     def task_info(self) -> List[Tuple[int, str, int]]:
-        return [(i, self.suite.get_task(i).language, len(self._init[i])) for i in range(self.suite.n_tasks)]
+        """(task id, instruction, number of benchmark initial states) for every task of the suite."""
+        return [(i, self.task_language(i), len(self.init_states(i))) for i in range(self.suite.n_tasks)]
 
     def close(self) -> None:
         for conn, p in zip(self.conns, self.procs):

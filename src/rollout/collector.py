@@ -33,7 +33,7 @@ def token_stats(logits: torch.Tensor, ref_logits: Optional[torch.Tensor] = None)
 
 class Collector:
     def __init__(self, vec: LiberoVecEnv, policy: TokenPolicy, labelers: Optional[Dict[str, TokenPolicy]] = None,
-                 sample: bool = False, temperature: float = 1.0, seed: int = 7):
+                 sample: bool = False, temperature: float = 1.0, seed: int = 7, task_ids: Optional[Sequence[int]] = None):
         self.vec, self.policy, self.labelers = vec, policy, labelers or {}
         self.sample, self.temperature = sample, temperature
         self.min_free_gb = float(os.environ.get("MIN_FREE_GB_RUN", 4))
@@ -42,7 +42,10 @@ class Collector:
         self._saver = ThreadPoolExecutor(2)  # npz compression off the rollout loop (zlib releases the GIL)
         self._jsonl_lock = threading.Lock()
         self.gen = torch.Generator(device=policy.device).manual_seed(seed)
-        self.tasks = {i: (lang, n) for i, lang, n in vec.task_info()}
+        if task_ids is None:  # (instruction, number of initial states) per task
+            self.tasks = {i: (lang, n) for i, lang, n in vec.task_info()}
+        else:  # only these tasks (LIBERO-Plus has thousands; avoids loading every initial-state file)
+            self.tasks = {i: (vec.task_language(i), len(vec.init_states(i))) for i in task_ids}
 
     def run(self, episodes: Sequence[Tuple[int, int]], out_dir: Optional[str] = None, save_steps: bool = True,
             on_episode: Optional[Callable[[dict], None]] = None, keep_steps: bool = False) -> List[dict]:
