@@ -302,12 +302,19 @@ Từ vòng 8 trở đi B2 ổn định quanh 82–90 (trung bình 86.6), còn B2
 | Teacher full-SFT (H200) | 90 | 100 | 100 | 80 | 94 | 100 | 100 | 92 | 100 | 96 | 95.2 |
 | **B2** (state student, không 3D) | 72 | 98 | 96 | 74 | 96 | **30** | 100 | 96 | 100 | 100 | **86.2** |
 | **B2′** (state teacher, không 3D) | 76 | 74 | 84 | 52 | 100 | 60 | 86 | 96 | **4** | 100 | **73.2** |
+| **B4** (state student + depth) | 42 | 92 | 98 | 80 | 88 | 76 | 98 | 98 | 100 | 90 | **86.2** |
 
 - B2 thấp hơn VLA-OPD 7.6 điểm (86.2 so với 93.8): **chưa đạt mốc "trong 3 điểm"**. Bảy task đã ở 96–100; khoảng
   hụt nằm ở task 5 (30%, trong khi student ban đầu đạt 74% và teacher 100%: distill làm *hỏng* task này) và hai
   task khó nhất 0 và 3 (72–74%).
 - B2′ có kiểu sụp tương tự ở task khác (task 8: 86% → 4%). Sụp theo từng task trên những task student vốn làm
   được là dấu hiệu bất ổn của quá trình distill (teacher khác dòng dõi, lr cố định), không phải thiếu năng lực.
+- **Idea hiện có (loss depth trên state on-policy) không hơn baseline**: B4 = 86.2%, bằng đúng B2. Đường cong train
+  cũng trùng nhau (vòng 10–20: B4 88 / 81 / 80 / 81 / 82 / 87; B2 89 / 85 / 90 / 84 / 82 / 88). Khác nhau chỉ ở
+  task nào bị sụp (B4: task 0 còn 42%; B2: task 5 còn 30%), tức là nhiễu giữa các run, không phải hiệu ứng của depth.
+- Task 5 của B2 theo checkpoint (50 trial): vòng 10: 60%, vòng 14: 64%, vòng 20: 30%; task 0: 76 / 72 / 72; task 3:
+  84 / 70 / 74. Task 5 chưa bao giờ về lại mức 74% của student ban đầu và còn tụt tiếp ở cuối: quá trình distill
+  dao động chứ không hội tụ (lr cố định 1e-4, khoảng 2000 state mỗi vòng, teacher khác dòng dõi).
 - Sai khác so với VLA-OPD cần nhớ khi so: LoRA thay vì full-parameter, khoảng 41k state so với khoảng 300k của
   họ, teacher full-SFT chuyển bin thay vì teacher RL cùng dòng dõi.
 
