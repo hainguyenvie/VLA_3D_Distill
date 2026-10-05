@@ -200,6 +200,9 @@ mốc không nhìn ảnh: offset trung bình của cùng task và cùng thứ t�
 - **Cú kẹp trượt đi theo quỹ đạo thuộc lòng, không theo vị trí vật**: trên episode hỏng, vector lệch của cú kẹp
   tương quan r = 0.79 với độ lệch của cảnh hiện tại so với offset trung bình lúc train (mốc "thuộc lòng"), và chỉ
   r = 0.11 với sai số của probe trên token ảnh. Episode thành công: r = 0.28.
+- Cùng probe trên feature của **teacher** (cùng các state của student): token ảnh 0.37 cm, vị trí action 0.61 cm
+  (student: 0.69 và 0.91); trên hai query cuối của episode hỏng 0.43 / 0.64 (student 0.81 / 1.05). Feature của
+  teacher định vị chính xác gấp khoảng hai lần, nhưng cả hai đều nằm sâu dưới dung sai gắp 2.5 cm.
 - Kết luận tạm (một seed, 100 episode held-out, probe phi tuyến): lỗi chính của student **không phải thiếu nhận
   thức 3D**, mà là action không dùng thông tin hình học đã có; student phát lại quỹ đạo của 1 demo thay vì bám
   theo vật. Khớp với probe depth (mục 3 ở trên) và với việc nhánh có loss depth chưa cho khác biệt.
