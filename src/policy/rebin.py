@@ -68,7 +68,8 @@ class RebinnedPolicy:
         return torch.log(probs.clamp_min(1e-12))
 
     @torch.inference_mode()
-    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None):
+    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None,
+            obs=None):  # `obs` is part of the common policy interface; a token policy does not use it
         logits, _ = self.source.forward_logits(self.source.build_inputs(images, task_descriptions, pils))
         if sample:
             p = torch.softmax(logits / temperature, -1)
