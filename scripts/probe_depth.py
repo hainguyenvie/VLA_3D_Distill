@@ -77,11 +77,12 @@ def main():
         for ei in rng.permutation(len(train)):
             ep = train[ei]
             z = np.load(ep["path"])
-            idx = rng.permutation(np.arange(rng.integers(args.stride), len(z["t"]), args.stride))
+            rgb, depth = z["rgb"], z["depth"]  # each access to an npz member decompresses it again
+            idx = rng.permutation(np.arange(rng.integers(args.stride), len(rgb), args.stride))
             for s in range(0, len(idx), args.batch_size):
                 j = np.sort(idx[s : s + args.batch_size])
-                feats = features(z["rgb"][j], ep["task"])
-                target = depth_target(torch.from_numpy(z["depth"][j]).to(dev))
+                feats = features(rgb[j], ep["task"])
+                target = depth_target(torch.from_numpy(depth[j]).to(dev))
                 loss = sum(depth_loss(heads[l](feats[l].clone()), target) for l in layers)
                 opt.zero_grad(set_to_none=True)
                 loss.backward()
@@ -93,11 +94,12 @@ def main():
     rows = []
     for ep in test:
         z = np.load(ep["path"])
-        n = len(z["t"])
+        rgb, depth = z["rgb"], z["depth"]
+        n = len(rgb)
         errs = {l: [] for l in layers}
         for s in range(0, n, args.batch_size):
-            feats = features(z["rgb"][s : s + args.batch_size], ep["task"])
-            target = depth_target(torch.from_numpy(z["depth"][s : s + args.batch_size]).to(dev))
+            feats = features(rgb[s : s + args.batch_size], ep["task"])
+            target = depth_target(torch.from_numpy(depth[s : s + args.batch_size]).to(dev))
             for l in layers:
                 with torch.no_grad():
                     errs[l].append(depth_metrics(heads[l](feats[l]), target)["abs_rel"].cpu().numpy())
