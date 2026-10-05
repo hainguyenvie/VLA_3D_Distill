@@ -118,10 +118,10 @@ class EnvRunner:
     def restore(self, sim_state, t0: int, gripper_cmd: float) -> Dict[str, Any]:
         """Continue from a logged mid-episode simulator state at step `t0` (no wait steps).
 
-        The first frame is a forced render of exactly that state. The arm controller starts fresh, as after a
-        reset, but the gripper does not: robosuite integrates gripper commands into an internal target that is
-        not part of the simulator state, and a reset leaves it half-open, which ruins a restore during the
-        grasp. `gripper_cmd` is the last command executed before this state (-1 open, +1 close).
+        The first frame is a forced render of exactly that state. Two pieces of robosuite state are not part of
+        the simulator state and are rebuilt here: the gripper's integrated command target (a reset leaves it
+        half-open; `gripper_cmd` is the last command executed before this state, -1 open, +1 close) and the arm
+        controller's cached end-effector pose and goal.
         """
         robo = self.env.env
         cams = [name for name in robo._observables if name.endswith(("_image", "_depth"))]
@@ -133,8 +133,13 @@ class EnvRunner:
             self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
                            for name in cams}
             self._cameras(False)
+        robot = robo.robots[0]
         # PandaGripper.format_action accumulates [-1, 1] * 0.01 * sign(cmd) per substep and saturates within 4 steps
-        robo.robots[0].gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))
+        robot.gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))
+        # The arm controller cached the end-effector pose of the reset (home) configuration and would steer the
+        # first control step from there; refresh it from the restored state and hold the current pose as goal.
+        robot.controller.update(force=True)
+        robot.controller.reset_goal()
         self.t, self.done = t0, False
         return dict(_pack_obs(self.env, obs, self.cfg), t=t0, done=False, active=True)
 
