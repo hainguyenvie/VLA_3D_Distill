@@ -47,7 +47,7 @@ def main():
     import torch.nn as nn
     from libero.libero import benchmark
 
-    from scripts.analyze_failures import task_layout
+    from analyze_failures import task_layout  # sibling script: this file is run as a script, so its folder is on sys.path
     from src.policy.token_policy import TokenPolicy
 
     rng = np.random.default_rng(args.seed)
