@@ -37,7 +37,7 @@ class Collector:
         self.vec, self.policy, self.labelers = vec, policy, labelers or {}
         self.sample, self.temperature = sample, temperature
         self.min_free_gb = float(os.environ.get("MIN_FREE_GB_RUN", 4))
-        assert all(p.center_crop == policy.center_crop for p in self.labelers.values())
+        assert not getattr(policy, "raw_images", False) or not self.labelers, "shared preprocessing follows the actor"
         self.timing = {"preprocess": 0.0, "act": 0.0, "label": 0.0, "env": 0.0, "other": 0.0, "rounds": 0}
         self._saver = ThreadPoolExecutor(2)  # npz compression off the rollout loop (zlib releases the GIL)
         self._jsonl_lock = threading.Lock()
@@ -115,7 +115,8 @@ class Collector:
             act_idx = [i for i, s in enumerate(slots) if s is not None and s["obs"] is not None]
             images = [slots[i]["obs"]["rgb"] for i in act_idx]
             descs = [self.tasks[slots[i]["task_id"]][0] for i in act_idx]
-            pils = preprocess_batch(images, self.policy.center_crop)  # shared by the actor and all labelers
+            # one default-pipeline preprocessing shared by the actor and the labelers (a raw-image policy redoes its own)
+            pils = None if getattr(self.policy, "raw_images", False) else preprocess_batch(images, self.policy.center_crop)
             t1 = time.perf_counter()
             out = self.policy.act(images, descs, sample=self.sample, temperature=self.temperature, generator=self.gen, pils=pils)
             t2 = time.perf_counter()

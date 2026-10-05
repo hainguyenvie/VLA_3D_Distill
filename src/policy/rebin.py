@@ -80,8 +80,14 @@ class RebinnedPolicy:
 
 
 def load_policy(spec: str, suite: str, device: str, target: Optional[TokenPolicy] = None):
-    """`spec` is a checkpoint path, or `rebin:<path>` to express that checkpoint in `target`'s bins."""
+    """`spec` is a checkpoint path, optionally prefixed:
+
+    rebin:<path>   express that checkpoint's distribution in `target`'s bins (different action normalisation)
+    raw:<path>     feed that checkpoint raw 256 x 256 frames (RLinf's image pipeline, see `preprocess_image`)
+    """
     if spec.startswith("rebin:"):
         assert target is not None, "rebin: needs a target policy"
         return RebinnedPolicy(TokenPolicy(spec[len("rebin:"):], suite, device=device), target)
+    if spec.startswith("raw:"):
+        return TokenPolicy(spec[len("raw:"):], suite, device=device, raw_images=True)
     return TokenPolicy(spec, suite, device=device)

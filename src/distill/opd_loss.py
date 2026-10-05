@@ -16,7 +16,7 @@ def opd_loss(student_logits: torch.Tensor, teacher_logits: torch.Tensor, mode: s
     rkl_pg  VLA-OPD Eq. 6-7 as published: REINFORCE on the token the student sampled (`bins`), with reward
             r = -(log pi_S(a) - log pi_T(a)) under stop-gradient
     fkl     forward KL(teacher || student)
-    ce      cross-entropy to the teacher's argmax token
+    ce      cross-entropy to the teacher's argmax token (DAgger with the teacher's greedy action as label)
     """
     ls = F.log_softmax(student_logits.float() / temperature, dim=-1)
     lt = F.log_softmax(teacher_logits.float() / temperature, dim=-1).detach()

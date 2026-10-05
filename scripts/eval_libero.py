@@ -54,7 +54,7 @@ def main():
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
-    policy = TokenPolicy(args.ckpt, args.suite, device=args.device)
+    policy = load_policy(args.ckpt, args.suite, args.device)  # plain path, or raw:<path> (RLinf image pipeline)
     print("loading info:", {k: len(v) for k, v in policy.loading_info.items()}, flush=True)
     if args.lora:
         policy.add_lora(adapter_path=args.lora)
@@ -99,7 +99,7 @@ def main():
         summary[f"mean_kl_{name}"] = float(np.mean([r[f"kl_{name}"] for r in recs]))
         summary[f"mean_agree_{name}"] = float(np.mean([r[f"agree_{name}"] for r in recs]))
     for name, path in [("ckpt", args.ckpt)] + [s.split("=", 1) for s in args.label]:
-        meta = os.path.join(path.removeprefix("rebin:"), ".hf_fetch.json")
+        meta = os.path.join(path.removeprefix("rebin:").removeprefix("raw:"), ".hf_fetch.json")
         if os.path.exists(meta):
             m = json.load(open(meta))
             summary.setdefault("checkpoints", {})[name] = {"repo": m["repo"], "revision": m["revision"]}

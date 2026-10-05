@@ -40,8 +40,15 @@ def prompt_for(task_description: str) -> str:
     return f"In: What action should the robot take to {task_description.lower()}?\nOut:"
 
 
-def preprocess_image(img: np.ndarray, center_crop: bool = True) -> Image.Image:
-    """uint8 HxWx3 (already rotated to the training orientation) -> PIL image ready for the image processor."""
+def preprocess_image(img: np.ndarray, center_crop: bool = True, raw: bool = False) -> Image.Image:
+    """uint8 HxWx3 (already rotated to the training orientation) -> PIL image ready for the image processor.
+
+    Default: the openvla-oft / SimpleVLA-RL pipeline (JPEG round trip, lanczos resize to 224, centre crop).
+    `raw`: hand the 256 x 256 frame to the image processor as is (its own bicubic resize to 224, no JPEG, no
+    crop), which is how RLinf fine-tuned and evaluates its checkpoints.
+    """
+    if raw:
+        return Image.fromarray(img).convert("RGB")
     if img.shape != (IMAGE_SIZE, IMAGE_SIZE, 3):
         img = resize_image_for_policy(img, IMAGE_SIZE)
     pil = Image.fromarray(img).convert("RGB")
@@ -51,16 +58,18 @@ def preprocess_image(img: np.ndarray, center_crop: bool = True) -> Image.Image:
 _POOL = ThreadPoolExecutor(8)
 
 
-def preprocess_batch(images: Sequence[np.ndarray], center_crop: bool = True) -> List[Image.Image]:
+def preprocess_batch(images: Sequence[np.ndarray], center_crop: bool = True, raw: bool = False) -> List[Image.Image]:
     """`preprocess_image` over a batch; the TF ops release the GIL, so a small thread pool is ~linear."""
-    return list(_POOL.map(lambda im: preprocess_image(im, center_crop), images))
+    return list(_POOL.map(lambda im: preprocess_image(im, center_crop, raw), images))
 
 
 class TokenPolicy:
-    def __init__(self, checkpoint: str, unnorm_key: str, device: str = "cuda:0", center_crop: bool = True):
+    def __init__(self, checkpoint: str, unnorm_key: str, device: str = "cuda:0", center_crop: bool = True,
+                 raw_images: bool = False):
         self.checkpoint = checkpoint
         self.device = torch.device(device)
         self.center_crop = center_crop
+        self.raw_images = raw_images  # see `preprocess_image`
         vla, info = OpenVLAForActionPrediction.from_pretrained(
             checkpoint, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, output_loading_info=True
         )
@@ -122,8 +131,8 @@ class TokenPolicy:
 
         `pils` may carry the output of `preprocess_batch(images)` so several policies share one preprocessing.
         """
-        if pils is None:
-            pils = preprocess_batch(images, self.center_crop)
+        if pils is None or self.raw_images:  # shared `pils` come from the default pipeline
+            pils = preprocess_batch(images, self.center_crop, self.raw_images)
         pixel_values = self.image_processor.preprocess(pils, return_tensors="pt")["pixel_values"]
         prompts = [self._prompt_ids(t) for t in task_descriptions]
         prompt_len = torch.tensor([len(p) for p in prompts])
