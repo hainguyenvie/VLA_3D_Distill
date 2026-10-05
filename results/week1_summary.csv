@@ -1,0 +1,7 @@
+exp_id,machine,renderer,backbone,suite,demos,rollout_budget,opd,3d,3d_distribution,selector,3d_query_rate,seed,n_episodes,SR,paper_SR,revision,notes
+b0_object_student,L40,gpu_egl,openvla-oft-token,libero_object,10,0,no,no,-,-,0,7,500,0.514,0.549,01619ad-dirty,"1-traj SFT checkpoint (Haozhan72), greedy, 512 steps; paper = SimpleVLA-RL Table 5"
+b1_object_fullsft,L40,gpu_egl,openvla-oft-token,libero_object,454,0,no,no,-,-,0,7,500,0.958,0.953,12f40f8-dirty,"full-data SFT checkpoint (Haozhan72), greedy; used as teacher after bin transfer"
+teacher_object_rlinf,L40,gpu_egl,openvla-oft-token,libero_object,10,RL,no,no,-,-,0,7,500,0.664,0.977,12f40f8-dirty,"RLinf GRPO checkpoint, greedy, SimpleVLA-RL pipeline; card number uses RLinf pipeline (no centre crop, bicubic, half-open gripper reset, T=1.6 sampling)"
+cpu_quick_student,H200,cpu_osmesa,openvla-oft-token,libero_object,10,0,no,no,-,-,0,7,100,0.53,,821d567-dirty,"trials 0-9; same 100 episodes on L40 gpu_egl: 0.52"
+cpu_quick_fullsft,H200,cpu_osmesa,openvla-oft-token,libero_object,454,0,no,no,-,-,0,7,100,0.93,,821d567-dirty,"trials 0-9; same 100 episodes on L40 gpu_egl: 0.98"
+cpu_quick_rlinf,H200,cpu_osmesa,openvla-oft-token,libero_object,10,RL,no,no,-,-,0,7,100,0.75,,821d567-dirty,"trials 0-9; same 100 episodes on L40 gpu_egl: 0.70"

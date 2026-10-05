@@ -18,7 +18,7 @@
 | | **Máy chính: 2×L40** | **Máy H200** |
 |---|---|---|
 | Biến trong `infra.env` | `L40_SSH`, `L40_REMOTE_ROOT` | `H200_SSH`, `H200_REMOTE_ROOT` |
-| Trạng thái với project này | **máy protocol**: mọi rollout và eval (render GPU đúng chuẩn) | **được dùng từ 05/10**, chỉ cho việc **không cần render** (xem dưới) |
+| Trạng thái với project này | **máy xác nhận**: eval mốc và eval cuối với render GPU đúng chuẩn upstream; một job mỗi lúc | **máy chính từ 05/10**: train + rollout (render CPU), nhiều job song song |
 | GPU | 2 × L40 46 GB (driver 580), hai socket, hai NUMA | 1 × H200 141 GB |
 | CPU / RAM | 96 core, 125 GB **không có swap**; người khác dùng 60–95 GB và dao động (load nền ≈ 24) | 22 core, 235 GB |
 | Đĩa | 838 GB, còn **189 GB** (05/10); workspace project khác của operator chiếm 169 GB | 2,9 TB |
@@ -30,18 +30,23 @@
 Card có thể bị project kia của operator lấy lại: kiểm `nvidia-smi` trước mỗi lần chạy, không đụng thư mục
 project kia. Workspace riêng nằm cạnh nó trong `~/projects/`.
 
-**H200 không render được MuJoCo một cách dùng được** (đo 05/10, driver 580.159 open kernel module, GPU
-passthrough):
+**Render MuJoCo trên H200: GPU không dùng được, CPU thì được** (đo 05/10, driver 580.159 open kernel
+module, GPU passthrough):
 - NVIDIA EGL chỉ sống khi nó là context duy nhất trên GPU. Hai tiến trình render cùng lúc, hoặc một tiến
   trình render trong khi có bất kỳ context CUDA nào (kể cả model đang nghỉ), bị driver kill: `NVRM Xid 31`
   (MMU fault ở engine đồ hoạ) hoặc `Xid 109` (ctx switch timeout). Lock tuần tự hoá render không cứu được.
-- Render CPU (OSMesa, `mesalib=24` từ conda-forge, chọn bằng `<workspace>/machine.env`) chạy ổn nhưng **làm
-  sai kết quả**: cùng state, cùng model, success rate của student tụt 52% → 33% và teacher 70% → 36%
-  (100 episode). Logits lệch KL ≈ 0.3 so với render GPU, trong khi chênh lệch số học giữa hai máy trên cùng
-  frame chỉ KL ≈ 0.01. Khác biệt nằm ở lọc texture và khử răng cưa; supersampling không giúp.
-- Hệ quả: **mọi rollout và eval chạy trên L40**; H200 chỉ nhận việc thuần GPU (train từ data đã thu, probe,
-  kiểm logits). Sửa tận gốc cần đổi driver trên H200 hoặc nối thẳng hai server: operator quyết.
-- Đường truyền L40 → laptop khoảng 0,8 MB/s (laptop → H200 khoảng 10 MB/s): chỉ chuyển data gọn.
+- Vì vậy H200 render bằng CPU: OSMesa (`mesalib=24` từ conda-forge, cài bởi `build_env.sh`), bật bằng file
+  `<workspace>/machine.env` (ngoài git) đặt `MUJOCO_GL=osmesa`. Mỗi chunk chỉ render 1 frame nên chi phí nhỏ.
+- **Renderer có ảnh hưởng nhưng nhỏ ở mức success rate**: trên cùng 100 episode (greedy), GPU (L40) so với
+  CPU (H200): student 52% / 53%, full-SFT 98% / 93%, teacher RLinf 70% / 75%. Ở mức logits thì lệch rõ
+  (KL ≈ 0.3 trên cùng state, so với KL ≈ 0.01 giữa hai máy trên cùng frame). Quy tắc: **mọi nhánh trong một
+  bảng so sánh dùng cùng một renderer**; checkpoint cuối được xác nhận lại trên L40 (render GPU, chuẩn upstream).
+- Bài học: con số "render CPU làm tụt 20–35 điểm" từng ghi ở đây là sai, do bug frame trễ của `EnvRunner`
+  (chỉ lộ từ episode thứ hai của mỗi worker). Gate phải chạy nhiều episode liên tiếp
+  (`scripts/check_env_stepping.py`), và một kết quả lạ phải được soi theo thứ tự episode trước khi quy cho
+  môi trường.
+- Hai server **không được nối trực tiếp với nhau** (quyết định của operator). Dữ liệu qua lại chỉ đi vòng
+  laptop và phải gọn: L40 → laptop khoảng 0,8 MB/s, laptop → H200 khoảng 10 MB/s.
 
 **Nút thắt thật của máy 2×L40 là RAM, không phải VRAM** (đo 05/10). Mỗi env LIBERO chiếm khoảng 1,7 GB
 RAM, tiến trình chính giữ hai policy 7B chiếm khoảng 1,5 GB (đỉnh 5 GB lúc nạp) → một job 8 env cần khoảng
@@ -238,7 +243,8 @@ until ssh -n -o ConnectTimeout=20 $L40_SSH "grep -q JOB_DONE $L40_REMOTE_ROOT/lo
 | `pip install` đứng hàng chục phút | PyPI bị bóp 30–100 KB/s mỗi kết nối; pip 23 còn tải cả wheel chỉ để resolve | nâng pip trước, resolve bằng dry-run, tải wheel song song (§7) |
 | Kill job nhưng job khác tự mọc lên | script hàng đợi gọi bằng đường dẫn tương đối nên không khớp bộ lọc theo tên workspace; nó thấy bước hiện tại chết và chạy bước kế | kill script hàng đợi **trước**, rồi mới tới các tiến trình con |
 | ssh tự chết khi kill job trên máy H200 | shell đăng nhập ở đó là bash, nên bộ lọc `comm=="bash"` + tên script khớp chính lệnh ssh của mình | loại `$$` khỏi danh sách PID (`awk -v me=$$ '$1!=me && …'`) |
-| Worker env chết không lời nào, `dmesg` có `NVRM: Xid 31/109` | render EGL trên H200 khi có context GPU khác (§0) | rollout chỉ chạy trên L40 |
+| Worker env chết không lời nào, `dmesg` có `NVRM: Xid 31/109` | render EGL trên H200 khi có context GPU khác (§0) | trên H200 dùng `MUJOCO_GL=osmesa` qua `machine.env` |
+| Success rate tụt mạnh, lỗi xen kẽ theo từng lượt episode của worker | frame trễ/đen từ episode thứ hai: timer lấy mẫu camera của robosuite bị lệch khi tắt/bật camera qua reset | bật camera trước `env.reset()`; in chuỗi thành/bại theo thứ tự hoàn thành để soi |
 | Hai lần render cùng state ra ảnh khác nhau | robosuite lấy mẫu camera ở substep 24/25 của control step, không phải state cuối | render đúng thời điểm đó (`EnvRunner`), kiểm bằng `scripts/check_env_stepping.py` |
 | ssh `Connection timed out during banner exchange` | máy cạn RAM, đang thrash | thử lại bằng vòng lặp ssh ngắn; việc đầu tiên khi vào được là dừng job của mình |
 | Hai `pip install` cùng ghi một env | kill script bash cha nhưng pip con vẫn sống, rồi chạy lại script | sau khi kill, liệt kê tiến trình con còn sống và kill theo PID trước khi chạy lại |

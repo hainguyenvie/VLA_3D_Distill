@@ -1,7 +1,7 @@
 """Distil a frozen teacher into a LoRA student on LIBERO, either on-policy or on teacher-visited states.
 
 One iteration = collect fresh rollouts, label every queried state with the teacher's token distribution,
-take gradient steps on those states, discard them (VLA-OPD's loop, without its GRPO stage).
+take gradient steps on a fixed number of those states, discard them (VLA-OPD's loop, without its GRPO stage).
 
     --state_source student   the student acts, the teacher only labels (on-policy distillation, B2)
     --state_source teacher   the teacher acts and labels (same loss, teacher-state distribution: the matched
@@ -32,7 +32,10 @@ def parse():
     ap.add_argument("--spatial_layer", type=int, default=24, help="LLM layer whose visual tokens feed the depth head (1..32)")
     ap.add_argument("--lambda_spatial", type=float, default=0.1)
     ap.add_argument("--iters", type=int, default=20)
-    ap.add_argument("--episodes_per_iter", type=int, default=64)
+    ap.add_argument("--states_per_iter", type=int, default=2048,
+                    help="queried states trained on per iteration; episodes are collected until there are enough, so "
+                         "arms with short episodes (teacher) and long ones (failing student) get the same updates")
+    ap.add_argument("--episodes_per_batch", type=int, default=32, help="episodes collected at a time until states_per_iter is reached")
     ap.add_argument("--train_trials", type=int, default=50, help="rollouts start from the first N benchmark init states")
     ap.add_argument("--num_envs", type=int, default=16)
     ap.add_argument("--max_steps", type=int, default=512)
@@ -117,14 +120,19 @@ def main():
 
     for it in range(start_it + 1, args.iters + 1):
         t0 = time.time()
-        idx = rng.choice(len(pool), size=min(args.episodes_per_iter, len(pool)), replace=False)
-        recs = col.run([pool[i] for i in idx], keep_steps=True)
-        images = np.concatenate([r["arrays"]["rgb"] for r in recs])
+        order, recs = rng.permutation(len(pool)), []
+        while sum(r["n_queries"] for r in recs) < args.states_per_iter and len(recs) < len(pool):
+            batch = order[len(recs) : len(recs) + args.episodes_per_batch]
+            recs += col.run([pool[i] for i in batch], keep_steps=True)
+        n_collected = sum(r["n_queries"] for r in recs)
+        keep = np.sort(rng.choice(n_collected, size=min(args.states_per_iter, n_collected), replace=False))
+        images = np.concatenate([r["arrays"]["rgb"] for r in recs])[keep]
         t_key = "logits_teacher" if args.state_source == "student" else "logits"
-        t_logits = np.concatenate([r["arrays"][t_key] for r in recs])
-        bins = np.concatenate([r["arrays"]["bins"] for r in recs])
-        depth = np.concatenate([r["arrays"]["depth"] for r in recs]) if head is not None else None
-        descs = [r["task"] for r in recs for _ in range(r["n_queries"])]
+        t_logits = np.concatenate([r["arrays"][t_key] for r in recs])[keep]
+        bins = np.concatenate([r["arrays"]["bins"] for r in recs])[keep]
+        depth = np.concatenate([r["arrays"]["depth"] for r in recs])[keep] if head is not None else None
+        all_descs = [r["task"] for r in recs for _ in range(r["n_queries"])]
+        descs = [all_descs[k] for k in keep]
         t_collect = time.time() - t0
         tm = {k: round(v, 1) for k, v in col.timing.items()}
         col.timing.update({k: 0 if k == "rounds" else 0.0 for k in col.timing})
@@ -162,7 +170,9 @@ def main():
         totals["episodes"] += len(recs)
         totals["env_steps"] += int(sum(r["env_steps"] for r in recs))
         totals["states"] += n
+        totals["states_collected"] = totals.get("states_collected", 0) + n_collected
         row = {"iter": it, "rollout_sr": float(np.mean([r["success"] for r in recs])), "n_states": n,
+               "n_episodes": len(recs), "n_states_collected": n_collected,
                "loss": float(np.mean(losses)), **{f"train_{k}": float(np.mean([m[k] for m in mets])) for k in mets[0]},
                "sec_collect": round(t_collect), "sec_total": round(time.time() - t0), "collect_timing": tm,
                "gpu_peak_gb": round(torch.cuda.max_memory_allocated(student.device) / 1e9, 1), **totals}
