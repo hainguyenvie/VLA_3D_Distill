@@ -23,7 +23,7 @@ import numpy as np
 def parse():
     ap = argparse.ArgumentParser()
     ap.add_argument("--student", required=True)
-    ap.add_argument("--teacher", required=True)
+    ap.add_argument("--teacher", required=True, help="checkpoint, or rebin:checkpoint when its action normalisation differs from the student's")
     ap.add_argument("--suite", default="libero_object")
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher"], default="student")
@@ -63,13 +63,14 @@ def main():
 
     from src.distill.opd_loss import opd_loss, token_metrics
     from src.distill.spatial_loss import DepthHead, depth_loss, depth_target
+    from src.policy.rebin import load_policy
     from src.policy.token_policy import TokenPolicy
     from src.rollout.collector import Collector
 
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
     student = TokenPolicy(args.student, args.suite, device=args.student_device)
-    teacher = TokenPolicy(args.teacher, args.suite, device=args.teacher_device)
+    teacher = load_policy(args.teacher, args.suite, args.teacher_device, target=student)
     last = os.path.join(args.out, "adapter_last")
     state_path = os.path.join(args.out, "state.pt")
     resume = os.path.exists(state_path)
@@ -125,6 +126,8 @@ def main():
         depth = np.concatenate([r["arrays"]["depth"] for r in recs]) if head is not None else None
         descs = [r["task"] for r in recs for _ in range(r["n_queries"])]
         t_collect = time.time() - t0
+        tm = {k: round(v, 1) for k, v in col.timing.items()}
+        col.timing.update({k: 0 if k == "rounds" else 0.0 for k in col.timing})
 
         losses, sp_losses, mets, n = [], [], [], len(images)
         opt.zero_grad(set_to_none=True)
@@ -158,7 +161,7 @@ def main():
         totals["states"] += n
         row = {"iter": it, "rollout_sr": float(np.mean([r["success"] for r in recs])), "n_states": n,
                "loss": float(np.mean(losses)), **{f"train_{k}": float(np.mean([m[k] for m in mets])) for k in mets[0]},
-               "sec_collect": round(t_collect), "sec_total": round(time.time() - t0), **totals}
+               "sec_collect": round(t_collect), "sec_total": round(time.time() - t0), "collect_timing": tm, **totals}
         if sp_losses:
             row["spatial_loss"] = float(np.mean(sp_losses))
         if args.state_source == "student":

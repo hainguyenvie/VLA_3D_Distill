@@ -13,6 +13,7 @@ Numerical protocol (fixed for rollout, training and evaluation): bf16 base weigh
 """
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Sequence
 
 import numpy as np
@@ -45,6 +46,14 @@ def preprocess_image(img: np.ndarray, center_crop: bool = True) -> Image.Image:
         img = resize_image_for_policy(img, IMAGE_SIZE)
     pil = Image.fromarray(img).convert("RGB")
     return center_crop_image(pil) if center_crop else pil
+
+
+_POOL = ThreadPoolExecutor(8)
+
+
+def preprocess_batch(images: Sequence[np.ndarray], center_crop: bool = True) -> List[Image.Image]:
+    """`preprocess_image` over a batch; the TF ops release the GIL, so a small thread pool is ~linear."""
+    return list(_POOL.map(lambda im: preprocess_image(im, center_crop), images))
 
 
 class TokenPolicy:
@@ -107,9 +116,14 @@ class TokenPolicy:
             self._prompt_cache[task_description] = ids
         return self._prompt_cache[task_description]
 
-    def build_inputs(self, images: Sequence[np.ndarray], task_descriptions: Sequence[str]) -> Dict[str, torch.Tensor]:
-        """Right-padded batch: [BOS, prompt, '', 56 placeholders, </s>, pad...]; `prompt_len` counts BOS..''."""
-        pils = [preprocess_image(im, self.center_crop) for im in images]
+    def build_inputs(self, images: Sequence[np.ndarray], task_descriptions: Sequence[str],
+                     pils: Optional[List[Image.Image]] = None) -> Dict[str, torch.Tensor]:
+        """Right-padded batch: [BOS, prompt, '', 56 placeholders, </s>, pad...]; `prompt_len` counts BOS..''.
+
+        `pils` may carry the output of `preprocess_batch(images)` so several policies share one preprocessing.
+        """
+        if pils is None:
+            pils = preprocess_batch(images, self.center_crop)
         pixel_values = self.image_processor.preprocess(pils, return_tensors="pt")["pixel_values"]
         prompts = [self._prompt_ids(t) for t in task_descriptions]
         prompt_len = torch.tensor([len(p) for p in prompts])
@@ -164,9 +178,9 @@ class TokenPolicy:
         return act_logits, {l: out.hidden_states[l][:, 1 : 1 + P] for l in hidden_layers}
 
     @torch.inference_mode()
-    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None):
+    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None):
         """Returns dict(logits (B,56,256) float32 cpu, bins (B,56) int64 cpu, actions (B,8,7) unnormalised)."""
-        logits, _ = self.forward_logits(self.build_inputs(images, task_descriptions))
+        logits, _ = self.forward_logits(self.build_inputs(images, task_descriptions, pils))
         if sample:
             probs = torch.softmax(logits / temperature, dim=-1)
             bins = torch.multinomial(probs.reshape(-1, N_BINS), 1, generator=generator).reshape(logits.shape[:2])

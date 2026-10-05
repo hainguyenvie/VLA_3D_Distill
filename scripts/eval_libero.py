@@ -20,7 +20,9 @@ def parse():
     ap.add_argument("--ckpt", required=True)
     ap.add_argument("--suite", default="libero_object")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--label", action="append", default=[], help="name=checkpoint; extra frozen policy that labels every state")
+    ap.add_argument("--label", action="append", default=[],
+                    help="name=checkpoint, extra frozen policy that labels every state; name=rebin:checkpoint if its "
+                         "action normalisation differs from --ckpt (labels are then expressed in --ckpt's bins)")
     ap.add_argument("--tasks", default="all", help="comma-separated task ids, or 'all'")
     ap.add_argument("--trials", type=int, default=50, help="use the first N benchmark initial states of each task")
     ap.add_argument("--num_envs", type=int, default=10)
@@ -45,6 +47,7 @@ def main():
 
     import torch
 
+    from src.policy.rebin import load_policy
     from src.policy.token_policy import TokenPolicy
     from src.rollout.collector import Collector
 
@@ -55,7 +58,7 @@ def main():
     labelers = {}
     for spec in args.label:
         name, path = spec.split("=", 1)
-        labelers[name] = TokenPolicy(path, args.suite, device=args.device)
+        labelers[name] = load_policy(path, args.suite, args.device, target=policy)
     col = Collector(vec, policy, labelers, sample=args.sample, temperature=args.temperature, seed=args.seed)
     task_ids = sorted(col.tasks) if args.tasks == "all" else [int(x) for x in args.tasks.split(",")]
     episodes = [(t, n) for t in task_ids for n in range(min(args.trials, col.tasks[t][1]))]
@@ -87,18 +90,19 @@ def main():
         "revision": open(os.path.join(os.environ.get("REPO", "."), "REVISION")).read().strip()
         if os.path.exists(os.path.join(os.environ.get("REPO", "."), "REVISION")) else None,
         "wall_seconds": round(time.time() - t0),
+        "timing_seconds": {k: round(v, 1) for k, v in col.timing.items()},
     }
     for name in labelers:
         summary[f"mean_kl_{name}"] = float(np.mean([r[f"kl_{name}"] for r in recs]))
         summary[f"mean_agree_{name}"] = float(np.mean([r[f"agree_{name}"] for r in recs]))
     for name, path in [("ckpt", args.ckpt)] + [s.split("=", 1) for s in args.label]:
-        meta = os.path.join(path, ".hf_fetch.json")
+        meta = os.path.join(path.removeprefix("rebin:"), ".hf_fetch.json")
         if os.path.exists(meta):
             m = json.load(open(meta))
             summary.setdefault("checkpoints", {})[name] = {"repo": m["repo"], "revision": m["revision"]}
     with open(os.path.join(args.out, "summary.json"), "w") as f:
         json.dump(summary, f, indent=1)
-    print(json.dumps({k: summary[k] for k in ("success_rate", "n_episodes", "mean_env_steps")}), flush=True)
+    print(json.dumps({k: summary[k] for k in ("success_rate", "n_episodes", "mean_env_steps", "timing_seconds")}), flush=True)
     print("EVAL_DONE", flush=True)
 
 

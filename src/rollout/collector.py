@@ -6,13 +6,15 @@ acting policy's logits, and the logits of any extra `labelers` (e.g. the frozen 
 """
 import json
 import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
 
-from src.policy.token_policy import TokenPolicy
+from src.policy.token_policy import TokenPolicy, preprocess_batch
 from src.rollout.vec_env import LiberoVecEnv, mem_available_gb, postprocess_actions
 
 STEP_KEYS = ("rgb", "depth", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "sim_state")
@@ -35,6 +37,10 @@ class Collector:
         self.vec, self.policy, self.labelers = vec, policy, labelers or {}
         self.sample, self.temperature = sample, temperature
         self.min_free_gb = float(os.environ.get("MIN_FREE_GB_RUN", 4))
+        assert all(p.center_crop == policy.center_crop for p in self.labelers.values())
+        self.timing = {"preprocess": 0.0, "act": 0.0, "label": 0.0, "env": 0.0, "other": 0.0, "rounds": 0}
+        self._saver = ThreadPoolExecutor(2)  # npz compression off the rollout loop (zlib releases the GIL)
+        self._jsonl_lock = threading.Lock()
         self.gen = torch.Generator(device=policy.device).manual_seed(seed)
         self.tasks = {i: (lang, n) for i, lang, n in vec.task_info()}
 
@@ -58,6 +64,8 @@ class Collector:
         by_task: Dict[int, List[Tuple[int, int]]] = {}
         for t, n in sorted(tuple(e) for e in episodes if tuple(e) not in done_ids):
             by_task.setdefault(t, []).append((t, n))
+        pending_saves = []
+        self._pending_saves = pending_saves
         slots: List[Optional[dict]] = [None] * self.vec.num_envs
         last_task = [None] * self.vec.num_envs
 
@@ -97,11 +105,16 @@ class Collector:
             if rounds % 20 == 0 and mem_available_gb() < self.min_free_gb:
                 # shared machine without swap: stop before we push it into thrashing; finished episodes are saved
                 raise MemoryError(f"only {mem_available_gb():.1f} GB RAM available on the machine, aborting the rollout")
+            tm, t0 = self.timing, time.perf_counter()
             act_idx = [i for i, s in enumerate(slots) if s is not None]
             images = [slots[i]["obs"]["rgb"] for i in act_idx]
             descs = [self.tasks[slots[i]["task_id"]][0] for i in act_idx]
-            out = self.policy.act(images, descs, sample=self.sample, temperature=self.temperature, generator=self.gen)
-            label_logits = {k: p.act(images, descs)["logits"] for k, p in self.labelers.items()}
+            pils = preprocess_batch(images, self.policy.center_crop)  # shared by the actor and all labelers
+            t1 = time.perf_counter()
+            out = self.policy.act(images, descs, sample=self.sample, temperature=self.temperature, generator=self.gen, pils=pils)
+            t2 = time.perf_counter()
+            label_logits = {k: p.act(images, descs, pils=pils)["logits"] for k, p in self.labelers.items()}
+            t3 = time.perf_counter()
             env_actions = postprocess_actions(out["actions"])
             for j, i in enumerate(act_idx):
                 s, obs = slots[i], slots[i]["obs"]
@@ -116,11 +129,13 @@ class Collector:
                     s["label_logits"][k].append(label_logits[k][j].numpy().astype(np.float16))
                 self.vec.step(i, env_actions[j])
             finished = []
+            t4 = time.perf_counter()
             for i in act_idx:
                 obs = self.vec.recv(i)
                 slots[i]["obs"] = obs
                 if not obs["active"]:
                     finished.append(i)
+            t5 = time.perf_counter()
             for i in finished:
                 rec = self._finish(slots[i], out_dir, save_steps)
                 results.append(rec)
@@ -129,6 +144,13 @@ class Collector:
                 start(i)
                 if slots[i] is not None:
                     slots[i]["obs"] = self.vec.recv(i)
+            t6 = time.perf_counter()
+            for k, v in (("preprocess", t1 - t0), ("act", t2 - t1), ("label", t3 - t2), ("env", t5 - t4 + t6 - t5),
+                         ("other", t4 - t3)):
+                tm[k] += v
+            tm["rounds"] += 1
+        for f in pending_saves:
+            f.result()
         return results
 
     def _finish(self, s: dict, out_dir: Optional[str], save_steps: bool) -> dict:
@@ -150,12 +172,16 @@ class Collector:
             arrays.update({f"logits_{k}": np.stack(v) for k, v in s["label_logits"].items()})
         if out_dir:
             eid = f"t{s['task_id']:02d}_n{s['trial_id']:02d}"
-            if save_steps:
-                tmp = os.path.join(out_dir, "steps", f".{eid}.{os.getpid()}.npz")
-                np.savez_compressed(tmp, **arrays)
-                os.replace(tmp, os.path.join(out_dir, "steps", f"{eid}.npz"))
-            with open(os.path.join(out_dir, "episodes.jsonl"), "a") as f:
-                f.write(json.dumps(rec) + "\n")
+
+            def save(rec=rec, arrays=arrays):  # the summary line is written only after the arrays are on disk
+                if save_steps:
+                    tmp = os.path.join(out_dir, "steps", f".{eid}.{os.getpid()}.npz")
+                    np.savez_compressed(tmp, **arrays)
+                    os.replace(tmp, os.path.join(out_dir, "steps", f"{eid}.npz"))
+                with self._jsonl_lock, open(os.path.join(out_dir, "episodes.jsonl"), "a") as f:
+                    f.write(json.dumps(rec) + "\n")
+
+            self._pending_saves.append(self._saver.submit(save))
         if self._keep_steps:
             rec = dict(rec, arrays=arrays)
         return rec
