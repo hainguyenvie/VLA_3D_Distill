@@ -237,6 +237,7 @@ Chạy lại có lưu state: 71.4% (lần trước 70.2%). 120 episode hỏng:
 | Student 1-traj (trước distill) | 21.2 | 3.3 | 13.3 | 6.7 | 18.3 | 33.3 | 35.0 | 38.3 |
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 4; 88% trên bản chuẩn) | 42.9 | 5.0 | **60.0** | 21.7 | 48.3 | 46.7 | 53.3 | 65.0 |
 | Student sau distill không-3D (reverse-KL, **state student**, vòng 10; 89% trên bản chuẩn) | 46.9 | 11.7 | 45.0 | 26.7 | 43.3 | 48.3 | 78.3 | 75.0 |
+| Student sau distill không-3D (reverse-KL, state teacher, vòng 8; 90% trên bản chuẩn) | 45.7 | 6.7 | 56.7 | 18.3 | 55.0 | 45.0 | 73.3 | 65.0 |
 | Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
 
 Distill không-3D đã kéo student từ 21% lên 43% trên LIBERO-Plus, gần teacher (50%). Riêng Light student vượt
@@ -250,7 +251,24 @@ teacher (60 so với 30; mỗi ô 60 task, sai số chuẩn khoảng 6 điểm),
 | B2′ (state teacher) | 52 | 69 | 88 | 70 | 90 | 68 | 83 | 84 | 81 | 78 | 71 |
 
 Từ vòng 8 trở đi B2 ổn định quanh 82–90 (trung bình 86.6), còn B2′ dao động 68–90 và đi xuống ở cuối (trung bình
-79.4). VLA-OPD báo 93.8 cho Object. Số 500 episode của hai adapter cuối đang chạy.
+79.4). VLA-OPD báo 93.8 cho Object.
+
+**Adapter cuối (vòng 20) trên 500 episode chuẩn, greedy:**
+
+| Task | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | Tổng |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Student ban đầu (H200) | 22 | 66 | 46 | 2 | 6 | 74 | 100 | 62 | 86 | 62 | 52.6 |
+| Teacher full-SFT (H200) | 90 | 100 | 100 | 80 | 94 | 100 | 100 | 92 | 100 | 96 | 95.2 |
+| **B2** (state student, không 3D) | 72 | 98 | 96 | 74 | 96 | **30** | 100 | 96 | 100 | 100 | **86.2** |
+| **B2′** (state teacher, không 3D) | 76 | 74 | 84 | 52 | 100 | 60 | 86 | 96 | **4** | 100 | **73.2** |
+
+- B2 thấp hơn VLA-OPD 7.6 điểm (86.2 so với 93.8): **chưa đạt mốc "trong 3 điểm"**. Bảy task đã ở 96–100; khoảng
+  hụt nằm ở task 5 (30%, trong khi student ban đầu đạt 74% và teacher 100%: distill làm *hỏng* task này) và hai
+  task khó nhất 0 và 3 (72–74%).
+- B2′ có kiểu sụp tương tự ở task khác (task 8: 86% → 4%). Sụp theo từng task trên những task student vốn làm
+  được là dấu hiệu bất ổn của quá trình distill (teacher khác dòng dõi, lr cố định), không phải thiếu năng lực.
+- Sai khác so với VLA-OPD cần nhớ khi so: LoRA thay vì full-parameter, khoảng 41k state so với khoảng 300k của
+  họ, teacher full-SFT chuyển bin thay vì teacher RL cùng dòng dõi.
 
 ## LIBERO-Long: mốc teacher (H200, render CPU)
 
