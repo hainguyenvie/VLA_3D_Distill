@@ -32,6 +32,36 @@ cùng số state và số update; chỉ khác **ai lái rollout** và **có loss
 Loss depth: head MLP nhẹ đọc 256 token ảnh ở lớp 24 của LLM, dự đoán log-depth 64×64 của chính ảnh agentview
 (cùng center crop với input của policy), L1, trọng số 0.5; bỏ head lúc inference.
 
+## Trần và headroom (đo trước khi thử phương pháp)
+
+**LIBERO-Object chuẩn** (greedy, 500 episode): student 51.4% → teacher 95.8%. Trần của distill thuần là teacher.
+Nhánh distill không-3D trên state của teacher từng chạm 88% chỉ sau 4 vòng (reverse-KL, chưa ổn định), nên phần
+còn lại cho "3D thêm vào" trên benchmark chuẩn nhiều nhất chỉ vài điểm, ngang mức nhiễu của eval. **Không nên
+lấy LIBERO chuẩn làm thước đo chính cho đóng góp 3D.**
+
+**LIBERO-Plus, suite Object** (zero-shot, 60 task mỗi loại nhiễu, 1 trial, render CPU trên H200):
+
+| Loại nhiễu | Teacher full-SFT (95.8% trên bản chuẩn) | OpenVLA-OFT đã công bố (2 camera + proprio) |
+|---|---|---|
+| Camera Viewpoints | **13.3** | 38.9 |
+| Light Conditions | **30.0** | 73.7 |
+| Sensor Noise | 43.3 | 72.3 |
+| Robot Initial States | 55.0 | 25.4 |
+| Objects Layout | 58.3 | 71.8 |
+| Background Textures | 73.3 | 97.6 |
+| Language Instructions | 75.0 | 99.0 |
+| **Tổng** | **49.8** | 66.5 |
+
+Theo mức khó: L1 79% → L5 27%. Student 1-traj đang được đo (khoảng 21–24% sau 280/420 episode).
+
+Đọc bảng này:
+- Headroom thật nằm ở đây: ngay cả teacher cũng chỉ đạt một nửa, và trần **không** bị teacher chặn, vì giám sát
+  3D có thể cho student độ bền mà teacher không có.
+- Camera và Light là hai chiều yếu nhất của model 1-camera, cũng là hai chiều mà các paper distill geometry
+  (GaussianWAM, MVUCF) tăng mạnh nhất trên backbone khác.
+- Cần xác nhận lại trên L40 (render GPU) trước khi so với số đã công bố: nhiễu ánh sáng và camera có thể nhạy
+  với renderer hơn bản chuẩn. LIBERO-Plus đã cài xong trên L40.
+
 ## Những gì đã biết (LIBERO-Object, một seed)
 
 1. **Mốc tái lập được**: student 51.4% (paper 54.9), full-SFT 95.8% (paper 95.3) trên 500 episode.
@@ -50,8 +80,20 @@ Loss depth: head MLP nhẹ đọc 256 token ảnh ở lớp 24 của LLM, dự �
 
 ## Việc đang chạy / tiếp theo
 
-- H200: ba nhánh forward-KL (B2, B2′, B4), B3 nối sau khi biết VRAM mỗi job.
-- L40: lặp lại B0 với code mới (kiểm độ ổn định), rồi "teacher tiếp quản" từ state của student
-  (`scripts/takeover_eval.py`): đo trực tiếp teacher có cứu được episode từ state student đi tới hay không.
-- Sau ma trận: eval 500 episode cho checkpoint cuối trên cả hai renderer; nếu Gate B/C của plan qua thì thêm seed.
-- Chuẩn bị sẵn: LIBERO-Plus (repo + assets đã tải về H200) để đo ở chiều Robot-init / Camera / Layout.
+- H200: ba nhánh tìm công thức distill không-3D ổn định (forward-KL trên state student, forward-KL và
+  cross-entropy trên state teacher), eval LIBERO-Plus của student rồi của checkpoint student đã distill.
+- L40: "teacher tiếp quản" từ state của student (`scripts/takeover_eval.py`), chạy lại sau khi sửa lỗi khôi phục
+  gripper; có nhánh đối chứng student tự tiếp quản state của chính nó.
+- Chưa chạy các nhánh có loss depth (B3/B4): chờ có baseline không-3D ổn định và bảng headroom đầy đủ.
+- Hướng đang cân nhắc cho bước sau: lấy LIBERO-Plus làm thước đo chính; so {không 3D, 3D trên state teacher,
+  3D trên state student} theo từng loại nhiễu.
+
+## Lỗi của chính mình đã gặp (để không lặp lại)
+
+- Frame trễ/đen từ episode thứ hai của mỗi worker sau khi tối ưu render: gate chỉ kiểm episode đầu. Đã thêm gate
+  nhiều episode liên tiếp. Hậu quả: một kết luận sai về renderer đã được báo rồi phải rút lại.
+- Công cụ takeover khôi phục state nhưng để gripper về nửa mở: lộ ra nhờ nhánh đối chứng (student chỉ còn 11%
+  ở mốc 25% trên chính episode nó từng thành công). Mọi công cụ can thiệp vào simulator cần một nhánh đối chứng
+  "không đổi gì thì phải ra như cũ" trước khi đọc kết quả.
+- Tín hiệu "teacher rất bất định trên state lỗi của student" đến từ checkpoint RLinf lệch pipeline; với teacher
+  đúng pipeline thì hiệu ứng gần như biến mất.
