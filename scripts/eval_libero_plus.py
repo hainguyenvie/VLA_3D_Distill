@@ -25,6 +25,8 @@ def main():
     ap.add_argument("--max_steps", type=int, default=512, help="openvla-oft uses 220 / 280 / 300 / 520 for spatial / object / goal / 10")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--save_steps", action="store_true", help="keep per-query arrays (steps/*.npz) for failure analysis")
+    ap.add_argument("--oracle_xy", action="store_true",
+                    help="diagnostic: privileged horizontal servo on the target until the first grasp (src/policy/oracle.py)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     assert os.environ.get("LIBERO_VARIANT") == "plus", "run with LIBERO_VARIANT=plus"
@@ -54,6 +56,10 @@ def main():
     policy = load_policy(args.ckpt, args.suite, "cuda:0")  # plain path, raw:<path> or oft:<path>
     if args.lora:
         policy.add_lora(adapter_path=args.lora)
+    if args.oracle_xy:
+        from src.policy.oracle import ApproachOracle
+
+        policy = ApproachOracle(policy)
     col = Collector(vec, policy, {}, sample=False, seed=args.seed, task_ids=sorted(meta))
     t0, state = time.time(), {"n": 0, "s": 0}
 

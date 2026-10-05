@@ -17,7 +17,7 @@ import torch
 from src.policy.token_policy import TokenPolicy, preprocess_batch
 from src.rollout.vec_env import LiberoVecEnv, mem_available_gb, postprocess_actions
 
-STEP_KEYS = ("rgb", "depth", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "sim_state")
+STEP_KEYS = ("rgb", "depth", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "sim_state", "target_pos")
 
 
 def token_stats(logits: torch.Tensor, ref_logits: Optional[torch.Tensor] = None) -> Dict[str, float]:

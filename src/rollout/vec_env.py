@@ -19,6 +19,14 @@ import numpy as np
 DUMMY_ACTION = [0, 0, 0, 0, 0, 0, -1]
 
 
+def _target_pos(robo) -> np.ndarray:
+    """Privileged world position of the task's target (first object of interest of the BDDL goal); NaN if none."""
+    names = getattr(robo, "obj_of_interest", None) or []
+    if not names or names[0] not in robo.obj_body_id:
+        return np.full(3, np.nan, dtype=np.float32)
+    return np.array(robo.sim.data.body_xpos[robo.obj_body_id[names[0]]], dtype=np.float32)
+
+
 def _pack_obs(env, obs, cfg) -> Dict[str, Any]:
     out = {
         # rotate 180 degrees to match the training-data preprocessing
@@ -27,6 +35,7 @@ def _pack_obs(env, obs, cfg) -> Dict[str, Any]:
         "eef_quat": obs["robot0_eef_quat"].astype(np.float32),
         "gripper_qpos": obs["robot0_gripper_qpos"].astype(np.float32),
         "sim_state": env.get_sim_state().astype(np.float64),
+        "target_pos": _target_pos(env.env),
     }
     if cfg.get("wrist"):
         out["wrist_rgb"] = np.ascontiguousarray(obs["robot0_eye_in_hand_image"][::-1, ::-1])
@@ -63,7 +72,7 @@ class EnvRunner:
                 camera_names=["agentview"] + (["robot0_eye_in_hand"] if cfg.get("wrist") else []),
             )
             self.env.seed(0)  # upstream: the seed affects object positions even with a fixed initial state
-        self.t, self.done = 0, False
+        self.t, self.done, self.closed = 0, False, False
 
     def _cameras(self, enabled: bool) -> None:
         robo = self.env.env
@@ -86,6 +95,7 @@ class EnvRunner:
             else:  # robosuite-level step: the LIBERO-Plus wrapper post-processes the frame, which is absent here
                 obs, _, self.done, _ = self.env.env.step(a)
             self.t += 1
+            self.closed = self.closed or a[-1] > 0  # a gripper-close command has been executed in this episode
             if stop_at_end and (self.done or self.t >= self.cfg["max_steps"]):
                 break
         if not rendered:  # the episode ended mid-chunk: render its final state (only used for logging)
@@ -93,7 +103,7 @@ class EnvRunner:
                 self._cameras(True)
                 obs = self.env.env._get_observations(force_update=True)
                 self._cameras(False)
-        return dict(_pack_obs(self.env, obs, self.cfg), t=self.t, done=bool(self.done),
+        return dict(_pack_obs(self.env, obs, self.cfg), t=self.t, done=bool(self.done), closed_before=bool(self.closed),
                     active=not (self.done or self.t >= self.cfg["max_steps"]))
 
     def reset(self, init_state) -> Dict[str, Any]:
@@ -112,8 +122,8 @@ class EnvRunner:
             self._cameras(False)
         self.t = -self.cfg["num_steps_wait"]
         out = self._run([DUMMY_ACTION] * self.cfg["num_steps_wait"], stop_at_end=False)  # upstream ignores `done` here
-        self.t, self.done = 0, False
-        return dict(out, t=0, done=False, active=True)
+        self.t, self.done, self.closed = 0, False, False
+        return dict(out, t=0, done=False, active=True, closed_before=False)
 
     def restore(self, sim_state, t0: int, gripper_cmd: float) -> Dict[str, Any]:
         """Continue from a logged mid-episode simulator state at step `t0` (no wait steps).
@@ -140,8 +150,8 @@ class EnvRunner:
         # first control step from there; refresh it from the restored state and hold the current pose as goal.
         robot.controller.update(force=True)
         robot.controller.reset_goal()
-        self.t, self.done = t0, False
-        return dict(_pack_obs(self.env, obs, self.cfg), t=t0, done=False, active=True)
+        self.t, self.done, self.closed = t0, False, gripper_cmd > 0
+        return dict(_pack_obs(self.env, obs, self.cfg), t=t0, done=False, active=True, closed_before=bool(self.closed))
 
     def step(self, actions) -> Dict[str, Any]:
         return self._run([a.tolist() for a in actions])  # (k, 7) actions, already gripper-post-processed
