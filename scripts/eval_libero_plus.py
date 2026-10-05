@@ -24,6 +24,7 @@ def main():
     ap.add_argument("--num_envs", type=int, default=7)
     ap.add_argument("--max_steps", type=int, default=512, help="openvla-oft uses 220 / 280 / 300 / 520 for spatial / object / goal / 10")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--save_steps", action="store_true", help="keep per-query arrays (steps/*.npz) for failure analysis")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     assert os.environ.get("LIBERO_VARIANT") == "plus", "run with LIBERO_VARIANT=plus"
@@ -62,7 +63,7 @@ def main():
         if state["n"] % 20 == 0:
             print(f"[{time.time() - t0:6.0f}s] {state['n']} episodes, running_sr={state['s'] / state['n']:.3f}", flush=True)
 
-    results = col.run([(t, 0) for t in sorted(meta)], out_dir=args.out, save_steps=False, on_episode=on_episode)
+    results = col.run([(t, 0) for t in sorted(meta)], out_dir=args.out, save_steps=args.save_steps, on_episode=on_episode)
     vec.close()
     by_id = {r["task_id"]: r for r in results}
     rows = [dict(meta[t], task_id=t, success=by_id[t]["success"]) for t in sorted(meta) if t in by_id]

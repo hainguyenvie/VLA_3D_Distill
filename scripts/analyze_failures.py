@@ -5,6 +5,7 @@ back directly. For each episode this computes what happened to the target object
 the gripper, assigns one coarse failure mode, and estimates when the episode went wrong.
     python scripts/analyze_failures.py --run outputs/week1/b0_object_student [--suite libero_object]
 Writes <run>/failures.csv (one row per episode, raw features + label) and <run>/failures.json (counts).
+With LIBERO_VARIANT=plus (runs of eval_libero_plus.py --save_steps) modes are also counted per perturbation type.
 
 Modes (first match wins; thresholds are heuristics, features are kept so they can be re-cut):
   success
@@ -46,7 +47,10 @@ def task_layout(suite, task_id):
     robo = env.env
     addr = {}
     for name in robo.objects_dict:
-        a = robo.sim.model.get_joint_qpos_addr(f"{name}_joint0")
+        try:
+            a = robo.sim.model.get_joint_qpos_addr(f"{name}_joint0")
+        except Exception:  # an object without a free joint cannot move
+            continue
         addr[name] = int(a[0] if isinstance(a, (tuple, list, np.ndarray)) else a)
     interest = list(robo.obj_of_interest)
     env.close()
@@ -64,6 +68,13 @@ def main():
 
     suite = benchmark.get_benchmark_dict()[args.suite]()
     eps = [json.loads(l) for l in open(os.path.join(args.run, "episodes.jsonl"))]
+    meta = {}  # LIBERO-Plus: perturbation type and difficulty of each task
+    if os.environ.get("LIBERO_VARIANT") == "plus":
+        import libero.libero as L
+
+        cls = json.load(open(os.path.join(os.path.dirname(L.__file__), "benchmark", "task_classification.json")))[args.suite]
+        by_name = {c["name"]: c for c in cls}
+        meta = {t: by_name[suite.get_task(t).name] for t in {e["task_id"] for e in eps}}
     layouts, rows = {}, []
     for e in sorted(eps, key=lambda e: (e["task_id"], e["trial_id"])):
         path = os.path.join(args.run, "steps", f"t{e['task_id']:02d}_n{e['trial_id']:02d}.npz")
@@ -130,6 +141,8 @@ def main():
             "max_other_push": round(max((push[k] for k in others), default=0.0), 3),
             "first_bad_step": int(t_steps[min(first_bad, n - 1)]) if first_bad >= 0 else -1,
         })
+        if meta:
+            rows[-1].update(category=meta[e["task_id"]]["category"], difficulty_level=meta[e["task_id"]]["difficulty_level"])
     with open(os.path.join(args.run, "failures.csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
@@ -142,7 +155,14 @@ def main():
     summary = {
         "n_episodes": len(rows), "n_failures": len(fails),
         "modes": dict(Counter(r["mode"] for r in fails).most_common()),
-        "modes_by_task": {str(t): dict(Counter(r["mode"] for r in fails if r["task_id"] == t)) for t in sorted(layouts)},
+        "modes_by_task": {} if meta else {str(t): dict(Counter(r["mode"] for r in fails if r["task_id"] == t)) for t in sorted(layouts)},
+        "modes_by_category": {c: dict(Counter(r["mode"] for r in rows if r["category"] == c).most_common())
+                              for c in sorted({r["category"] for r in rows})} if meta else {},
+        "xy_err_at_first_close_median_by_category": {
+            c: {k: (round(float(np.median(v)), 3) if v else None) for k, v in (
+                ("success", [r["xy_err_at_first_close"] for r in att(wins) if r["category"] == c]),
+                ("failure", [r["xy_err_at_first_close"] for r in att(fails) if r["category"] == c]))}
+            for c in sorted({r["category"] for r in rows})} if meta else {},
         # how far from the target (horizontal, metres) the gripper was when it first closed
         "xy_err_at_first_close_quartiles": {"success": q3([r["xy_err_at_first_close"] for r in att(wins)]),
                                             "failure": q3([r["xy_err_at_first_close"] for r in att(fails)])},
