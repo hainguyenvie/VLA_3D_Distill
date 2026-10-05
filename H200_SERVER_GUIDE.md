@@ -1,4 +1,4 @@
-# Máy chủ — hướng dẫn dùng cho project VLA 3D Distill (2×L40, H200 khi được nhường)
+# Máy chủ — hướng dẫn dùng cho project VLA 3D Distill (2×L40 + H200)
 
 > **File duy nhất về máy chủ của project này** (On-Policy 3D / Gaussian Distillation for VLA). Viết lại
 > 05/10/2026 từ bản của project `3dgs_in_refiner`, sau khi probe trực tiếp máy 2×L40. Các bài học chung
@@ -17,18 +17,31 @@
 
 | | **Máy chính: 2×L40** | **Máy H200** |
 |---|---|---|
-| Biến trong `infra.env` | `L40_SSH`, `L40_REMOTE_ROOT` | `H200_SSH`, `H200_REMOTE_ROOT` (để trống) |
-| Trạng thái với project này | **dùng hằng ngày** | **chưa được dùng**: đang thuộc project khác của operator |
+| Biến trong `infra.env` | `L40_SSH`, `L40_REMOTE_ROOT` | `H200_SSH`, `H200_REMOTE_ROOT` |
+| Trạng thái với project này | **máy protocol**: mọi rollout và eval (render GPU đúng chuẩn) | **được dùng từ 05/10**, chỉ cho việc **không cần render** (xem dưới) |
 | GPU | 2 × L40 46 GB (driver 580), hai socket, hai NUMA | 1 × H200 141 GB |
 | CPU / RAM | 96 core, 125 GB **không có swap**; người khác dùng 60–95 GB và dao động (load nền ≈ 24) | 22 core, 235 GB |
 | Đĩa | 838 GB, còn **189 GB** (05/10); workspace project khác của operator chiếm 169 GB | 2,9 TB |
 | Tài khoản | **dùng chung** với nhiều người (home có thư mục của họ) | root |
 | Shell / giờ | **zsh**, **UTC+7** | bash, UTC |
-| Có sẵn | git, tmux, rsync, wget, curl, docker, miniconda ở home; EGL của NVIDIA; **không có ffmpeg** | — |
+| Có sẵn | git, tmux, rsync, wget, curl, docker, miniconda ở home; EGL của NVIDIA; **không có ffmpeg** | git, tmux, rsync, `uv` + `micromamba` ở `~/.local/bin`; mạng nhanh mọi nơi (PyPI 50 MB/s, HF 80 MB/s) |
 
-**Quy tắc về H200:** mặc định project này chỉ chạy trên 2×L40. Khi một thí nghiệm không vừa VRAM
-(46 GB mỗi card) hoặc cần chạy lớn, **báo operator** kèm ước lượng VRAM và thời gian; operator sẽ bảo
-project kia nhường card. Không tự ý ssh lên máy H200 để chạy.
+**Quy tắc về H200:** operator cho dùng từ 05/10 ("util, VRAM hay RAM chưa dùng hết thì cứ đưa lên chạy").
+Card có thể bị project kia của operator lấy lại: kiểm `nvidia-smi` trước mỗi lần chạy, không đụng thư mục
+project kia. Workspace riêng nằm cạnh nó trong `~/projects/`.
+
+**H200 không render được MuJoCo một cách dùng được** (đo 05/10, driver 580.159 open kernel module, GPU
+passthrough):
+- NVIDIA EGL chỉ sống khi nó là context duy nhất trên GPU. Hai tiến trình render cùng lúc, hoặc một tiến
+  trình render trong khi có bất kỳ context CUDA nào (kể cả model đang nghỉ), bị driver kill: `NVRM Xid 31`
+  (MMU fault ở engine đồ hoạ) hoặc `Xid 109` (ctx switch timeout). Lock tuần tự hoá render không cứu được.
+- Render CPU (OSMesa, `mesalib=24` từ conda-forge, chọn bằng `<workspace>/machine.env`) chạy ổn nhưng **làm
+  sai kết quả**: cùng state, cùng model, success rate của student tụt 52% → 33% và teacher 70% → 36%
+  (100 episode). Logits lệch KL ≈ 0.3 so với render GPU, trong khi chênh lệch số học giữa hai máy trên cùng
+  frame chỉ KL ≈ 0.01. Khác biệt nằm ở lọc texture và khử răng cưa; supersampling không giúp.
+- Hệ quả: **mọi rollout và eval chạy trên L40**; H200 chỉ nhận việc thuần GPU (train từ data đã thu, probe,
+  kiểm logits). Sửa tận gốc cần đổi driver trên H200 hoặc nối thẳng hai server: operator quyết.
+- Đường truyền L40 → laptop khoảng 0,8 MB/s (laptop → H200 khoảng 10 MB/s): chỉ chuyển data gọn.
 
 **Nút thắt thật của máy 2×L40 là RAM, không phải VRAM** (đo 05/10). Mỗi env LIBERO chiếm khoảng 1,7 GB
 RAM, tiến trình chính giữ hai policy 7B chiếm khoảng 1,5 GB (đỉnh 5 GB lúc nạp) → một job 8 env cần khoảng
@@ -41,8 +54,8 @@ cạn RAM, load lên trên 500 trong khoảng 8 phút; đã dừng job và thêm
 
 ```bash
 . ./infra.env
-ssh $L40_SSH
-scripts/sync.sh          # rsync repo local -> $L40_REMOTE_ROOT/repo (có --delete, bỏ qua mọi thứ trong .gitignore)
+ssh $L40_SSH             # hoặc $H200_SSH
+scripts/sync.sh [l40|h200|all]   # rsync repo local -> <workspace>/repo (có --delete, bỏ qua mọi thứ trong .gitignore)
 ```
 
 - **Đăng nhập bằng key** (alias trong `~/.ssh/config`). Mật khẩu từng được gửi qua chat thì **không lưu
@@ -224,6 +237,9 @@ until ssh -n -o ConnectTimeout=20 $L40_SSH "grep -q JOB_DONE $L40_REMOTE_ROOT/lo
 | `pip … \| tail` báo OK nhưng thiếu module | pipe nuốt lỗi build | không pipe output pip |
 | `pip install` đứng hàng chục phút | PyPI bị bóp 30–100 KB/s mỗi kết nối; pip 23 còn tải cả wheel chỉ để resolve | nâng pip trước, resolve bằng dry-run, tải wheel song song (§7) |
 | Kill job nhưng job khác tự mọc lên | script hàng đợi gọi bằng đường dẫn tương đối nên không khớp bộ lọc theo tên workspace; nó thấy bước hiện tại chết và chạy bước kế | kill script hàng đợi **trước**, rồi mới tới các tiến trình con |
+| ssh tự chết khi kill job trên máy H200 | shell đăng nhập ở đó là bash, nên bộ lọc `comm=="bash"` + tên script khớp chính lệnh ssh của mình | loại `$$` khỏi danh sách PID (`awk -v me=$$ '$1!=me && …'`) |
+| Worker env chết không lời nào, `dmesg` có `NVRM: Xid 31/109` | render EGL trên H200 khi có context GPU khác (§0) | rollout chỉ chạy trên L40 |
+| Hai lần render cùng state ra ảnh khác nhau | robosuite lấy mẫu camera ở substep 24/25 của control step, không phải state cuối | render đúng thời điểm đó (`EnvRunner`), kiểm bằng `scripts/check_env_stepping.py` |
 | ssh `Connection timed out during banner exchange` | máy cạn RAM, đang thrash | thử lại bằng vòng lặp ssh ngắn; việc đầu tiên khi vào được là dừng job của mình |
 | Hai `pip install` cùng ghi một env | kill script bash cha nhưng pip con vẫn sống, rồi chạy lại script | sau khi kill, liệt kê tiến trình con còn sống và kill theo PID trước khi chạy lại |
 | `conda create python=3.10` xong không có pip | conda-forge không kéo pip theo python | thêm `pip` vào lệnh create |

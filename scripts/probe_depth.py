@@ -28,7 +28,7 @@ def parse():
     ap.add_argument("--holdout_from", type=int, default=40, help="trials >= this id are held out")
     ap.add_argument("--stride", type=int, default=2, help="use every k-th queried state for fitting")
     ap.add_argument("--epochs", type=int, default=2)
-    ap.add_argument("--batch_size", type=int, default=16)
+    ap.add_argument("--batch_size", type=int, default=8)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=0)
     return ap.parse_args()

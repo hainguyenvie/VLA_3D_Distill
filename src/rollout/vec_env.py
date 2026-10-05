@@ -96,12 +96,18 @@ class EnvRunner:
                     active=not (self.done or self.t >= self.cfg["max_steps"]))
 
     def reset(self, init_state) -> Dict[str, Any]:
+        robo = self.env.env
+        cams = [name for name in robo._observables if name.endswith(("_image", "_depth"))]
         with self.lock:  # a (hard) reset rebuilds the simulator and its render context
+            # cameras must be enabled across reset + set_init_state, exactly as upstream: these two calls reset the
+            # sampling timers and force two observation updates, which is what puts the timers in their phase
+            for name in cams:
+                robo.modify_observable(name, "enabled", True)
             self.env.reset()
             self.env.set_init_state(init_state)
             # sampling-timer state of each camera at the start of a control step (identical at every step)
-            self._phase = {name: (ob._time_since_last_sample, ob._sampled)
-                           for name, ob in self.env.env._observables.items() if name.endswith(("_image", "_depth"))}
+            self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
+                           for name in cams}
             self._cameras(False)
         self.t = -self.cfg["num_steps_wait"]
         out = self._run([DUMMY_ACTION] * self.cfg["num_steps_wait"], stop_at_end=False)  # upstream ignores `done` here
@@ -182,6 +188,10 @@ class LiberoVecEnv:
 
     def step(self, i: int, actions: np.ndarray) -> None:
         self.conns[i].send(("step", actions))
+
+    def ready(self, i: int) -> bool:
+        """True if env i has answered its pending request (so `recv` will not block)."""
+        return self.conns[i].poll(0)
 
     def recv(self, i: int, timeout: float = 900.0) -> Any:
         if not self.conns[i].poll(timeout):

@@ -95,18 +95,21 @@ class Collector:
 
         for i in range(self.vec.num_envs):
             start(i)
-        for i, s in enumerate(slots):
-            if s is not None:
-                s["obs"] = self.vec.recv(i)
 
         rounds = 0
         while any(s is not None for s in slots):
             rounds += 1
+            # Resets (simulator rebuild, about 2 s) run in the background: an env joins the batch again once its
+            # first observation is there. Only when no env at all has an observation do we wait for one.
+            for i, s in enumerate(slots):
+                if s is not None and s["obs"] is None:
+                    if self.vec.ready(i) or not any(x is not None and x["obs"] is not None for x in slots):
+                        s["obs"] = self.vec.recv(i)
             if rounds % 20 == 0 and mem_available_gb() < self.min_free_gb:
                 # shared machine without swap: stop before we push it into thrashing; finished episodes are saved
                 raise MemoryError(f"only {mem_available_gb():.1f} GB RAM available on the machine, aborting the rollout")
             tm, t0 = self.timing, time.perf_counter()
-            act_idx = [i for i, s in enumerate(slots) if s is not None]
+            act_idx = [i for i, s in enumerate(slots) if s is not None and s["obs"] is not None]
             images = [slots[i]["obs"]["rgb"] for i in act_idx]
             descs = [self.tasks[slots[i]["task_id"]][0] for i in act_idx]
             pils = preprocess_batch(images, self.policy.center_crop)  # shared by the actor and all labelers
@@ -142,8 +145,6 @@ class Collector:
                 if on_episode:
                     on_episode(rec)
                 start(i)
-                if slots[i] is not None:
-                    slots[i]["obs"] = self.vec.recv(i)
             t6 = time.perf_counter()
             for k, v in (("preprocess", t1 - t0), ("act", t2 - t1), ("label", t3 - t2), ("env", t5 - t4 + t6 - t5),
                          ("other", t4 - t3)):

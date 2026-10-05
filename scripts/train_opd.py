@@ -131,6 +131,8 @@ def main():
 
         losses, sp_losses, mets, n = [], [], [], len(images)
         opt.zero_grad(set_to_none=True)
+        if args.grad_checkpointing:  # HF only checkpoints in train mode (the LLM has no dropout, so nothing else changes)
+            student.vla.language_model.train()
         for _ in range(args.epochs):
             order = rng.permutation(n)
             for b, s in enumerate(range(0, n, args.batch_size)):
@@ -155,13 +157,15 @@ def main():
                 if b % 20 == 0:
                     mets.append(token_metrics(logits.detach(), tl))
         opt.zero_grad(set_to_none=True)
+        student.vla.eval()
 
         totals["episodes"] += len(recs)
         totals["env_steps"] += int(sum(r["env_steps"] for r in recs))
         totals["states"] += n
         row = {"iter": it, "rollout_sr": float(np.mean([r["success"] for r in recs])), "n_states": n,
                "loss": float(np.mean(losses)), **{f"train_{k}": float(np.mean([m[k] for m in mets])) for k in mets[0]},
-               "sec_collect": round(t_collect), "sec_total": round(time.time() - t0), "collect_timing": tm, **totals}
+               "sec_collect": round(t_collect), "sec_total": round(time.time() - t0), "collect_timing": tm,
+               "gpu_peak_gb": round(torch.cuda.max_memory_allocated(student.device) / 1e9, 1), **totals}
         if sp_losses:
             row["spatial_loss"] = float(np.mean(sp_losses))
         if args.state_source == "student":
