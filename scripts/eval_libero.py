@@ -18,6 +18,7 @@ import numpy as np
 def parse():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", required=True)
+    ap.add_argument("--lora", default="", help="LoRA adapter directory (from train_opd.py) to put on top of --ckpt")
     ap.add_argument("--suite", default="libero_object")
     ap.add_argument("--out", required=True)
     ap.add_argument("--label", action="append", default=[],
@@ -55,6 +56,8 @@ def main():
     np.random.seed(args.seed)
     policy = TokenPolicy(args.ckpt, args.suite, device=args.device)
     print("loading info:", {k: len(v) for k, v in policy.loading_info.items()}, flush=True)
+    if args.lora:
+        policy.add_lora(adapter_path=args.lora)
     labelers = {}
     for spec in args.label:
         name, path = spec.split("=", 1)
