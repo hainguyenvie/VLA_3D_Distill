@@ -179,3 +179,25 @@ thật.
 "Vượt SOTA" theo nghĩa các paper này dùng là vượt đối thủ trực tiếp trong cùng setting và cùng backbone. Bảng xếp
 hạng tuyệt đối của LIBERO-Plus (lớp π0.5, 85–88) nằm ngoài tầm của backbone OFT và không bài nào trong hai nhánh
 lấy làm đích.
+
+## 7. Bổ sung 05/10 (tối): bài gần với hướng "render lại state dưới góc nhìn khác" và với sự bất ổn của distill
+
+- **S2VOPD (2608.14144)** [V]: on-policy distillation cho VLM, bất đối xứng dựng từ đầu vào: teacher (EMA) nhìn
+  ảnh gốc, student nhìn ảnh bị giảm chất lượng (thu nhỏ 0.3–0.6×, nhiễu Gauss); Qwen 4B 70.7 → 77.4 trên các bench
+  perception. Không có robot, không có đổi góc nhìn. Là họ hàng gần nhất về cơ chế "teacher nhìn sạch, student
+  nhìn bẩn"; phần của ta khác ở chỗ nhiễu góc nhìn cần cảnh 3D và ở vòng điều khiển kín.
+- **InfiNoVA (2609.27734)** [V, chỉ abstract]: dựng mỗi demo thành Gaussian 4D rồi render góc nhìn mới để tăng
+  cường **demo** (offline, giữ nguyên action); robot thật, 5.4× so với không tăng cường dưới góc nhìn lạ. Không có
+  teacher, không có state on-policy.
+- **GS-VLA (2608.19066)** [V] và **AnyCamVLA (2603.05868)**: chuẩn hoá góc nhìn **lúc test** (render ảnh về góc
+  camera lúc train rồi mới đưa cho policy đóng băng); cần depth đã hiệu chuẩn và pose camera lúc chạy. π0.5 trên
+  LIBERO-Spatial khi dời camera 1 m: 42.6 → 86.8. Hướng của ta không cần gì thêm lúc test.
+- **AnyViewDex (2609.20107)**: distill teacher–student cho thao tác khéo léo bất biến góc nhìn; distill giữ được
+  61–72% năng lực teacher so với 33–49% nếu chỉ domain randomization.
+- **2609.35259** (động học của distill on/off-policy, LLM) [V]: reverse-KL nhạy với policy sinh rollout và với
+  learning rate, đôi khi sụp ở lr cao; **learning rate quyết định mức quên**; forward-KL bền hơn. Khớp với hiện
+  tượng sụp theo task của B2 / B4 ở lr cố định 1e-4 → thử giảm lr theo cosine trước khi kết luận gì về khoảng
+  cách 86 so với 93.8.
+- Benchmark có thể chuyển sang nếu cần: **LIBERO-VPro (2609.24350)** (robustness thị giác vòng kín), **RoboRecover
+  (2609.28952)** (phục hồi sau lệch thực thi; liên quan trực tiếp tới kết quả takeover "sau lần kẹp hỏng thì không
+  cứu được"), RoboTwin 2.0 (benchmark thứ hai của hầu hết các bài cùng nhánh).

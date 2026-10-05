@@ -49,6 +49,8 @@ def parse():
     ap.add_argument("--batch_size", type=int, default=4)
     ap.add_argument("--grad_accum", type=int, default=2)
     ap.add_argument("--lr", type=float, default=1e-4)
+    ap.add_argument("--lr_min", type=float, default=0.0,
+                    help="> 0: cosine decay of the learning rate over the iterations, from --lr down to this value")
     ap.add_argument("--lora_rank", type=int, default=32)
     ap.add_argument("--grad_clip", type=float, default=1.0)
     ap.add_argument("--grad_checkpointing", action="store_true")
@@ -152,6 +154,10 @@ def main():
         for c, _ in cols:
             c.timing.update({k: 0 if k == "rounds" else 0.0 for k in c.timing})
 
+        if args.lr_min > 0:  # one value per iteration; a function of the iteration only, so a resumed run continues it
+            lr = args.lr_min + 0.5 * (args.lr - args.lr_min) * (1 + np.cos(np.pi * (it - 1) / max(args.iters - 1, 1)))
+            for g in opt.param_groups:
+                g["lr"] = float(lr)
         losses, sp_losses, mets, n = [], [], [], len(images)
         opt.zero_grad(set_to_none=True)
         if args.grad_checkpointing:  # HF only checkpoints in train mode (the LLM has no dropout, so nothing else changes)
@@ -190,7 +196,8 @@ def main():
                "n_episodes": len(recs), "n_states_collected": n_collected,
                "loss": float(np.mean(losses)), **{f"train_{k}": float(np.mean([m[k] for m in mets])) for k in mets[0]},
                "sec_collect": round(t_collect), "sec_total": round(time.time() - t0), "collect_timing": tm,
-               "gpu_peak_gb": round(torch.cuda.max_memory_allocated(student.device) / 1e9, 1), **totals}
+               "gpu_peak_gb": round(torch.cuda.max_memory_allocated(student.device) / 1e9, 1),
+               "lr": opt.param_groups[0]["lr"], **totals}
         if sp_losses:
             row["spatial_loss"] = float(np.mean(sp_losses))
         for who in ("student", "teacher"):  # success of the rollouts by who drove them (under view_aug: perturbed for the student)
