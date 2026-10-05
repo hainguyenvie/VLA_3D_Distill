@@ -44,6 +44,9 @@ def main():
 
     ref = episode(False)
     assert all("rgb_clean" not in o for o in ref)
+    again = episode(False)  # floor: two nominal episodes of the same env differ by float noise in the state
+    floor = max(float(np.abs(a["sim_state"] - b["sim_state"]).max()) for a, b in zip(ref, again))
+    assert floor < 1e-9 and all((a["rgb"] == b["rgb"]).all() for a, b in zip(ref, again)), floor
     zero = dict(camera=dict(azimuth=0.0, elevation=0.0, distance=1.0, aim=np.zeros(2)),
                 light=dict(diffuse=1.0, ambient=1.0, tint=np.ones(3), shift=np.zeros(3)))
     same = episode(zero)
@@ -51,8 +54,9 @@ def main():
     d_clean = max(float(np.abs(a["rgb"].astype(int) - b["rgb_clean"].astype(int)).max()) for a, b in zip(ref, same))
     d_zero = max(float(np.abs(b["rgb"].astype(int) - b["rgb_clean"].astype(int)).max()) for b in same)
     d_depth = max(float(np.abs(a["depth"] - b["depth"]).max()) for a, b in zip(ref, same))
-    print(f"zero perturbation: |state| {d_state:.1e}, nominal frame {d_clean}, extra render vs nominal {d_zero}, depth {d_depth:.1e}")
-    assert d_state == 0 and d_clean == 0 and d_zero == 0 and d_depth == 0
+    print(f"nominal twice: |state| {floor:.1e}; zero perturbation: |state| {d_state:.1e}, nominal frame {d_clean}, "
+          f"extra render vs nominal {d_zero}, depth {d_depth:.1e}")
+    assert d_state < 1e-9 and d_clean == 0 and d_zero == 0 and d_depth == 0
 
     draw_rng, frames, worst_state, worst_clean, n_diff = np.random.default_rng(1), [], 0.0, 0, 0
     for k in range(args.draws):
@@ -68,7 +72,7 @@ def main():
         print(k, {name: {a: np.round(v, 2).tolist() if hasattr(v, "__len__") else round(float(v), 2) for a, v in p.items() if a != "seed"}
                   for name, p in pert.items()})
     print(f"drawn perturbations: |state| {worst_state:.1e}, nominal frame {worst_clean}, {n_diff}/{args.draws} visibly perturbed")
-    assert worst_state == 0 and worst_clean == 0 and n_diff >= args.draws - 1
+    assert worst_state < 1e-9 and worst_clean == 0 and n_diff >= args.draws - 1
     cols = 4
     rows = [np.concatenate(frames[i : i + cols], axis=1) for i in range(0, len(frames) - len(frames) % cols, cols)]
     sheet = np.concatenate([np.concatenate([ref[0]["rgb"]] + [np.zeros_like(ref[0]["rgb"])] * (cols - 1), axis=1)] + rows, axis=0)

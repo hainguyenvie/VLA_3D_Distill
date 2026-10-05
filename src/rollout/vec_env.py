@@ -158,8 +158,23 @@ class EnvRunner:
         out = _pack_obs(self.env, obs, self.cfg)
         if self.pert:
             out["rgb_clean"] = out["rgb"]
-            out.update(self._perturbed_view())
+            out.update(self._stash)
         return out
+
+    def _hook_camera(self) -> None:
+        """Make the agent-view sensor also render the perturbed view, at the very simulator instant it samples (the
+        sensor runs inside the control step, under the render lock held by the caller)."""
+        robo = self.env.env
+        sensor = robo._observables["agentview_image"]._sensor
+
+        def both(obs_cache):
+            img = sensor(obs_cache)
+            if self.pert:
+                self._stash = self._perturbed_view()
+            return img
+
+        both.__modality__ = sensor.__modality__
+        robo.modify_observable("agentview_image", "sensor", both)
 
     def _start_perturbation(self, fixed: Optional[Dict[str, Any]] = None) -> None:
         """Draw this episode's perturbation (or take `fixed`) and precompute the camera / light parameters it puts
@@ -209,10 +224,9 @@ class EnvRunner:
 
         robo, res, depth = self.env.env, self.cfg["resolution"], bool(self.cfg.get("depth"))
         conv = IMAGE_CONVENTION_MAPPING[macros.IMAGE_CONVENTION]
-        with self.lock:
-            self._set_visuals(self._perturbed)
-            img = robo.sim.render(camera_name="agentview", width=res, height=res, depth=depth)
-            self._set_visuals(self._nominal)
+        self._set_visuals(self._perturbed)
+        img = robo.sim.render(camera_name="agentview", width=res, height=res, depth=depth)
+        self._set_visuals(self._nominal)
         out = {}
         if depth:
             img, dep = img
@@ -265,12 +279,14 @@ class EnvRunner:
             for name in cams:
                 robo.modify_observable(name, "enabled", True)
             self.env.reset()
+            self.pert = None
+            if self.cfg.get("perturb"):
+                self._hook_camera()
             self.env.set_init_state(init_state)
             # sampling-timer state of each camera at the start of a control step (identical at every step)
             self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
                            for name in cams}
             self._cameras(False)
-        self.pert = None
         if isinstance(perturb, dict):
             self._start_perturbation(perturb)
         elif perturb and self.cfg.get("perturb"):
