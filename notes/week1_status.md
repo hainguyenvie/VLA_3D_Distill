@@ -328,6 +328,28 @@ dùng làm teacher cho Long.
 Student 1-traj của Long, eval đầu của run distill (100 episode, greedy): **17%** (paper 17.3); theo task 0 / 20 / 60 /
 10 / 0 / 30 / 30 / 0 / 0 / 20.
 
+## Bước sửa theo failure analysis: distill dưới nhiễu thị giác, teacher nhìn cảnh sạch (đang chạy)
+
+Chuỗi lập luận: (1) loss depth trên cảnh chuẩn không đổi kết quả (B4 = B2), vì trong phân phối feature đã đủ hình
+học; (2) trên LIBERO-Plus, thứ hỏng là việc đọc hình học khi góc nhìn / ánh sáng / nhiễu ảnh đổi; (3) teacher chỉ
+dạy được ở những chỗ nó nhìn được. Vì vậy: giữ nguyên vòng lặp distill, nhưng **render lại chính các state đó dưới
+góc nhìn / ánh sáng / nhiễu ngẫu nhiên cho student**, còn teacher gán nhãn (và lái, khi tới lượt) từ ảnh chuẩn của
+cùng state mô phỏng. Đây là chỗ 3D thật sự cần: muốn có ảnh của cùng một state từ góc nhìn khác thì phải có cảnh 3D
+(simulator ở đây; 3DGS ngoài đời thật).
+
+- Cài đặt: `--view_aug` (`src/rollout/vec_env.py::VIEW_AUG`). Mỗi episode một lần rút: 25% giữ nguyên; còn lại mỗi
+  yếu tố camera / ánh sáng / cảm biến bật với xác suất 0.6. Camera quay quanh điểm nó đang nhìn trên mặt bàn
+  (phương vị ±75°, nâng 0–15°, khoảng cách ×1–2, lệch hướng ngắm ±10°); ánh sáng ×0.3–1.7, dời đèn ±1 m, ám màu
+  ±15%; nhiễu Gauss tới 0.08 và blur tới 2 px. Ảnh nhiễu được render ngay tại thời điểm sensor lấy mẫu; cổng
+  `scripts/check_view_aug.py` xác nhận biên độ 0 cho đúng từng pixel ảnh chuẩn và vật lý không đổi.
+- `--state_source mixed`: các lô episode luân phiên do student lái (trên ảnh nhiễu) và teacher lái (trên ảnh
+  chuẩn), vì dưới nhiễu mạnh student hỏng sớm và phần lớn state của nó nằm sau lần kẹp hỏng (nhãn vô dụng).
+- Hai nhánh, cùng siêu tham số với B2 (seed 7, 20 vòng × 2048 state): **V1** = mixed + view_aug (H200); **V2** =
+  V1 + loss depth trên ảnh nhiễu (L40). Đánh giá: 500 episode chuẩn và cùng 420 task LIBERO-Plus.
+- Điều phải nói rõ khi báo cáo: dải nhiễu được chọn rộng cỡ LIBERO-Plus (họ quay camera tới ±75° và kéo xa tới
+  2 lần), nên đây **không còn là zero-shot theo loại nhiễu**; không dùng demo mới và không dùng task / file nhiễu
+  của LIBERO-Plus. Mốc so công bằng là student / teacher cùng backbone và OFT train trên data nhiễu (79.5).
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
