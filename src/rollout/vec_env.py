@@ -114,6 +114,24 @@ class EnvRunner:
         self.t, self.done = 0, False
         return dict(out, t=0, done=False, active=True)
 
+    def restore(self, sim_state, t0: int) -> Dict[str, Any]:
+        """Continue from a logged mid-episode simulator state at step `t0` (no wait steps).
+
+        The first frame is a forced render of exactly that state; the controller starts fresh, as after a reset.
+        """
+        robo = self.env.env
+        cams = [name for name in robo._observables if name.endswith(("_image", "_depth"))]
+        with self.lock:
+            for name in cams:
+                robo.modify_observable(name, "enabled", True)
+            self.env.reset()
+            obs = self.env.set_init_state(sim_state)
+            self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
+                           for name in cams}
+            self._cameras(False)
+        self.t, self.done = t0, False
+        return dict(_pack_obs(self.env, obs, self.cfg), t=t0, done=False, active=True)
+
     def step(self, actions) -> Dict[str, Any]:
         return self._run([a.tolist() for a in actions])  # (k, 7) actions, already gripper-post-processed
 
@@ -131,13 +149,13 @@ def _worker(conn, cfg: Dict[str, Any], lock) -> None:
         lock = lock if lock is not None else contextlib.nullcontext()
         while True:
             cmd, arg = conn.recv()
-            if cmd == "reset":
-                task_id, bddl, init_state = arg
+            if cmd in ("reset", "restore"):
+                task_id, bddl, state, t0 = arg
                 if task_id != cur_task:
                     if runner is not None:
                         runner.close()
                     runner, cur_task = EnvRunner(bddl, cfg, lock), task_id  # imports only the env stack, never torch
-                conn.send(("ok", runner.reset(init_state)))
+                conn.send(("ok", runner.reset(state) if cmd == "reset" else runner.restore(state, t0)))
             elif cmd == "step":
                 conn.send(("ok", runner.step(arg)))
             elif cmd == "close":
@@ -184,7 +202,11 @@ class LiberoVecEnv:
 
     def reset(self, i: int, task_id: int, trial_id: int) -> None:
         """Ask env i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
-        self.conns[i].send(("reset", (task_id, self._bddl[task_id], self._init[task_id][trial_id])))
+        self.conns[i].send(("reset", (task_id, self._bddl[task_id], self._init[task_id][trial_id], 0)))
+
+    def restore(self, i: int, task_id: int, sim_state: np.ndarray, t0: int) -> None:
+        """Ask env i to continue an episode of task `task_id` from a logged simulator state at step `t0`."""
+        self.conns[i].send(("restore", (task_id, self._bddl[task_id], sim_state, t0)))
 
     def step(self, i: int, actions: np.ndarray) -> None:
         self.conns[i].send(("step", actions))
