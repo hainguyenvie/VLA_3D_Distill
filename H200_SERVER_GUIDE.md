@@ -20,7 +20,7 @@
 | Biến trong `infra.env` | `L40_SSH`, `L40_REMOTE_ROOT` | `H200_SSH`, `H200_REMOTE_ROOT` (để trống) |
 | Trạng thái với project này | **dùng hằng ngày** | **chưa được dùng**: đang thuộc project khác của operator |
 | GPU | 2 × L40 46 GB (driver 580), hai socket, hai NUMA | 1 × H200 141 GB |
-| CPU / RAM | 96 core, 125 GB; người khác dùng khoảng một nửa (load ≈ 24) | 22 core, 235 GB |
+| CPU / RAM | 96 core, 125 GB **không có swap**; người khác dùng 60–95 GB và dao động (load nền ≈ 24) | 22 core, 235 GB |
 | Đĩa | 838 GB, còn **189 GB** (05/10); workspace project khác của operator chiếm 169 GB | 2,9 TB |
 | Tài khoản | **dùng chung** với nhiều người (home có thư mục của họ) | root |
 | Shell / giờ | **zsh**, **UTC+7** | bash, UTC |
@@ -29,6 +29,13 @@
 **Quy tắc về H200:** mặc định project này chỉ chạy trên 2×L40. Khi một thí nghiệm không vừa VRAM
 (46 GB mỗi card) hoặc cần chạy lớn, **báo operator** kèm ước lượng VRAM và thời gian; operator sẽ bảo
 project kia nhường card. Không tự ý ssh lên máy H200 để chạy.
+
+**Nút thắt thật của máy 2×L40 là RAM, không phải VRAM** (đo 05/10). Mỗi env LIBERO chiếm khoảng 1,7 GB
+RAM, tiến trình chính giữ hai policy 7B chiếm khoảng 1,5 GB (đỉnh 5 GB lúc nạp) → một job 8 env cần khoảng
+15 GB. Máy không có swap và một job của người khác dao động 36 GB trở lên, nên RAM trống thực tế chỉ
+20–50 GB. Hệ quả: **mỗi lúc chỉ chạy một job có env**, tối đa 8 env; hai card không dùng song song cho
+rollout được. Sự cố 05/10 (09:42–09:51): hai job eval × 10 env (35 GB) trùng lúc job kia phình to làm máy
+cạn RAM, load lên trên 500 trong khoảng 8 phút; đã dừng job và thêm các chốt chặn ở §4.
 
 ## 1. Truy cập và đồng bộ code
 
@@ -89,7 +96,7 @@ không có đường dẫn tuyệt đối nào trong repo.
   hoặc nháy, đặc biệt trong chuỗi lệnh `ssh '…'`.
 - Cấu hình mặc định của nhiều thư viện ghi vào home (`~/.libero`, `~/.cache`, `~/.keras`): home là của
   chung, nên luôn chuyển hướng vào workspace bằng biến môi trường (`env.sh` đã làm).
-- CPU 96 core nhưng load nền khoảng 24: rollout mô phỏng song song nên giới hạn ở khoảng 16–24 tiến trình.
+- CPU 96 core nhưng load nền khoảng 24, và RAM mới là giới hạn (§0): tối đa 8 env cho một job.
 
 ## 4. Luật dùng GPU
 
@@ -113,7 +120,17 @@ G=0; vgate() { until [ "$(nvidia-smi --query-gpu=memory.used --format=csv,nohead
 ```
 
 - **Khi nào xin H200:** batch huấn luyện không vừa 46 GB dù đã giảm batch + gradient accumulation; cần
-  chạy nhiều seed song song cho bảng kết quả cuối; hoặc card 1 bị người khác giữ lâu làm nghẽn tiến độ.
+  chạy nhiều seed hoặc nhiều biến thể song song (RAM của máy này chỉ cho một job có env mỗi lúc); hoặc
+  card 1 bị người khác giữ lâu làm nghẽn tiến độ.
+- **Chốt chặn RAM và CPU (bắt buộc, đã cài sẵn trong script):**
+  - `env.sh` giới hạn thread (`OMP/OPENBLAS/MKL/NUMBA/TF_*`): không có thì mỗi tiến trình mở khoảng 96
+    thread BLAS/TF, 20 worker đẩy load average lên hàng trăm.
+  - `run_py.sh` chờ đến khi `MemAvailable ≥ MIN_FREE_GB` (mặc định 24) mới chạy, và chạy với `nice`.
+  - Collector tự dừng (MemoryError) khi `MemAvailable < MIN_FREE_GB_RUN` (mặc định 4); episode đã xong
+    được lưu, chạy lại là resume.
+  - Worker env không import torch (chỉ `libero.libero.envs`); init state do tiến trình chính gửi sang.
+  - Trước khi chạy job mới: `free -g`, và đếm RAM job mình đang giữ
+    (`ps -u $USER -o rss=,args= | awk '/<workspace>/ {s+=$1} END {print s/1e6 " GB"}'`).
 
 ## 5. Dùng cả hai GPU
 
@@ -206,6 +223,8 @@ until ssh -n -o ConnectTimeout=20 $L40_SSH "grep -q JOB_DONE $L40_REMOTE_ROOT/lo
 | Run hỏng tưởng hoàn tất | guard chỉ kiểm file trung gian | kiểm file cuối và số dòng hoặc id |
 | `pip … \| tail` báo OK nhưng thiếu module | pipe nuốt lỗi build | không pipe output pip |
 | `pip install` đứng hàng chục phút | PyPI bị bóp 30–100 KB/s mỗi kết nối; pip 23 còn tải cả wheel chỉ để resolve | nâng pip trước, resolve bằng dry-run, tải wheel song song (§7) |
+| Kill job nhưng job khác tự mọc lên | script hàng đợi gọi bằng đường dẫn tương đối nên không khớp bộ lọc theo tên workspace; nó thấy bước hiện tại chết và chạy bước kế | kill script hàng đợi **trước**, rồi mới tới các tiến trình con |
+| ssh `Connection timed out during banner exchange` | máy cạn RAM, đang thrash | thử lại bằng vòng lặp ssh ngắn; việc đầu tiên khi vào được là dừng job của mình |
 | Hai `pip install` cùng ghi một env | kill script bash cha nhưng pip con vẫn sống, rồi chạy lại script | sau khi kill, liệt kê tiến trình con còn sống và kill theo PID trước khi chạy lại |
 | `conda create python=3.10` xong không có pip | conda-forge không kéo pip theo python | thêm `pip` vào lệnh create |
 | `$VAR` rỗng trong script sinh bằng heredoc | nội suy sớm | heredoc `<<'EOF'` (hoặc viết local rồi sync) |
