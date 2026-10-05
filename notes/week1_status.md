@@ -236,10 +236,28 @@ Chạy lại có lưu state: 71.4% (lần trước 70.2%). 120 episode hỏng:
 |---|---|---|---|---|---|---|---|---|
 | Student 1-traj (trước distill) | 21.2 | 3.3 | 13.3 | 6.7 | 18.3 | 33.3 | 35.0 | 38.3 |
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 4; 88% trên bản chuẩn) | 42.9 | 5.0 | **60.0** | 21.7 | 48.3 | 46.7 | 53.3 | 65.0 |
+| Student sau distill không-3D (reverse-KL, **state student**, vòng 10; 89% trên bản chuẩn) | 46.9 | 11.7 | 45.0 | 26.7 | 43.3 | 48.3 | 78.3 | 75.0 |
 | Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
 
 Distill không-3D đã kéo student từ 21% lên 43% trên LIBERO-Plus, gần teacher (50%). Riêng Light student vượt
 teacher (60 so với 30; mỗi ô 60 task, sai số chuẩn khoảng 6 điểm), còn Camera và Noise vẫn rất thấp.
+
+## Đường cong baseline không-3D tới hết ngân sách (Object, seed 7, eval greedy 100 episode)
+
+| Vòng | 0 | 2 | 4 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B2 (state student) | 52 | 39 | 61 | 69 | 88 | 89 | 85 | 90 | 84 | 82 | 88 |
+| B2′ (state teacher) | 52 | 69 | 88 | 70 | 90 | 68 | 83 | 84 | 81 | 78 | 71 |
+
+Từ vòng 8 trở đi B2 ổn định quanh 82–90 (trung bình 86.6), còn B2′ dao động 68–90 và đi xuống ở cuối (trung bình
+79.4). VLA-OPD báo 93.8 cho Object. Số 500 episode của hai adapter cuối đang chạy.
+
+## LIBERO-Long: mốc teacher (H200, render CPU)
+
+Teacher RL của SimpleVLA-RL (`Haozhan72/openvla-oft-libero10-traj1-rl`, cùng bin action với student): **85.5%** trên
+200 episode (paper 91.7; sai số chuẩn khoảng 2.5 điểm). Theo task: 60 / 95 / 100 / 95 / 50 / 85 / 85 / 100 / 90 /
+95. Thấp hơn paper khoảng 6 điểm, cùng chiều với student Object (51.4 so với 54.9). Vừa qua ngưỡng 85% đã đặt nên
+dùng làm teacher cho Long.
 
 ## Việc đang chạy / tiếp theo
 
