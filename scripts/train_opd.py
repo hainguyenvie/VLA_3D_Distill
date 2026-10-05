@@ -107,8 +107,10 @@ def main():
     log_path = os.path.join(args.out, "train_log.jsonl")
 
     def evaluate():
+        """Greedy success rate of the student, overall and per task (per task: only eval_trials episodes each)."""
         recs = evalc.run(eval_eps)
-        return float(np.mean([r["success"] for r in recs]))
+        per_task = [float(np.mean([r["success"] for r in recs if r["task_id"] == t])) for t in task_ids]
+        return {"eval_sr": float(np.mean([r["success"] for r in recs])), "eval_per_task": per_task}
 
     def log(row):
         with open(log_path, "a") as f:
@@ -116,7 +118,7 @@ def main():
         print(json.dumps(row), flush=True)
 
     if start_it == 0 and args.eval_every > 0:
-        log({"iter": 0, "eval_sr": evaluate(), **totals})
+        log({"iter": 0, **evaluate(), **totals})
 
     for it in range(start_it + 1, args.iters + 1):
         t0 = time.time()
@@ -185,7 +187,7 @@ def main():
                     "head": head.state_dict() if head is not None else None}, state_path + ".tmp")
         os.replace(state_path + ".tmp", state_path)
         if args.eval_every > 0 and (it % args.eval_every == 0 or it == args.iters):
-            row["eval_sr"] = evaluate()
+            row.update(evaluate())
             student.save_lora(os.path.join(args.out, f"adapter_iter{it:04d}"))
         log(row)
     vec.close()
