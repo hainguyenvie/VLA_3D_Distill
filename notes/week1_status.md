@@ -308,6 +308,19 @@ Từ vòng 8 trở đi B2 ổn định quanh 82–90 (trung bình 86.6), còn B2
 | **B2** (state student, không 3D) | 72 | 98 | 96 | 74 | 96 | **30** | 100 | 96 | 100 | 100 | **86.2** |
 | **B2′** (state teacher, không 3D) | 76 | 74 | 84 | 52 | 100 | 60 | 86 | 96 | **4** | 100 | **73.2** |
 | **B4** (state student + depth) | 42 | 92 | 98 | 80 | 88 | 76 | 98 | 98 | 100 | 90 | **86.2** |
+| **B3** (state teacher + depth) | 94 | 38 | 96 | 62 | 100 | 68 | 100 | 92 | 100 | 100 | **85.0** |
+
+**Ma trận 2×2 đã đủ (LIBERO-Object chuẩn, 500 episode, adapter vòng 20, seed 7):**
+
+| | Không 3D | + loss depth | Hiệu |
+|---|---|---|---|
+| State của student | 86.2 (B2) | 86.2 (B4) | Δ_π = 0.0 |
+| State của teacher | 73.2 (B2′) | 85.0 (B3) | Δ_E = +11.8 |
+
+Giả thuyết ban đầu là Δ_π > Δ_E; số liệu một seed cho chiều ngược lại. Phần lớn Δ_E đến từ việc B2′ sụp task 8
+ở vòng cuối (4%), còn B3 sụp nhẹ hơn ở task 1 (38%); trung bình eval 100 episode các vòng 8–20 là 79.3 (B2′) so với
+83.1 (B3). Đọc thận trọng: loss depth có thể đóng vai trò điều hoà khi học trên state của teacher, chứ không có dấu
+hiệu nào cho thấy nó giúp riêng trên state on-policy. Cần thêm seed mới nói được gì về hiệu ứng cỡ vài điểm.
 
 - B2 thấp hơn VLA-OPD 7.6 điểm (86.2 so với 93.8): **chưa đạt mốc "trong 3 điểm"**. Bảy task đã ở 96–100; khoảng
   hụt nằm ở task 5 (30%, trong khi student ban đầu đạt 74% và teacher 100%: distill làm *hỏng* task này) và hai
