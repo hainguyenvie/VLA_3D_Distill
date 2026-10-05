@@ -22,6 +22,7 @@ export TF_NUM_INTRAOP_THREADS=2 TF_NUM_INTEROP_THREADS=2
 # LIBERO_VARIANT=plus swaps in LIBERO-Plus (same package name `libero`, perturbed tasks) with its own config dir
 if [ "${LIBERO_VARIANT:-}" = plus ]; then
   LIBERO_DIR="$W/third_party/LIBERO-plus"
+  export LD_LIBRARY_PATH="$W/envs/oft/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"  # ImageMagick (wand) lives in the env
   export LIBERO_CONFIG_PATH="$W/.libero_plus"
   if [ ! -f "$LIBERO_CONFIG_PATH/config.yaml" ]; then
     mkdir -p "$LIBERO_CONFIG_PATH"
