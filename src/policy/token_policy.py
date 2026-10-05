@@ -7,6 +7,9 @@ batched over mixed prompts and exposes the per-token logits, which on-policy dis
 The forward pass mirrors `OpenVLAForActionPrediction.predict_action` + `_regression_or_discrete_prediction`
 (openvla-oft) and the 256-bin slicing of SimpleVLA-RL's `_verl_discrete_prediction`; `scripts/check_policy.py`
 asserts that greedy actions are identical to upstream on real observations.
+
+Numerical protocol (fixed for rollout, training and evaluation): bf16 base weights, forward under
+`torch.autocast(bfloat16)` as in SimpleVLA-RL rollouts and OpenVLA-OFT training; LoRA adapters stay fp32.
 """
 import json
 import os
@@ -67,10 +70,33 @@ class TokenPolicy:
             unnorm_key = f"{unnorm_key}_no_noops"
         assert unnorm_key in norm_stats, f"unnorm key {unnorm_key} not in {list(norm_stats)}"
         self.unnorm_key = unnorm_key
+        vla.norm_stats = norm_stats  # as upstream `_load_dataset_stats`, so `predict_action` un-normalises alike
         a = norm_stats[unnorm_key]["action"]
         self.act_low, self.act_high = np.array(a["q01"]), np.array(a["q99"])
         self.act_mask = np.array(a.get("mask", np.ones_like(a["q01"], dtype=bool)))
         self._prompt_cache: Dict[str, torch.Tensor] = {}
+
+    # ------------------------------------------------------------------ LoRA
+    def add_lora(self, rank: int = 32, adapter_path: Optional[str] = None):
+        """Same adapter recipe as OpenVLA-OFT fine-tuning (all linear layers, alpha = min(rank, 16)).
+
+        PEFT injects the adapters into `self.vla` in place, so every forward below goes through them.
+        """
+        from peft import LoraConfig, PeftModel, get_peft_model
+
+        if adapter_path:
+            self.peft = PeftModel.from_pretrained(self.vla, adapter_path, is_trainable=True)
+        else:
+            cfg = LoraConfig(r=rank, lora_alpha=min(rank, 16), lora_dropout=0.0, target_modules="all-linear",
+                             init_lora_weights="gaussian")
+            self.peft = get_peft_model(self.vla, cfg)
+        params = [p for p in self.peft.parameters() if p.requires_grad]
+        for p in params:  # bf16 master weights lose Adam updates of ~1e-4 to rounding; keep adapters in fp32
+            p.data = p.data.float()
+        return params
+
+    def save_lora(self, path: str) -> None:
+        self.peft.save_pretrained(path)
 
     # ---------------------------------------------------------------- inputs
     def _prompt_ids(self, task_description: str) -> torch.Tensor:
@@ -106,6 +132,10 @@ class TokenPolicy:
     # --------------------------------------------------------------- forward
     def forward_logits(self, inputs: Dict[str, torch.Tensor], hidden_layers: Optional[List[int]] = None):
         """Returns action logits (B, 56, 256) and, if requested, {layer: visual-token hidden states (B, 256, D)}."""
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            return self._forward_logits(inputs, hidden_layers)
+
+    def _forward_logits(self, inputs, hidden_layers):
         vla = self.vla
         input_ids, prompt_len = inputs["input_ids"], inputs["prompt_len"]
         B, L = input_ids.shape

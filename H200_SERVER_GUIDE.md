@@ -152,8 +152,16 @@ báo lỗi). Hệ quả cho project này:
   Checkpoint huấn luyện chỉ giữ LoRA/adaptor + head khi có thể. Kiểm `df -h ~` trước mỗi lô lớn.
 - **Repo gated** trả 401 khi không có token: tìm mirror chính thức, tải thẳng trên máy đích, rồi so
   sha256 với metadata LFS của HF trước khi dùng.
-- Tốc độ tải trên máy này: HF khoảng 20 MB/s. Copy file GB giữa hai server qua laptop rất chậm
-  (từng đo 144 KB/s) → tải thẳng trên máy đích.
+- Checkpoint tải bằng `scripts/server/hf_fetch.py` (chỉ dùng stdlib, chạy trước cả khi có env): mỗi repo
+  về một thư mục thường `checkpoints/<org>__<name>/`, kiểm sha256 từng file LFS, ghi revision vào
+  `.hf_fetch.json`. Config trỏ thẳng tới thư mục đó.
+- **Mạng của máy này không đều** (đo 05/10): HF 16–30 MB/s, conda-forge 30 MB/s,
+  `download.pytorch.org` 11 MB/s; nhưng **PyPI và GitHub bị bóp theo từng kết nối, 30–100 KB/s**, hay
+  rớt kết nối. Mirror PyPI Trung Quốc không dùng được. Cách xử trong `scripts/server/build_env.sh`:
+  torch + thư viện CUDA lấy từ index pytorch; các gói còn lại resolve bằng `pip install --dry-run --report`
+  rồi tải bằng nhiều range request song song (`pfetch.sh`, `fetch_report.py`) và cài offline từ thư mục
+  wheel; repo GitHub lấy bằng `git clone --depth 1` hoặc file zip.
+- Copy file GB giữa hai server qua laptop rất chậm (từng đo 144 KB/s) → tải thẳng trên máy đích.
 
 ## 8. Chạy job và theo dõi
 
@@ -197,6 +205,9 @@ until ssh -n -o ConnectTimeout=20 $L40_SSH "grep -q JOB_DONE $L40_REMOTE_ROOT/lo
 | `uint32_t` undeclared khi build extension | gcc 13 | `CXXFLAGS="-include cstdint"` |
 | Run hỏng tưởng hoàn tất | guard chỉ kiểm file trung gian | kiểm file cuối và số dòng hoặc id |
 | `pip … \| tail` báo OK nhưng thiếu module | pipe nuốt lỗi build | không pipe output pip |
+| `pip install` đứng hàng chục phút | PyPI bị bóp 30–100 KB/s mỗi kết nối; pip 23 còn tải cả wheel chỉ để resolve | nâng pip trước, resolve bằng dry-run, tải wheel song song (§7) |
+| Hai `pip install` cùng ghi một env | kill script bash cha nhưng pip con vẫn sống, rồi chạy lại script | sau khi kill, liệt kê tiến trình con còn sống và kill theo PID trước khi chạy lại |
+| `conda create python=3.10` xong không có pip | conda-forge không kéo pip theo python | thêm `pip` vào lệnh create |
 | `$VAR` rỗng trong script sinh bằng heredoc | nội suy sớm | heredoc `<<'EOF'` (hoặc viết local rồi sync) |
 | `OverflowError` khi import gsplat / pycolmap | numpy 2 | ghim `numpy==1.26.4` trong env 3DGS |
 | Số lệch khoảng 1e-4 dù tính tất định | TF32 | tắt TF32 khi so fp32 |

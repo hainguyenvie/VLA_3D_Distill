@@ -25,6 +25,8 @@ if [ ! -x "$PY" ]; then
   "$HOME/miniconda3/bin/conda" create -y -q -p "$W/envs/oft" -c conda-forge --override-channels python=3.10 pip > /dev/null || die CONDA_FAILED
 fi
 $PY -m pip --version > /dev/null 2>&1 || $PY -m ensurepip --upgrade > /dev/null || die PIP_FAILED
+# the bundled pip 23.0 downloads whole wheels just to resolve; newer pip reads the PEP 658 metadata files
+$PY -c "import pip, sys; sys.exit(int(pip.__version__.split('.')[0]) < 25)" || $PY -m pip install -q --upgrade pip || die PIP_UPGRADE_FAILED
 PIP="$PY -m pip"
 if ! $PY -c "import torch" 2>/dev/null; then
   log "installing torch + CUDA runtime wheels (pytorch index, no deps)"
@@ -40,7 +42,9 @@ fi
 WH="$W/.cache/wheels"; ZIPS="$W/.cache/zips"; mkdir -p "$WH" "$ZIPS"
 branch() { git ls-remote --symref "https://github.com/$1.git" HEAD | awk '/^ref:/{sub("refs/heads/","",$2); print $2}'; }
 zip_bg() {  # zip_bg <owner/repo> <name>
-  [ -s "$ZIPS/$2.zip" ] || (curl -sL --retry 5 -o "$ZIPS/$2.zip.part" "https://github.com/$1/archive/refs/heads/$(branch "$1").zip" && mv "$ZIPS/$2.zip.part" "$ZIPS/$2.zip") &
+  [ -s "$ZIPS/$2.zip" ] && return
+  pgrep -u "$USER" -f "curl.*$ZIPS/$2.zip.part" > /dev/null && return  # an earlier run is still downloading it
+  (curl -sL --retry 5 -o "$ZIPS/$2.zip.part" "https://github.com/$1/archive/refs/heads/$(branch "$1").zip" && mv "$ZIPS/$2.zip.part" "$ZIPS/$2.zip") &
 }
 zip_bg moojink/transformers-openvla-oft transformers
 zip_bg moojink/dlimp_openvla dlimp
@@ -52,13 +56,12 @@ torchaudio==2.2.0
 numpy==1.26.4
 TXT
 if [ ! -f "$W/.cache/deps_installed" ]; then
-  log "resolving python deps (pip dry run)"
-  $PIP install -q --dry-run --report "$W/.cache/pip_report.json" -c "$W/.cache/constraints.txt" \
+  [ -s "$W/.cache/pip_report.json" ] || { log "resolving python deps (pip dry run)"; $PIP install -q --dry-run --report "$W/.cache/pip_report.json.tmp" -c "$W/.cache/constraints.txt" \
     filelock typing-extensions sympy networkx jinja2 fsspec pillow requests safetensors regex packaging pyyaml tqdm \
     tensorflow==2.15.0 tensorflow_datasets==4.9.3 tensorflow_graphics==2021.12.3 tqdm-multiprocess \
     "accelerate>=0.25.0" draccus==0.8.0 einops huggingface_hub json-numpy jsonlines matplotlib peft==0.11.1 protobuf rich \
     sentencepiece==0.1.99 timm==0.9.10 tokenizers==0.19.1 wandb diffusers==0.30.3 "imageio[ffmpeg]" uvicorn fastapi \
-    robosuite==1.4.1 bddl easydict cloudpickle gym h5py pandas scipy || die RESOLVE_FAILED
+    robosuite==1.4.1 bddl easydict cloudpickle gym h5py pandas scipy && mv "$W/.cache/pip_report.json.tmp" "$W/.cache/pip_report.json" || die RESOLVE_FAILED; }
   log "fetching wheels (parallel ranges)"
   $PY "$HERE/fetch_report.py" "$W/.cache/pip_report.json" "$WH" "$W/.cache/pinned.txt" || die FETCH_FAILED
   log "installing python deps from local wheels"
@@ -67,10 +70,27 @@ if [ ! -f "$W/.cache/deps_installed" ]; then
 fi
 $PY -c "import torch; assert torch.cuda.is_available(); print('torch', torch.__version__)" || die TORCH_IMPORT_FAILED
 
-wait  # GitHub archives
-if ! $PY -c "import transformers" 2>/dev/null; then
+# Pins that override what the resolver picked (installed without deps, after everything else):
+#  mujoco 3.2.3            robosuite 1.4.1 breaks on recent mujoco (3.14: AssertionError in get_joint_qpos_addr
+#                          when the env is built); 3.2.3 is what other LIBERO setups of early 2025 pin
+#  tensorflow-metadata 1.15.0  newer releases ship protobuf-5 generated code, TF 2.15 needs protobuf < 5
+PINS="mujoco==3.2.3 tensorflow-metadata==1.15.0"
+PIN_MARK="$W/.cache/pins_$(echo "$PINS" | md5sum | cut -c1-8)"
+if [ ! -f "$PIN_MARK" ]; then
+  log "installing version pins: $PINS"
+  $PIP install -q --dry-run --no-deps --ignore-installed --report "$W/.cache/pins_report.json" $PINS || die PIN_RESOLVE_FAILED
+  $PY "$HERE/fetch_report.py" "$W/.cache/pins_report.json" "$WH" "$W/.cache/pins.txt" || die PIN_FETCH_FAILED
+  $PIP install -q --no-deps --no-index --find-links "$WH" -r "$W/.cache/pins.txt" || die PIN_INSTALL_FAILED
+  touch "$PIN_MARK"
+fi
+
+log "waiting for GitHub archives"
+until [ -s "$ZIPS/transformers.zip" ] && [ -s "$ZIPS/dlimp.zip" ]; do sleep 10; done
+if [ ! -f "$W/.cache/transformers_fork_installed" ]; then
+  # must replace the PyPI transformers pulled in as a dependency: only the fork has bidirectional attention
   log "installing transformers fork (zip archive)"
-  $PIP install -q --no-deps --no-index --no-build-isolation "$ZIPS/transformers.zip" || die TRANSFORMERS_FAILED
+  $PIP install -q --no-deps --no-index --no-build-isolation --force-reinstall "$ZIPS/transformers.zip" || die TRANSFORMERS_FAILED
+  touch "$W/.cache/transformers_fork_installed"
 fi
 if ! $PY -c "import dlimp" 2>/dev/null; then
   log "installing dlimp (zip archive)"
@@ -104,6 +124,8 @@ import tensorflow as tf
 print("tensorflow", tf.__version__)
 import robosuite, mujoco
 print("robosuite", robosuite.__version__, "mujoco", mujoco.__version__)
+import dlimp, tensorflow_datasets  # noqa: F401  (RLDS loader chain; catches protobuf mismatches)
+import experiments.robot.openvla_utils  # noqa: F401  (everything the policy wrapper imports)
 from libero.libero import benchmark
 print("libero suites", sorted(benchmark.get_benchmark_dict().keys()))
 PY

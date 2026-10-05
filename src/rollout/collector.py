@@ -38,12 +38,14 @@ class Collector:
         self.tasks = {i: (lang, n) for i, lang, n in vec.task_info()}
 
     def run(self, episodes: Sequence[Tuple[int, int]], out_dir: Optional[str] = None, save_steps: bool = True,
-            on_episode: Optional[Callable[[dict], None]] = None) -> List[dict]:
+            on_episode: Optional[Callable[[dict], None]] = None, keep_steps: bool = False) -> List[dict]:
         """Run `episodes` = [(task_id, trial_id), ...]; returns one summary dict per episode.
 
         With `out_dir`, a summary line is appended to episodes.jsonl per finished episode (already present
         episodes are skipped on restart) and, if `save_steps`, the per-query arrays go to steps/<id>.npz.
+        With `keep_steps`, each returned dict also carries the per-query arrays under "arrays" (in memory).
         """
+        self._keep_steps = keep_steps
         done_ids, results = set(), []
         if out_dir:
             os.makedirs(os.path.join(out_dir, "steps"), exist_ok=True)
@@ -134,16 +136,20 @@ class Collector:
         for k, v in s["label_logits"].items():
             st = token_stats(logits, torch.from_numpy(np.stack(v).astype(np.float32)))
             rec[f"kl_{k}"], rec[f"agree_{k}"] = st["kl"], st["agree"]
+        arrays = None
+        if (out_dir and save_steps) or self._keep_steps:
+            arrays = {k: np.stack(v) for k, v in s["steps"].items() if v}
+            arrays.update(t=np.array(s["t"]), bins=np.stack(s["bins"]), logits=np.stack(s["logits"]),
+                          actions=np.stack(s["actions"]), final_sim_state=final["sim_state"])
+            arrays.update({f"logits_{k}": np.stack(v) for k, v in s["label_logits"].items()})
         if out_dir:
             eid = f"t{s['task_id']:02d}_n{s['trial_id']:02d}"
             if save_steps:
-                arrays = {k: np.stack(v) for k, v in s["steps"].items() if v}
-                arrays.update(t=np.array(s["t"]), bins=np.stack(s["bins"]), logits=np.stack(s["logits"]),
-                              actions=np.stack(s["actions"]), final_sim_state=final["sim_state"])
-                arrays.update({f"logits_{k}": np.stack(v) for k, v in s["label_logits"].items()})
                 tmp = os.path.join(out_dir, "steps", f".{eid}.{os.getpid()}.npz")
                 np.savez_compressed(tmp, **arrays)
                 os.replace(tmp, os.path.join(out_dir, "steps", f"{eid}.npz"))
             with open(os.path.join(out_dir, "episodes.jsonl"), "a") as f:
                 f.write(json.dumps(rec) + "\n")
+        if self._keep_steps:
+            rec = dict(rec, arrays=arrays)
         return rec
