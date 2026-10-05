@@ -109,6 +109,44 @@ cục) từ 500 episode của B0.
   nằm trong các episode hỏng, phần lớn sau điểm đó, nên nhãn action của teacher ở đó không dẫn tới thành công.
 - Đang đo mịn hơn ở 5/10/15/20% để định vị điểm không thể cứu.
 
+## Phân loại failure của student (B0, 500 episode, 243 hỏng; `scripts/analyze_failures.py`)
+
+Đọc thẳng quỹ đạo vật thể và gripper từ state của simulator đã log, không cần chạy lại.
+
+| Kiểu lỗi | Số episode | Tỉ lệ | Lệch ngang lúc kẹp lần đầu (trung vị) |
+|---|---|---|---|
+| Kẹp trượt sát vật (near miss): kẹp cạnh vật đích, tay không | 113 | 46% | 3.5 cm |
+| Làm đổ / đẩy lệch vật đích | 54 | 22% | 5.5 cm |
+| Kẹp ở chỗ khác (gần vật khác hơn vật đích) | 34 | 14% | 18 cm |
+| Nhấc nhầm vật khác | 32 | 13% | 20 cm |
+| Đã nhấc đúng vật nhưng rơi / đặt sai | 10 | 4% | 2.5 cm |
+
+- Sai lệch ngang giữa gripper và vật đích lúc kẹp lần đầu: episode thành công 1.1 / 1.6 / 2.1 cm (tứ phân vị);
+  episode hỏng 3.2 / 5.2 / 12.1 cm. **Khoảng 69% failure là lỗi chính xác không gian cỡ vài cm ở pha gắp**
+  (F2/F5 trong plan), khoảng 27% là lỗi ngữ nghĩa nhầm vật / nhầm chỗ (F1), 4% xảy ra muộn.
+- Lần kẹp đầu tiên xảy ra quanh bước 48 ở cả episode thành công lẫn hỏng: số phận episode được quyết định trong
+  khoảng 10% đầu của horizon 512 bước.
+- Lỗi phân bố rất khác nhau theo task: task 0 (alphabet soup) gần như toàn near miss; task 3 (bbq sauce) chủ yếu
+  làm đổ vật; task 4 (ketchup) chủ yếu nhầm vật / nhầm chỗ.
+
+Ghép với takeover của teacher (cùng các episode):
+
+| Trao quyền cho teacher tại | 0% | 5% | 10% | 15% | 20% | 25% | 50% |
+|---|---|---|---|---|---|---|---|
+| Episode near miss | 100 | 82 | 79 | 63 | 20 | 8 | 5 |
+
+(các mốc 5–20% mới có 17–20 episode mỗi ô, đang chạy thêm.) Gộp mọi kiểu lỗi: trao quyền **trước** lần kẹp
+đầu tiên của student thì teacher thành công 95% (n=62); **sau** lần kẹp đó chỉ 3% (n=170).
+
+Đọc kết quả:
+- Điểm không thể cứu chính là **lần kẹp hỏng đầu tiên**. Ngay cả near miss, khi vật đích còn nguyên chỗ, teacher
+  cũng không gắp lại được: teacher học từ demo nên không có hành vi "thử lại" từ trạng thái tay kẹp rỗng cạnh vật.
+- Vì vậy tín hiệu sửa lỗi hữu ích của on-policy distillation nằm gần hết ở **pha tiếp cận trước lần kẹp đầu**
+  (khoảng 40–50 bước), còn phần lớn state on-policy (sau lần kẹp hỏng) mang nhãn action không dẫn tới thành công.
+- Lỗi quyết định là lệch 3–5 cm giữa gripper và vật ở pha tiếp cận, đúng loại lỗi mà giám sát hình học có cơ
+  hội giúp. Gợi ý cho phương pháp (chưa kiểm chứng): đặt giám sát 3D và trọng số distill vào các state tiền
+  tiếp xúc mà student thực sự đi qua, thay vì các state "recovery" sau khi đã hỏng.
+
 ## LIBERO-Plus của student sau distill (Object, cùng 420 task, render CPU)
 
 | | Tổng | Camera | Light | Noise | Robot | Layout | BG | Lang |
