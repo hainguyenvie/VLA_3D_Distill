@@ -25,6 +25,12 @@ for a in $ARMS; do
     b4)  arm b4_student_states_depth --state_source student $DEPTH & ;;
     b2p) arm b2p_teacher_states --state_source teacher & ;;
     b3)  arm b3_teacher_states_depth --state_source teacher $DEPTH & ;;
+    # mixed drivers (batches of episodes alternate between student and teacher), without / with visual
+    # perturbations of the training rollouts (teacher sees the nominal view), without / with the depth loss
+    b2m) arm b2m_mixed_states --state_source mixed & ;;
+    v1)  arm v1_mixed_viewaug --state_source mixed --view_aug & ;;
+    v2)  arm v2_mixed_viewaug_depth --state_source mixed --view_aug $DEPTH & ;;
+    v0)  arm v0_student_viewaug --state_source student --view_aug & ;;
     *) log "unknown arm $a" ;;
   esac
   sleep 90  # stagger model loading
