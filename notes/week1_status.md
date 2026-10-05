@@ -129,6 +129,15 @@ cục) từ 500 episode của B0.
 - Sai lệch ngang giữa gripper và vật đích lúc kẹp lần đầu: episode thành công 1.1 / 1.6 / 2.1 cm (tứ phân vị);
   episode hỏng 3.2 / 5.2 / 12.1 cm. **Khoảng 69% failure là lỗi chính xác không gian cỡ vài cm ở pha gắp**
   (F2/F5 trong plan), khoảng 27% là lỗi ngữ nghĩa nhầm vật / nhầm chỗ (F1), 4% xảy ra muộn.
+- Dung sai gắp khoảng 2.5 cm, và success rate rơi rất dốc quanh đó (500 episode, theo sai lệch ngang lúc kẹp
+  lần đầu):
+
+  | Lệch ngang (cm) | <1 | 1–1.5 | 1.5–2 | 2–2.5 | 2.5–3 | 3–4 | 4–6 | 6–10 | >10 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Số episode | 46 | 77 | 71 | 55 | 43 | 56 | 38 | 40 | 74 |
+  | Success rate (%) | 96 | 94 | 82 | 76 | 44 | 29 | 11 | 5 | 0 |
+
+  Lúc kẹp, episode hỏng cũng ở cao hơn vật đích (trung vị 2.9 cm so với 0.8 cm ở episode thành công).
 - Lần kẹp đầu tiên xảy ra quanh bước 48 ở cả episode thành công lẫn hỏng: số phận episode được quyết định trong
   khoảng 10% đầu của horizon 512 bước.
 - Lỗi phân bố rất khác nhau theo task: task 0 (alphabet soup) gần như toàn near miss; task 3 (bbq sauce) chủ yếu
