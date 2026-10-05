@@ -279,7 +279,12 @@ cả hai máy trước khi so với số đã công bố.
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 8; 90% trên bản chuẩn) | 45.7 | 6.7 | 56.7 | 18.3 | 55.0 | 45.0 | 73.3 | 65.0 |
 | Student sau distill không-3D (reverse-KL, state student, **vòng 20**; 86.2% trên 500 episode chuẩn) | 48.1 | 13.3 | 61.7 | 21.7 | 46.7 | 48.3 | 80.0 | 65.0 |
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 20; 73.2% trên 500 episode chuẩn) | 39.0 | 5.0 | 50.0 | 15.0 | 48.3 | 38.3 | 63.3 | 53.3 |
+| **B4**: state student + loss depth, vòng 20 (86.2% trên 500 episode chuẩn) | 45.0 | 8.3 | 50.0 | 16.7 | 41.7 | 51.7 | 68.3 | 78.3 |
 | Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
+
+Loss depth trên cảnh chuẩn cũng không giúp trên LIBERO-Plus: B4 45.0% so với 48.1% của B2 cùng vòng (chênh trong
+mức nhiễu của 420 task, và không có loại nhiễu nào B4 hơn rõ). Kết luận cho idea ban đầu, một seed: **không hơn
+baseline trên cả hai thước đo**.
 
 Distill không-3D đã kéo student từ 21% lên 43% trên LIBERO-Plus, gần teacher (50%). Riêng Light student vượt
 teacher (60 so với 30; mỗi ô 60 task, sai số chuẩn khoảng 6 điểm), còn Camera và Noise vẫn rất thấp.
