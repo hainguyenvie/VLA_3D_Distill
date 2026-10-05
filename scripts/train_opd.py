@@ -6,8 +6,12 @@ take gradient steps on a fixed number of those states, discard them (VLA-OPD's l
     --state_source student   the student acts, the teacher only labels (on-policy distillation, B2)
     --state_source teacher   the teacher acts and labels (same loss, teacher-state distribution: the matched
                              off-policy control)
+    --state_source mixed     alternate batches of episodes driven by the student and by the teacher
     --spatial depth          add the privileged depth loss on the same states (training only); with the two
                              state sources this gives the 2 x 2 design {student, teacher states} x {no 3D, 3D}
+    --view_aug               re-render the training states under random camera / light / sensor perturbations: the
+                             student is fed (and, when it drives, acts on) the perturbed view, the teacher labels and
+                             drives from the nominal view of the same simulator state. Evaluation stays nominal.
 
 Outputs in --out: train_log.jsonl (one line per iteration), adapter_last/ + state.pt (resume), and
 adapter_iterXXXX/ at every evaluation.
@@ -26,7 +30,8 @@ def parse():
     ap.add_argument("--teacher", required=True, help="checkpoint, or rebin:checkpoint when its action normalisation differs from the student's")
     ap.add_argument("--suite", default="libero_object")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--state_source", choices=["student", "teacher"], default="student")
+    ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
+    ap.add_argument("--view_aug", action="store_true", help="visual perturbations of the training rollouts (vec_env.VIEW_AUG)")
     ap.add_argument("--mode", choices=["rkl", "rkl_pg", "fkl", "ce"], default="rkl")
     ap.add_argument("--spatial", choices=["none", "depth"], default="none")
     ap.add_argument("--spatial_layer", type=int, default=24, help="LLM layer whose visual tokens feed the depth head (1..32)")
@@ -58,9 +63,10 @@ def parse():
 def main():
     args = parse()
     os.makedirs(args.out, exist_ok=True)
-    from src.rollout.vec_env import LiberoVecEnv
+    from src.rollout.vec_env import VIEW_AUG, LiberoVecEnv
 
-    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, depth=args.spatial != "none")
+    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, depth=args.spatial != "none",
+                       perturb=VIEW_AUG if args.view_aug else None)
 
     import torch
 
@@ -96,10 +102,13 @@ def main():
     print(f"trainable params: {sum(p.numel() for p in params) / 1e6:.1f}M", flush=True)
 
     sample = args.rollout_temperature > 0
-    if args.state_source == "student":
-        col = Collector(vec, student, {"teacher": teacher}, sample=sample, temperature=args.rollout_temperature, seed=args.seed)
-    else:
-        col = Collector(vec, teacher, {}, sample=sample, temperature=args.rollout_temperature, seed=args.seed)
+    kw = dict(sample=sample, temperature=args.rollout_temperature, seed=args.seed, perturb=args.view_aug)
+    cols = []  # (collector, key of the teacher logits in its records): one per driver of the rollouts
+    if args.state_source in ("student", "mixed"):
+        cols.append((Collector(vec, student, {"teacher": teacher}, **kw), "logits_teacher"))
+    if args.state_source in ("teacher", "mixed"):
+        cols.append((Collector(vec, teacher, {}, actor_view="rgb_clean", **kw), "logits"))
+    col = cols[0][0]
     evalc = Collector(vec, student, {}, sample=False, seed=args.seed)
     task_ids = sorted(col.tasks)
     pool = [(t, n) for t in task_ids for n in range(min(args.train_trials, col.tasks[t][1]))]
@@ -122,22 +131,26 @@ def main():
 
     for it in range(start_it + 1, args.iters + 1):
         t0 = time.time()
-        order, recs = rng.permutation(len(pool)), []
+        order, recs, n_batches = rng.permutation(len(pool)), [], 0
         while sum(r["n_queries"] for r in recs) < args.states_per_iter and len(recs) < len(pool):
             batch = order[len(recs) : len(recs) + args.episodes_per_batch]
-            recs += col.run([pool[i] for i in batch], keep_steps=True)
+            c, t_key = cols[n_batches % len(cols)]
+            new = c.run([pool[i] for i in batch], keep_steps=True)
+            for r in new:
+                r["teacher_logits"], r["driver"] = r["arrays"][t_key], "student" if t_key == "logits_teacher" else "teacher"
+            recs, n_batches = recs + new, n_batches + 1
         n_collected = sum(r["n_queries"] for r in recs)
         keep = np.sort(rng.choice(n_collected, size=min(args.states_per_iter, n_collected), replace=False))
         images = np.concatenate([r["arrays"]["rgb"] for r in recs])[keep]
-        t_key = "logits_teacher" if args.state_source == "student" else "logits"
-        t_logits = np.concatenate([r["arrays"][t_key] for r in recs])[keep]
+        t_logits = np.concatenate([r["teacher_logits"] for r in recs])[keep]
         bins = np.concatenate([r["arrays"]["bins"] for r in recs])[keep]
         depth = np.concatenate([r["arrays"]["depth"] for r in recs])[keep] if head is not None else None
         all_descs = [r["task"] for r in recs for _ in range(r["n_queries"])]
         descs = [all_descs[k] for k in keep]
         t_collect = time.time() - t0
-        tm = {k: round(v, 1) for k, v in col.timing.items()}
-        col.timing.update({k: 0 if k == "rounds" else 0.0 for k in col.timing})
+        tm = {k: round(sum(c.timing[k] for c, _ in cols), 1) for k in col.timing}
+        for c, _ in cols:
+            c.timing.update({k: 0 if k == "rounds" else 0.0 for k in c.timing})
 
         losses, sp_losses, mets, n = [], [], [], len(images)
         opt.zero_grad(set_to_none=True)
@@ -180,8 +193,13 @@ def main():
                "gpu_peak_gb": round(torch.cuda.max_memory_allocated(student.device) / 1e9, 1), **totals}
         if sp_losses:
             row["spatial_loss"] = float(np.mean(sp_losses))
-        if args.state_source == "student":
-            row["rollout_kl"] = float(np.mean([r["kl_teacher"] for r in recs]))
+        for who in ("student", "teacher"):  # success of the rollouts by who drove them (under view_aug: perturbed for the student)
+            v = [r["success"] for r in recs if r["driver"] == who]
+            if v and len(cols) > 1:
+                row[f"rollout_sr_{who}"] = float(np.mean(v))
+        kl = [r["kl_teacher"] for r in recs if "kl_teacher" in r]
+        if kl:
+            row["rollout_kl"] = float(np.mean(kl))
         student.save_lora(last)
         torch.save({"opt": opt.state_dict(), "iter": it, "totals": totals,
                     "head": head.state_dict() if head is not None else None}, state_path + ".tmp")

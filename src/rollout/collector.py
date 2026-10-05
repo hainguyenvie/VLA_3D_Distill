@@ -33,9 +33,14 @@ def token_stats(logits: torch.Tensor, ref_logits: Optional[torch.Tensor] = None)
 
 class Collector:
     def __init__(self, vec: LiberoVecEnv, policy: TokenPolicy, labelers: Optional[Dict[str, TokenPolicy]] = None,
-                 sample: bool = False, temperature: float = 1.0, seed: int = 7, task_ids: Optional[Sequence[int]] = None):
+                 sample: bool = False, temperature: float = 1.0, seed: int = 7, task_ids: Optional[Sequence[int]] = None,
+                 perturb: bool = False, actor_view: str = "rgb"):
+        """`perturb` asks the envs for visually perturbed episodes (see `vec_env.VIEW_AUG`): `rgb` is then the perturbed
+        frame and `rgb_clean` the nominal one. The acting policy is fed `actor_view`; labelers always get the nominal
+        frame (a privileged teacher). The logged `rgb` stays the perturbed frame either way."""
         self.vec, self.policy, self.labelers = vec, policy, labelers or {}
         self.sample, self.temperature = sample, temperature
+        self.perturb, self.actor_view = perturb, actor_view
         self.min_free_gb = float(os.environ.get("MIN_FREE_GB_RUN", 4))
         assert not getattr(policy, "raw_images", False) or not self.labelers, "shared preprocessing follows the actor"
         self.timing = {"preprocess": 0.0, "act": 0.0, "label": 0.0, "env": 0.0, "other": 0.0, "rounds": 0}
@@ -91,7 +96,7 @@ class Collector:
             if ep is None:
                 slots[i] = None
                 return
-            self.vec.reset(i, ep[0], ep[1])
+            self.vec.reset(i, ep[0], ep[1], perturb=self.perturb)
             slots[i] = {"task_id": ep[0], "trial_id": ep[1], "steps": {k: [] for k in STEP_KEYS}, "t": [],
                         "bins": [], "logits": [], "actions": [], "label_logits": {k: [] for k in self.labelers},
                         "obs": None, "t0": time.time()}
@@ -113,15 +118,20 @@ class Collector:
                 raise MemoryError(f"only {mem_available_gb():.1f} GB RAM available on the machine, aborting the rollout")
             tm, t0 = self.timing, time.perf_counter()
             act_idx = [i for i, s in enumerate(slots) if s is not None and s["obs"] is not None]
-            images = [slots[i]["obs"]["rgb"] for i in act_idx]
+            cur = [slots[i]["obs"] for i in act_idx]
+            images = [o.get(self.actor_view, o["rgb"]) for o in cur]
             descs = [self.tasks[slots[i]["task_id"]][0] for i in act_idx]
             # one default-pipeline preprocessing shared by the actor and the labelers (a raw-image policy redoes its own)
             pils = None if getattr(self.policy, "raw_images", False) else preprocess_batch(images, self.policy.center_crop)
+            clean, clean_pils = images, pils
+            if self.labelers and any("rgb_clean" in o for o in cur) and self.actor_view != "rgb_clean":
+                clean = [o.get("rgb_clean", o["rgb"]) for o in cur]  # perturbed episodes: labelers see the nominal frame
+                clean_pils = preprocess_batch(clean, self.policy.center_crop)
             t1 = time.perf_counter()
             out = self.policy.act(images, descs, sample=self.sample, temperature=self.temperature, generator=self.gen, pils=pils,
-                                  obs=[slots[i]["obs"] for i in act_idx] if getattr(self.policy, "needs_obs", False) else None)
+                                  obs=cur if getattr(self.policy, "needs_obs", False) else None)
             t2 = time.perf_counter()
-            label_logits = {k: p.act(images, descs, pils=pils)["logits"] for k, p in self.labelers.items()}
+            label_logits = {k: p.act(clean, descs, pils=clean_pils)["logits"] for k, p in self.labelers.items()}
             t3 = time.perf_counter()
             env_actions = postprocess_actions(out["actions"])
             for j, i in enumerate(act_idx):

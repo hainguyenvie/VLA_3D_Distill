@@ -18,6 +18,75 @@ import numpy as np
 
 DUMMY_ACTION = [0, 0, 0, 0, 0, 0, -1]
 
+# Visual perturbations for training rollouts (`LiberoVecEnv(perturb=...)`, switched on per reset). One draw per
+# episode: with probability p_clean nothing; otherwise each of camera / light / sensor is active with probability
+# 0.6 (at least one). The camera orbits the point it looks at on the table and is re-aimed by a small jitter.
+VIEW_AUG = dict(p_clean=0.25, azimuth=75.0, elevation=15.0, distance=(1.0, 2.0), aim=10.0,  # degrees / distance factor
+                light=(0.3, 1.7), light_shift=1.0, tint=0.15,  # intensity factor, metres, per-channel fraction
+                noise=0.08, blur=2.0)  # Gaussian noise std (of 1.0) and blur radius (pixels), upper bounds
+
+
+_PERT_RNG = None
+
+
+def sample_perturbation(rng: np.random.Generator, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Concrete perturbation of one episode, or None for the nominal scene."""
+    if rng.random() < cfg["p_clean"]:
+        return None
+    on = rng.random(3) < 0.6
+    if not on.any():
+        on[rng.integers(3)] = True
+    out: Dict[str, Any] = {}
+    if on[0]:
+        out["camera"] = dict(azimuth=rng.uniform(-cfg["azimuth"], cfg["azimuth"]), elevation=rng.uniform(0, cfg["elevation"]),
+                             distance=rng.uniform(*cfg["distance"]), aim=rng.uniform(-cfg["aim"], cfg["aim"], size=2))
+    if on[1]:
+        out["light"] = dict(diffuse=rng.uniform(*cfg["light"]), ambient=rng.uniform(*cfg["light"]),
+                            tint=1 + rng.uniform(-cfg["tint"], cfg["tint"], size=3),
+                            shift=rng.uniform(-cfg["light_shift"], cfg["light_shift"], size=3))
+    if on[2]:
+        out["sensor"] = dict(noise=rng.uniform(0, cfg["noise"]), blur=rng.uniform(0, cfg["blur"]), seed=int(rng.integers(2**31)))
+    return out
+
+
+def _axis_quat(axis, degrees: float) -> np.ndarray:
+    import mujoco
+
+    q = np.zeros(4)
+    mujoco.mju_axisAngle2Quat(q, np.asarray(axis, dtype=np.float64), np.radians(degrees))
+    return q
+
+
+def perturbed_camera(pos: np.ndarray, quat: np.ndarray, plane_z: float, c: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
+    """Orbit a camera (world pose, MuJoCo convention: it looks along its -z) about the point where its optical axis
+    meets the horizontal plane z = plane_z: azimuth about the vertical, elevation, distance factor; then re-aim it."""
+    import mujoco
+
+    def rot(q, v):
+        out = np.zeros(3)
+        mujoco.mju_rotVecQuat(out, np.asarray(v, dtype=np.float64), q)
+        return out
+
+    def mul(a, b):
+        out = np.zeros(4)
+        mujoco.mju_mulQuat(out, a, b)
+        return out
+
+    pos, quat = np.asarray(pos, dtype=np.float64), np.asarray(quat, dtype=np.float64)
+    look = rot(quat, [0, 0, -1])
+    t = (plane_z - pos[2]) / look[2] if look[2] < -1e-3 else 1.0
+    pivot = pos + t * look
+    q = _axis_quat([0, 0, 1], c["azimuth"])
+    d = rot(q, pos - pivot)
+    side = np.cross([0, 0, 1], d)
+    side = side / max(np.linalg.norm(side), 1e-9)
+    q = mul(_axis_quat(-side, c["elevation"]), q)  # positive elevation raises the camera
+    new_pos = pivot + c["distance"] * rot(q, pos - pivot)
+    new_quat = mul(q, quat)
+    for axis, deg in zip(([1, 0, 0], [0, 1, 0]), c["aim"]):  # pitch / yaw about the camera's own axes
+        new_quat = mul(new_quat, _axis_quat(axis, deg))
+    return new_pos, new_quat / np.linalg.norm(new_quat)
+
 
 def _target_pos(robo) -> np.ndarray:
     """Privileged world position of the task's target (first object of interest of the BDDL goal); NaN if none."""
@@ -73,6 +142,7 @@ class EnvRunner:
             )
             self.env.seed(0)  # upstream: the seed affects object positions even with a fixed initial state
         self.t, self.done, self.closed = 0, False, False
+        self.pert = None
 
     def _cameras(self, enabled: bool) -> None:
         robo = self.env.env
@@ -81,6 +151,84 @@ class EnvRunner:
                 robo.modify_observable(name, "enabled", enabled)
                 if enabled:  # enabling zeroes the sampling timer; put it back in the phase upstream stepping has
                     ob._time_since_last_sample, ob._sampled = self._phase[name]
+
+    def _obs(self, obs) -> Dict[str, Any]:
+        """Packed observation; in a perturbed episode `rgb` (and `depth`) show the perturbed view the student is fed,
+        and `rgb_clean` keeps the nominal frame for the teacher."""
+        out = _pack_obs(self.env, obs, self.cfg)
+        if self.pert:
+            out["rgb_clean"] = out["rgb"]
+            out.update(self._perturbed_view())
+        return out
+
+    def _start_perturbation(self, fixed: Optional[Dict[str, Any]] = None) -> None:
+        """Draw this episode's perturbation (or take `fixed`) and precompute the camera / light parameters it puts
+        into the model."""
+        global _PERT_RNG
+        if _PERT_RNG is None:  # one stream per worker process, across the envs it builds
+            _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
+        self.pert = fixed if fixed is not None else sample_perturbation(_PERT_RNG, self.cfg["perturb"])
+        if not self.pert:
+            return
+        robo = self.env.env
+        m, d = robo.sim.model._model, robo.sim.data._data
+        cid = robo.sim.model.camera_name2id("agentview")
+        names = ("cam_pos", "cam_quat", "light_pos", "light_dir", "light_diffuse", "light_ambient")
+        self._nominal = {k: getattr(m, k).copy() for k in names}
+        self._nominal["head"] = (m.vis.headlight.diffuse.copy(), m.vis.headlight.ambient.copy())
+        new = {k: v.copy() for k, v in self._nominal.items() if k != "head"}
+        new["head"] = tuple(v.copy() for v in self._nominal["head"])
+        if "camera" in self.pert:  # the camera hangs off the world body, so its model pose is its world pose
+            tgt = _target_pos(robo)
+            plane_z = float(tgt[2]) if np.isfinite(tgt).all() else float(d.cam_xpos[cid][2]) - 0.5
+            new["cam_pos"][cid], new["cam_quat"][cid] = perturbed_camera(m.cam_pos[cid], m.cam_quat[cid], plane_z, self.pert["camera"])
+        if "light" in self.pert:
+            li = self.pert["light"]
+            new["light_diffuse"] = np.clip(new["light_diffuse"] * li["diffuse"] * li["tint"], 0, 1)
+            new["light_ambient"] = np.clip(new["light_ambient"] * li["ambient"], 0, 1)
+            new["light_pos"] = new["light_pos"] + li["shift"]
+            new["head"] = (np.clip(new["head"][0] * li["diffuse"] * li["tint"], 0, 1), np.clip(new["head"][1] * li["ambient"], 0, 1))
+        self._perturbed = new
+
+    def _set_visuals(self, values) -> None:
+        import mujoco
+
+        robo = self.env.env
+        m, d = robo.sim.model._model, robo.sim.data._data
+        for k, v in values.items():
+            if k == "head":
+                m.vis.headlight.diffuse[:], m.vis.headlight.ambient[:] = v
+            else:
+                getattr(m, k)[:] = v
+        mujoco.mj_camlight(m, d)  # world poses of cameras and lights only; the physics state is not touched
+
+    def _perturbed_view(self) -> Dict[str, Any]:
+        import robosuite.macros as macros
+        from robosuite.utils.camera_utils import get_real_depth_map
+        from robosuite.utils.mjcf_utils import IMAGE_CONVENTION_MAPPING  # the flip the camera sensor applies
+
+        robo, res, depth = self.env.env, self.cfg["resolution"], bool(self.cfg.get("depth"))
+        conv = IMAGE_CONVENTION_MAPPING[macros.IMAGE_CONVENTION]
+        with self.lock:
+            self._set_visuals(self._perturbed)
+            img = robo.sim.render(camera_name="agentview", width=res, height=res, depth=depth)
+            self._set_visuals(self._nominal)
+        out = {}
+        if depth:
+            img, dep = img
+            dmap = get_real_depth_map(robo.sim, np.expand_dims(dep[::conv], axis=-1))[..., 0]
+            out["depth"] = np.ascontiguousarray(dmap[::-1, ::-1]).astype(np.float32)
+        rgb = np.ascontiguousarray(img[::conv][::-1, ::-1])
+        if "sensor" in self.pert:
+            se = self.pert["sensor"]
+            if se["blur"] > 0.05:
+                from PIL import Image, ImageFilter
+
+                rgb = np.asarray(Image.fromarray(rgb).filter(ImageFilter.GaussianBlur(se["blur"])))
+            noise = np.random.default_rng([se["seed"], self.t + 10**6]).normal(0, se["noise"] * 255, rgb.shape)
+            rgb = np.clip(rgb.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+        out["rgb"] = rgb
+        return out
 
     def _run(self, actions, stop_at_end: bool = True) -> Dict[str, Any]:
         """Execute actions until the episode ends; only the last one renders."""
@@ -103,10 +251,12 @@ class EnvRunner:
                 self._cameras(True)
                 obs = self.env.env._get_observations(force_update=True)
                 self._cameras(False)
-        return dict(_pack_obs(self.env, obs, self.cfg), t=self.t, done=bool(self.done), closed_before=bool(self.closed),
+        return dict(self._obs(obs), t=self.t, done=bool(self.done), closed_before=bool(self.closed),
                     active=not (self.done or self.t >= self.cfg["max_steps"]))
 
-    def reset(self, init_state) -> Dict[str, Any]:
+    def reset(self, init_state, perturb=False) -> Dict[str, Any]:
+        """Start an episode. `perturb`: True draws this episode's visual perturbation from the configured ranges; a
+        dict (as returned by `sample_perturbation`) applies exactly that one."""
         robo = self.env.env
         cams = [name for name in robo._observables if name.endswith(("_image", "_depth"))]
         with self.lock:  # a (hard) reset rebuilds the simulator and its render context
@@ -120,6 +270,11 @@ class EnvRunner:
             self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
                            for name in cams}
             self._cameras(False)
+        self.pert = None
+        if isinstance(perturb, dict):
+            self._start_perturbation(perturb)
+        elif perturb and self.cfg.get("perturb"):
+            self._start_perturbation()
         self.t = -self.cfg["num_steps_wait"]
         out = self._run([DUMMY_ACTION] * self.cfg["num_steps_wait"], stop_at_end=False)  # upstream ignores `done` here
         self.t, self.done, self.closed = 0, False, False
@@ -143,6 +298,7 @@ class EnvRunner:
             self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
                            for name in cams}
             self._cameras(False)
+        self.pert = None
         robot = robo.robots[0]
         # PandaGripper.format_action accumulates [-1, 1] * 0.01 * sign(cmd) per substep and saturates within 4 steps
         robot.gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))
@@ -171,12 +327,12 @@ def _worker(conn, cfg: Dict[str, Any], lock) -> None:
         while True:
             cmd, arg = conn.recv()
             if cmd in ("reset", "restore"):
-                task_id, bddl, state, t0, gripper_cmd = arg
+                task_id, bddl, state, t0, gripper_cmd, perturb = arg
                 if task_id != cur_task:
                     if runner is not None:
                         runner.close()
                     runner, cur_task = EnvRunner(bddl, cfg, lock), task_id  # imports only the env stack, never torch
-                conn.send(("ok", runner.reset(state) if cmd == "reset" else runner.restore(state, t0, gripper_cmd)))
+                conn.send(("ok", runner.reset(state, perturb) if cmd == "reset" else runner.restore(state, t0, gripper_cmd)))
             elif cmd == "step":
                 conn.send(("ok", runner.step(arg)))
             elif cmd == "close":
@@ -196,11 +352,11 @@ def mem_available_gb() -> float:
 
 class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
-                 depth: bool = False, wrist: bool = False):
+                 depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
-                        depth=depth, wrist=wrist)
+                        depth=depth, wrist=wrist, perturb=perturb)  # perturb: ranges as in VIEW_AUG, used per reset
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs
@@ -217,16 +373,16 @@ class LiberoVecEnv:
             self.conns.append(parent)
             self.procs.append(p)
 
-    def reset(self, i: int, task_id: int, trial_id: int) -> None:
+    def reset(self, i: int, task_id: int, trial_id: int, perturb: bool = False) -> None:
         """Ask env i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
-        self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0, -1.0)))
+        self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0, -1.0, perturb)))
 
     def restore(self, i: int, task_id: int, sim_state: np.ndarray, t0: int, gripper_cmd: float) -> None:
         """Ask env i to continue an episode of task `task_id` from a logged simulator state at step `t0`.
 
         `gripper_cmd` is the last gripper command executed before that state (-1 open, +1 close).
         """
-        self.conns[i].send(("restore", (task_id, self._bddl(task_id), sim_state, t0, gripper_cmd)))
+        self.conns[i].send(("restore", (task_id, self._bddl(task_id), sim_state, t0, gripper_cmd, False)))
 
     def step(self, i: int, actions: np.ndarray) -> None:
         self.conns[i].send(("step", actions))
