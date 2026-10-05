@@ -9,7 +9,7 @@ if [ ! -d "$L/assets/new_objects" ]; then
   mkdir -p "$W/data/libero_plus"
   Z="$W/data/libero_plus/assets.zip"
   [ -s "$Z" ] || { curl -sL --retry 5 -o "$Z.part" https://huggingface.co/datasets/Sylvest/LIBERO-plus/resolve/main/assets.zip && mv "$Z.part" "$Z"; } || { log ASSETS_FAILED; exit 1; }
-  (cd "$L" && unzip -q -o "$Z") || { log UNZIP_FAILED; exit 1; }
+  (cd "$L" && "$PY" -m zipfile -e "$Z" .) || { rm -f "$Z"; log UNZIP_FAILED; exit 1; }  # a bad archive is fetched again next run
   # the archive carries the authors' absolute path: find the assets folder inside and put it where LIBERO expects it
   A="$(find "$L" -mindepth 2 -type d -name assets -path '*LIBERO-plus-0*' | head -1)"
   [ -n "$A" ] && rm -rf "$L/assets" && mv "$A" "$L/assets" && rm -rf "$L/inspire"
