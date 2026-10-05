@@ -84,7 +84,12 @@ def load_policy(spec: str, suite: str, device: str, target: Optional[TokenPolicy
 
     rebin:<path>   express that checkpoint's distribution in `target`'s bins (different action normalisation)
     raw:<path>     feed that checkpoint raw 256 x 256 frames (RLinf's image pipeline, see `preprocess_image`)
+    oft:<path>     standard OpenVLA-OFT checkpoint (two images, proprio, L1 head): `ContinuousPolicy`
     """
+    if spec.startswith("oft:"):
+        from src.policy.continuous_policy import ContinuousPolicy
+
+        return ContinuousPolicy(spec[len("oft:"):], suite, device=device)
     if spec.startswith("rebin:"):
         assert target is not None, "rebin: needs a target policy"
         return RebinnedPolicy(TokenPolicy(spec[len("rebin:"):], suite, device=device), target)

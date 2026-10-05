@@ -9,12 +9,63 @@ import argparse
 import numpy as np
 
 
+def check_oft(args):
+    """Standard OpenVLA-OFT (two images, proprio, L1 head): batched `ContinuousPolicy.act` against upstream."""
+    from src.rollout.vec_env import LiberoVecEnv, postprocess_actions
+
+    vec = LiberoVecEnv(args.suite, 2, max_steps=512, wrist=True)
+    info = vec.task_info()
+
+    import torch
+
+    from prismatic.extern.hf.processing_prismatic import PrismaticProcessor
+    from src.policy.continuous_policy import ContinuousPolicy, proprio_state
+    from src.policy.token_policy import preprocess_image, prompt_for
+
+    policy = ContinuousPolicy(args.ckpt, args.suite)
+    print("unexpected keys:", policy.loading_info.get("unexpected_keys"), "missing:", policy.loading_info.get("missing_keys"))
+    processor = PrismaticProcessor(image_processor=policy.image_processor, tokenizer=policy.tokenizer)
+    lens = [len(policy._prompt_ids(lang)) for _, lang, _ in info]
+    tasks = [int(np.argmin(lens)), int(np.argmax(lens))]
+    descs = [info[t][1] for t in tasks]
+    for i, t in enumerate(tasks):
+        vec.reset(i, t, 0)
+    obs = [vec.recv(i) for i in range(2)]
+    d_ref, d_batch = 0.0, 0.0
+    for q in range(args.queries):
+        images = [o["rgb"] for o in obs]
+        ours = policy.act(images, descs, obs=obs)["actions"]
+        for i in range(2):
+            inputs = processor(prompt_for(descs[i]), preprocess_image(images[i])).to(policy.device, dtype=torch.bfloat16)
+            wrist = processor(prompt_for(descs[i]), preprocess_image(obs[i]["wrist_rgb"])).to(policy.device, dtype=torch.bfloat16)
+            inputs["pixel_values"] = torch.cat([inputs["pixel_values"], wrist["pixel_values"]], dim=1)
+            proprio = policy._normalize_proprio(proprio_state(obs[i]))
+            with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+                ref, _ = policy.vla.predict_action(**inputs, unnorm_key=policy.unnorm_key, do_sample=False, proprio=proprio,
+                                                   proprio_projector=policy.proprio_projector, action_head=policy.action_head)
+            single = policy.act([images[i]], [descs[i]], obs=[obs[i]])["actions"][0]
+            d_ref = max(d_ref, float(np.abs(single - ref).max()))
+            d_batch = max(d_batch, float(np.abs(ours[i] - single).max()))
+        env_actions = postprocess_actions(ours)
+        for i in range(2):
+            vec.step(i, env_actions[i])
+        obs = [vec.recv(i) for i in range(2)]
+    vec.close()
+    print(f"single-sample forward vs upstream predict_action: max |action diff| {d_ref:.5f} on {2 * args.queries} states")
+    print(f"padded batch of 2 vs single: max |action diff| {d_batch:.5f} (bf16 batching noise)")
+    assert d_ref < 1e-3, "batched re-implementation differs from upstream"
+    print("CHECK_POLICY_OK")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", required=True)
     ap.add_argument("--suite", default="libero_object")
     ap.add_argument("--queries", type=int, default=6)
+    ap.add_argument("--oft", action="store_true", help="--ckpt is a standard OpenVLA-OFT checkpoint (two images, proprio, L1 head)")
     args = ap.parse_args()
+    if args.oft:
+        return check_oft(args)
 
     from src.rollout.vec_env import LiberoVecEnv, postprocess_actions
 

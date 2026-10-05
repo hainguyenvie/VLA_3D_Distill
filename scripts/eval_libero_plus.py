@@ -22,7 +22,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--per_category", type=int, default=60)
     ap.add_argument("--num_envs", type=int, default=7)
-    ap.add_argument("--max_steps", type=int, default=512)
+    ap.add_argument("--max_steps", type=int, default=512, help="openvla-oft uses 220 / 280 / 300 / 520 for spatial / object / goal / 10")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -31,7 +31,7 @@ def main():
 
     from src.rollout.vec_env import LiberoVecEnv
 
-    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps)
+    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=args.ckpt.startswith("oft:"))
     cls_path = os.path.join(os.path.dirname(L.__file__), "benchmark", "task_classification.json")
     name_to_id = {vec.suite.get_task(i).name: i for i in range(vec.suite.n_tasks)}
     entries = [e for e in json.load(open(cls_path))[args.suite] if e["name"] in name_to_id]
@@ -46,11 +46,11 @@ def main():
 
     import torch
 
-    from src.policy.token_policy import TokenPolicy
+    from src.policy.rebin import load_policy
     from src.rollout.collector import Collector
 
     torch.manual_seed(args.seed)
-    policy = TokenPolicy(args.ckpt, args.suite)
+    policy = load_policy(args.ckpt, args.suite, "cuda:0")  # plain path, raw:<path> or oft:<path>
     if args.lora:
         policy.add_lora(adapter_path=args.lora)
     col = Collector(vec, policy, {}, sample=False, seed=args.seed, task_ids=sorted(meta))

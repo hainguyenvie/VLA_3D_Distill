@@ -158,14 +158,18 @@ class TokenPolicy:
         with torch.autocast("cuda", dtype=torch.bfloat16):
             return self._forward_logits(inputs, hidden_layers)
 
-    def _forward_logits(self, inputs, hidden_layers):
+    def _run_llm(self, inputs, extra_tokens=None):
+        """One multimodal forward. Returns (LLM output, positions whose outputs carry the 56 action tokens, number
+        of tokens inserted after BOS). `extra_tokens` (B, k, D) are appended to the visual tokens (proprio)."""
         vla = self.vla
         input_ids, prompt_len = inputs["input_ids"], inputs["prompt_len"]
         B, L = input_ids.shape
         pos = torch.arange(L, device=input_ids.device)[None]
         act_mask = (pos >= prompt_len[:, None]) & (pos < prompt_len[:, None] + N_ACT_TOKENS)
         emb = vla.get_input_embeddings()(input_ids) * ~act_mask[..., None]
-        patches = vla.projector(vla.vision_backbone(inputs["pixel_values"]))  # (B, 256, D)
+        patches = vla.projector(vla.vision_backbone(inputs["pixel_values"]))  # (B, 256 per image, D)
+        if extra_tokens is not None:
+            patches = torch.cat([patches, extra_tokens], dim=1)
         P = patches.shape[1]
         mm = torch.cat([emb[:, :1], patches, emb[:, 1:]], dim=1)
         am = inputs["attention_mask"]
@@ -178,8 +182,13 @@ class TokenPolicy:
             output_hidden_states=True,
             return_dict=True,
         )
-        # logits at position j predict token j+1, so the 56 action tokens are read from the '' token onwards
+        # outputs at position j predict token j+1, so the 56 action tokens are read from the '' token onwards
         idx = (P + prompt_len - 1)[:, None] + torch.arange(N_ACT_TOKENS, device=input_ids.device)[None]
+        return out, idx, P
+
+    def _forward_logits(self, inputs, hidden_layers):
+        out, idx, P = self._run_llm(inputs)
+        B = idx.shape[0]
         act_logits = out.logits[torch.arange(B, device=idx.device)[:, None], idx]
         act_logits = act_logits[..., self.vocab_size - N_BINS : self.vocab_size].float()
         if hidden_layers is None:
@@ -187,7 +196,8 @@ class TokenPolicy:
         return act_logits, {l: out.hidden_states[l][:, 1 : 1 + P] for l in hidden_layers}
 
     @torch.inference_mode()
-    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None):
+    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None,
+            obs=None):
         """Returns dict(logits (B,56,256) float32 cpu, bins (B,56) int64 cpu, actions (B,8,7) unnormalised)."""
         logits, _ = self.forward_logits(self.build_inputs(images, task_descriptions, pils))
         if sample:

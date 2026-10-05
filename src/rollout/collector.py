@@ -118,7 +118,8 @@ class Collector:
             # one default-pipeline preprocessing shared by the actor and the labelers (a raw-image policy redoes its own)
             pils = None if getattr(self.policy, "raw_images", False) else preprocess_batch(images, self.policy.center_crop)
             t1 = time.perf_counter()
-            out = self.policy.act(images, descs, sample=self.sample, temperature=self.temperature, generator=self.gen, pils=pils)
+            out = self.policy.act(images, descs, sample=self.sample, temperature=self.temperature, generator=self.gen, pils=pils,
+                                  obs=[slots[i]["obs"] for i in act_idx] if getattr(self.policy, "needs_obs", False) else None)
             t2 = time.perf_counter()
             label_logits = {k: p.act(images, descs, pils=pils)["logits"] for k, p in self.labelers.items()}
             t3 = time.perf_counter()
@@ -129,8 +130,9 @@ class Collector:
                     if k in obs:
                         s["steps"][k].append(obs[k])
                 s["t"].append(obs["t"])
-                s["bins"].append(out["bins"][j].numpy().astype(np.uint8))
-                s["logits"].append(out["logits"][j].numpy().astype(np.float16))
+                if "logits" in out:  # token policies only; a regression-head policy has no distribution to log
+                    s["bins"].append(out["bins"][j].numpy().astype(np.uint8))
+                    s["logits"].append(out["logits"][j].numpy().astype(np.float16))
                 s["actions"].append(out["actions"][j].astype(np.float32))
                 for k in self.labelers:
                     s["label_logits"][k].append(label_logits[k][j].numpy().astype(np.float16))
@@ -160,11 +162,11 @@ class Collector:
 
     def _finish(self, s: dict, out_dir: Optional[str], save_steps: bool) -> dict:
         final = s["obs"]
-        logits = torch.from_numpy(np.stack(s["logits"]).astype(np.float32))
+        logits = torch.from_numpy(np.stack(s["logits"]).astype(np.float32)) if s["logits"] else None
         rec = {
             "task_id": s["task_id"], "trial_id": s["trial_id"], "task": self.tasks[s["task_id"]][0],
             "success": bool(final["done"]), "env_steps": int(final["t"]), "n_queries": len(s["t"]),
-            "seconds": round(time.time() - s["t0"], 1), "entropy": token_stats(logits)["entropy"],
+            "seconds": round(time.time() - s["t0"], 1), "entropy": token_stats(logits)["entropy"] if logits is not None else None,
         }
         for k, v in s["label_logits"].items():
             st = token_stats(logits, torch.from_numpy(np.stack(v).astype(np.float32)))
@@ -172,8 +174,9 @@ class Collector:
         arrays = None
         if (out_dir and save_steps) or self._keep_steps:
             arrays = {k: np.stack(v) for k, v in s["steps"].items() if v}
-            arrays.update(t=np.array(s["t"]), bins=np.stack(s["bins"]), logits=np.stack(s["logits"]),
-                          actions=np.stack(s["actions"]), final_sim_state=final["sim_state"])
+            arrays.update(t=np.array(s["t"]), actions=np.stack(s["actions"]), final_sim_state=final["sim_state"])
+            if s["logits"]:
+                arrays.update(bins=np.stack(s["bins"]), logits=np.stack(s["logits"]))
             arrays.update({f"logits_{k}": np.stack(v) for k, v in s["label_logits"].items()})
         if out_dir:
             eid = f"t{s['task_id']:02d}_n{s['trial_id']:02d}"
