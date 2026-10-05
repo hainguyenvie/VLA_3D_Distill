@@ -57,6 +57,11 @@ Theo mức khó: L1 79% → L5 27%.
 Student 1-traj trên cùng 420 task: **tổng 21.2%** (Camera 3.3, Noise 6.7, Light 13.3, Robot-init 18.3, Layout
 33.3, Background 35.0, Language 38.3).
 
+OFT chuẩn (checkpoint chính thức, 2 camera + proprio) đo trong harness của ta trên cùng 420 task: **70.2%**
+(Camera 48, Robot-init 27, Noise 65, Layout 67, Light 90, Language 97, Background 98), so với 66.5% đã công bố cho
+toàn bộ suite Object; trên LIBERO-Object chuẩn nó đạt 96.8% (paper 98.4). Harness LIBERO-Plus vì vậy tái lập được
+dạng kết quả đã công bố.
+
 Đọc bảng này:
 - Headroom thật nằm ở đây: ngay cả teacher cũng chỉ đạt một nửa, và trần **không** bị teacher chặn, vì giám sát
   3D có thể cho student độ bền mà teacher không có.
@@ -135,8 +140,9 @@ Ghép với takeover của teacher (cùng các episode):
 |---|---|---|---|---|---|---|---|
 | Episode near miss | 100 | 82 | 79 | 63 | 20 | 8 | 5 |
 
-(các mốc 5–20% mới có 17–20 episode mỗi ô, đang chạy thêm.) Gộp mọi kiểu lỗi: trao quyền **trước** lần kẹp
-đầu tiên của student thì teacher thành công 95% (n=62); **sau** lần kẹp đó chỉ 3% (n=170).
+(bản đầy đủ, 37 episode mỗi ô: 86 / 78 / 65 / 24 ở các mốc 5 / 10 / 15 / 20%; trên episode student thành công
+teacher đạt 92–94% ở cả bốn mốc.) Gộp mọi kiểu lỗi ở các mốc 0/25/50/75%: trao quyền **trước** lần kẹp đầu tiên
+của student thì teacher thành công 95% (n=62); **sau** lần kẹp đó chỉ 3% (n=170).
 
 Đọc kết quả:
 - Điểm không thể cứu chính là **lần kẹp hỏng đầu tiên**. Ngay cả near miss, khi vật đích còn nguyên chỗ, teacher
