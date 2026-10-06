@@ -38,6 +38,7 @@ class Pi05Policy:
         cfg.device = str(self.device)
         self.vla = PI05Policy.from_pretrained(checkpoint, config=cfg)
         self.vla.to(self.device).eval()
+        self.loading_info = {}  # LeRobot reports mismatches itself (a warning about remapped keys is expected)
         overrides = {"device_processor": {"device": str(self.device)}}
         tok = tokenizer or (os.path.join(os.path.dirname(checkpoint.rstrip("/")), TOKENIZER_FALLBACK)
                             if not os.environ.get("HF_TOKEN") else None)
