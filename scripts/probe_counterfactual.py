@@ -75,7 +75,7 @@ def main():
     from src.policy.rebin import load_policy
 
     torch.manual_seed(args.seed)
-    vec = LiberoVecEnv(args.suite, args.num_envs, max_steps=512, wrist=args.ckpt.startswith("oft:"))
+    vec = LiberoVecEnv(args.suite, args.num_envs, max_steps=512, wrist=args.ckpt.startswith(("oft:", "pi05:")))
     policy = load_policy(args.ckpt, args.suite, "cuda:0")
     if args.lora:
         policy.add_lora(adapter_path=args.lora)
