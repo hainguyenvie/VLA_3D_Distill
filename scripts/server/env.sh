@@ -5,6 +5,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 W="$(dirname "$REPO")"
 export W REPO
 export PY="$W/envs/${PY_ENV:-oft}/bin/python"  # PY_ENV=pi05 selects the pi0.5 environment
+# torch >= 2.6 loads with weights_only=True by default, which breaks LIBERO's pickled init-state files
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 export HF_HOME="$W/checkpoints/hf"
 export TORCH_HOME="$W/checkpoints/torch"
 export PIP_CACHE_DIR="$W/.cache/pip"
