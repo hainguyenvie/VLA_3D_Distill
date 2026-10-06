@@ -21,6 +21,7 @@ def main():
     ap.add_argument("--task", type=int, default=3)
     ap.add_argument("--chunks", type=int, default=6)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--mode", default="shift", choices=["shift", "swap"])
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     from libero.libero import benchmark, get_libero_path
@@ -31,7 +32,7 @@ def main():
     bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
     init = np.asarray(suite.get_task_init_states(args.task))[0]
     cfg = dict(suite=args.suite, max_steps=512, num_steps_wait=10, resolution=256, depth=False, wrist=True, perturb=None,
-               counterfactual=COUNTERFACTUAL)
+               counterfactual=dict(COUNTERFACTUAL, mode=args.mode))
     runner = EnvRunner(bddl, cfg, contextlib.nullcontext())
     rng = np.random.default_rng(0)
     chunks = [np.concatenate([rng.uniform(-0.3, 0.3, (8, 6)), -np.ones((8, 1))], axis=1) for _ in range(args.chunks)]
@@ -45,9 +46,11 @@ def main():
     mags = [float(np.linalg.norm(b["cf_delta"])) for b in cf]
     print(f"|state| {d_state:.1e}, nominal rgb {d_rgb}, wrist {d_wrist}, mean |rgb_cf - rgb| {np.round(diff_cf, 2).tolist()}, "
           f"delta magnitudes {np.round(mags, 3).tolist()}, target_pos consistency {d_tp:.1e}")
+    if args.mode == "swap":
+        print("swap partners:", sorted({str(b["cf_target_name"]) for b in cf}), "target:", str(cf[0]["cf_source_name"]))
     assert d_state < 1e-9 and d_rgb == 0 and d_wrist == 0 and min(diff_cf) > 0.2 and d_tp < 1e-5
     rows = [np.concatenate([b["rgb"], b["rgb_cf"], b["wrist_rgb"], b["wrist_rgb_cf"]], axis=1) for b in cf[:4]]
-    Image.fromarray(np.concatenate(rows, axis=0)).save(os.path.join(args.out, "cf_sheet.jpg"), quality=85)
+    Image.fromarray(np.concatenate(rows, axis=0)).save(os.path.join(args.out, f"cf_sheet_{args.mode}.jpg"), quality=85)
     print("CHECK_COUNTERFACTUAL_OK")
 
 

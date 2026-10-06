@@ -5,8 +5,9 @@ counterfactual world (target object displaced horizontally, everything else unch
 the teacher (the same checkpoint with the adapters off) labels both worlds with its full 50-step chunk. The flow
 student is trained with paired flow matching: one noise sample and one time per state, shared by the two worlds,
     L = |v(o, x_t) - u| + |v(o', x'_t) - u'| + lambda_cf |(v(o', x'_t) - v(o, x_t)) - (u' - u)|      (squared)
-with x_t = t e + (1 - t) A, u = e - A (A, A': teacher chunks of the two worlds), so the last term supervises how
-the action must change when only the object moved (u' - u = A - A'). --lambda_cf 0 --no_cf is the matched on-policy
+with x_t = t e + (1 - t) A, u = e - A (A, A': labels of the two worlds), so the last term supervises how the action
+must change between the worlds (u' - u = A - A'). Swap mode: A' = A and the instruction names the object now at the
+target's place, so the pair asks for the same motion to a different named object (pre-grasp states only). --lambda_cf 0 --no_cf is the matched on-policy
 distillation baseline (same states, labels, budget, optimiser; no counterfactual world).
 Outputs in --out: train_log.jsonl, adapter_last/ + state.pt (resume), adapter_iterXXXX/ at every evaluation.
 """
@@ -25,7 +26,11 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_delta", default="0.02,0.08", help="displacement range of the target (metres)")
+    ap.add_argument("--cf_mode", choices=["shift", "swap"], default="swap",
+                    help="swap: the target exchanges places with another object and the counterfactual instruction names "
+                         "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
+                         "target is displaced and the teacher labels the counterfactual world")
+    ap.add_argument("--cf_delta", default="0.02,0.08", help="shift mode: displacement range of the target (metres)")
     ap.add_argument("--lambda_cf", type=float, default=1.0)
     ap.add_argument("--iters", type=int, default=20)
     ap.add_argument("--states_per_iter", type=int, default=1024)
@@ -49,7 +54,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     from src.rollout.vec_env import COUNTERFACTUAL, LiberoVecEnv
 
-    cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, delta=tuple(float(x) for x in args.cf_delta.split(",")))
+    cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")))
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg)
 
     import torch
@@ -117,9 +122,20 @@ def main():
         # flatten (episode, query) -> arrays
         cat = lambda k: np.concatenate([r["arrays"][k] for r in recs])  # noqa: E731
         A = {k: cat(k) for k in ("rgb", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "actions_teacher")}
-        if not args.no_cf:
-            A.update({k: cat(k) for k in ("rgb_cf", "wrist_rgb_cf", "cf_teacher")})
         descs_all = [r["task"] for r in recs for _ in range(r["n_queries"])]
+        cf_ok = np.zeros(len(descs_all), dtype=bool)
+        descs_cf = list(descs_all)
+        if not args.no_cf:
+            A.update({k: cat(k) for k in ("rgb_cf", "wrist_rgb_cf", "cf_teacher", "closed_before")})
+            phrase = lambda n: str(n).rsplit("_", 1)[0].replace("_", " ")  # "alphabet_soup_1" -> "alphabet soup"  # noqa: E731
+            if args.cf_mode == "swap":
+                tgt, src = cat("cf_target_name"), cat("cf_source_name")
+                for k, d in enumerate(descs_all):  # pre-grasp states whose instruction names the target explicitly
+                    if not A["closed_before"][k] and phrase(src[k]) in d and phrase(tgt[k]) != phrase(src[k]):
+                        descs_cf[k], cf_ok[k] = d.replace(phrase(src[k]), phrase(tgt[k])), True
+                A["cf_teacher"] = A["actions_teacher"]  # the correct action of the swapped world is the nominal one
+            else:
+                cf_ok[:] = ~A["closed_before"].astype(bool)
         n_all = len(descs_all)
         keep = np.sort(rng.choice(n_all, size=min(args.states_per_iter, n_all), replace=False))
         t_collect = time.time() - t0
@@ -143,12 +159,16 @@ def main():
             v = student.velocity([A["rgb"][k] for k in j], descs, obs_list(A, j), te * noise + (1 - te) * a, t)
             u = noise - a
             loss = ((v - u) ** 2).mean()
-            if not args.no_cf:
-                a2 = torch.from_numpy(A["cf_teacher"][j]).to(student.device, torch.float32)
-                v2 = student.velocity([A["rgb_cf"][k] for k in j], descs, obs_list(A, j, cf=True), te * noise + (1 - te) * a2, t)
-                u2 = noise - a2
+            jc = np.array([k for k in j if cf_ok[k]], dtype=int)
+            if not args.no_cf and len(jc):
+                sel = torch.from_numpy(np.isin(j, jc)).to(student.device)
+                a2 = torch.from_numpy(A["cf_teacher"][jc]).to(student.device, torch.float32)
+                n2, t2, te2 = noise[sel], t[sel], te[sel]
+                v2 = student.velocity([A["rgb_cf"][k] for k in jc], [descs_cf[k] for k in jc], obs_list(A, jc, cf=True),
+                                      te2 * n2 + (1 - te2) * a2, t2)
+                u2 = n2 - a2
                 loss = loss + ((v2 - u2) ** 2).mean()
-                lcf = (((v2 - v) - (u2 - u)) ** 2).mean()
+                lcf = (((v2 - v[sel]) - (u2 - u[sel])) ** 2).mean()
                 loss = loss + args.lambda_cf * lcf
                 cf_losses.append(float(lcf))
             opt.zero_grad(set_to_none=True)
@@ -167,8 +187,9 @@ def main():
                "gpu_peak_gb": round(torch.cuda.max_memory_allocated(student.device) / 1e9, 1), **totals}
         if cf_losses:
             row["cf_loss"] = float(np.mean(cf_losses))
-            # how much the teacher's own chunk moves between the two worlds (normalised units), for reference
-            row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())
+            row["cf_states"] = int(cf_ok[keep].sum())
+            if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)
+                row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())
         student.save_lora(last)
         torch.save({"opt": opt.state_dict(), "iter": it, "totals": totals}, state_path + ".tmp")
         os.replace(state_path + ".tmp", state_path)
