@@ -227,9 +227,12 @@ class EnvRunner:
         mujoco.mj_camlight(m, d)  # world poses of cameras and lights only; the physics state is not touched
 
     def _counterfactual_view(self) -> Dict[str, Any]:
-        """Frames of the same instant with the target object moved horizontally by a fresh random vector; the
-        simulator is put back exactly afterwards (positions only; no physics step happens in between)."""
-        import mujoco
+        """Frames of the same instant with the target object moved horizontally by a fresh random vector.
+
+        Only the rendered poses of the target's bodies, geoms and sites are shifted (and shifted back): after
+        mj_step the kinematic arrays still describe the qpos of the last substep's start, so recomputing kinematics
+        would also move the fingers and change the nominal frames; shifting the poses leaves everything else intact.
+        """
         import robosuite.macros as macros
         from robosuite.utils.mjcf_utils import IMAGE_CONVENTION_MAPPING
 
@@ -238,24 +241,33 @@ class EnvRunner:
             _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
         robo, res = self.env.env, self.cfg["resolution"]
         conv = IMAGE_CONVENTION_MAPPING[macros.IMAGE_CONVENTION]
-        m, d = robo.sim.model._model, robo.sim.data._data
+        d = robo.sim.data._data
         lo, hi = self.cfg["counterfactual"]["delta"]
         ang, mag = _PERT_RNG.uniform(0, 2 * np.pi), _PERT_RNG.uniform(lo, hi)
-        delta = np.array([mag * np.cos(ang), mag * np.sin(ang)])
-        a = self._cf_addr
-        saved = d.qpos[a : a + 2].copy()
-        d.qpos[a : a + 2] = saved + delta
-        mujoco.mj_kinematics(m, d)  # body poses only; nothing dynamic is touched
-        out = {"cf_delta": delta.astype(np.float32)}
-        for cam, key in (("agentview", "rgb_cf"), ("robot0_eye_in_hand", "wrist_rgb_cf")):
-            if cam == "robot0_eye_in_hand" and not self.cfg.get("wrist"):
-                continue
-            img = robo.sim.render(camera_name=cam, width=res, height=res, depth=False)
-            out[key] = np.ascontiguousarray(img[::conv][::-1, ::-1])
-        d.qpos[a : a + 2] = saved
-        mujoco.mj_kinematics(m, d)
-        out["target_pos_cf"] = _target_pos(robo) + np.array([delta[0], delta[1], 0.0], dtype=np.float32)
+        shift = np.array([mag * np.cos(ang), mag * np.sin(ang), 0.0])
+        bodies, geoms, sites = self._cf_ids
+        for arr, ids in ((d.xpos, bodies), (d.xipos, bodies), (d.geom_xpos, geoms), (d.site_xpos, sites)):
+            arr[ids] += shift
+        out = {"cf_delta": shift[:2].astype(np.float32)}
+        try:
+            for cam, key in (("agentview", "rgb_cf"), ("robot0_eye_in_hand", "wrist_rgb_cf")):
+                if cam == "robot0_eye_in_hand" and not self.cfg.get("wrist"):
+                    continue
+                img = robo.sim.render(camera_name=cam, width=res, height=res, depth=False)
+                out[key] = np.ascontiguousarray(img[::conv][::-1, ::-1])
+        finally:
+            for arr, ids in ((d.xpos, bodies), (d.xipos, bodies), (d.geom_xpos, geoms), (d.site_xpos, sites)):
+                arr[ids] -= shift
+        out["target_pos_cf"] = _target_pos(robo) + shift.astype(np.float32)
         return out
+
+    @staticmethod
+    def _is_descendant(m, b: int, root: int) -> bool:
+        while b > 0:
+            b = int(m.body_parentid[b])
+            if b == root:
+                return True
+        return False
 
     def _perturbed_view(self) -> Dict[str, Any]:
         import robosuite.macros as macros
@@ -334,9 +346,13 @@ class EnvRunner:
             self._start_perturbation()
         if counterfactual and self.cfg.get("counterfactual"):
             names = getattr(robo, "obj_of_interest", None) or []
-            addr = robo.sim.model.get_joint_qpos_addr(f"{names[0]}_joint0") if names else None
-            if addr is not None:
-                self._cf_addr = int(addr[0] if isinstance(addr, (tuple, list, np.ndarray)) else addr)
+            if names and names[0] in robo.obj_body_id:
+                m = robo.sim.model._model
+                root = robo.obj_body_id[names[0]]
+                bodies = [b for b in range(m.nbody) if b == root or self._is_descendant(m, b, root)]
+                geoms = [g for g in range(m.ngeom) if m.geom_bodyid[g] in bodies]
+                sites = [x for x in range(m.nsite) if m.site_bodyid[x] in bodies]
+                self._cf_ids = (np.array(bodies), np.array(geoms, dtype=int), np.array(sites, dtype=int))
                 self.cf = True
         self.t = -self.cfg["num_steps_wait"]
         out = self._run([DUMMY_ACTION] * self.cfg["num_steps_wait"], stop_at_end=False)  # upstream ignores `done` here
