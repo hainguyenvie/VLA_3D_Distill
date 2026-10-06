@@ -283,6 +283,7 @@ cả hai máy trước khi so với số đã công bố.
 | **B3**: state teacher + loss depth, vòng 20 (85.0% trên 500 episode chuẩn) | 49.3 | 10.0 | 53.3 | 21.7 | 48.3 | 48.3 | 85.0 | 78.3 |
 | **V1**: state hỗn hợp + nhiễu thị giác, vòng 20 (87.8% chuẩn) | **56.4** | **41.7** | **75.0** | **53.3** | 45.0 | 45.0 | 73.3 | 61.7 |
 | **V2**: V1 + loss depth trên ảnh nhiễu, vòng 20 (77.0% chuẩn; checkpoint cuối sụp, vòng 16–18 đạt 92% / 100 ep) | 50.2 | 23.3 | 75.0 | 43.3 | 36.7 | 46.7 | 66.7 | 60.0 |
+| **B2 với lr cosine**, vòng 20 (93.0% chuẩn) | 51.4 | 5.0 | 63.3 | 25.0 | 48.3 | 51.7 | 83.3 | 83.3 |
 | Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
 
 Loss depth trên cảnh chuẩn cũng không giúp trên LIBERO-Plus: B4 45.0% so với 48.1% của B2 cùng vòng (chênh trong
@@ -390,6 +391,9 @@ cùng state mô phỏng. Đây là chỗ 3D thật sự cần: muốn có ảnh 
   100 / 94; không task nào sụp), so với 93.8 của VLA-OPD: **mốc "trong 3 điểm" đã đạt**. Đường cong eval 100 episode:
   49 → 45 → 77 → 86 → 88 → 92 → 91 → 91 → 96 → 95. Khoảng hụt 86.2 của bản lr cố định là do dao động cuối run, không
   phải do ngân sách hay LoRA. Từ đây mọi nhánh mới dùng lr cosine.
+- Baseline lr cosine trên LIBERO-Plus: **51.4** (teacher 50.0): distill không-3D ổn định thì chạm teacher, không hơn;
+  Camera vẫn 5%. V1 (56.4) hơn baseline ổn định 5 điểm, toàn bộ ở Camera / Noise / Light. So công bằng hơn cho V1 là
+  bản V1 + lr cosine đang chạy trên L40.
 - Đang chạy tiếp: V1 seed 8 (H200) và V1 + lr cosine (L40), mỗi run kèm eval 500 episode và LIBERO-Plus.
 
 ## Việc đang chạy / tiếp theo

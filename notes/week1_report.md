@@ -12,7 +12,7 @@ bối cảnh paper: [related_work.md](related_work.md); nhật ký tái lập: [
   Forcing 71.9 (chỉ hơn 1.7 điểm, 91/420 task cả hai cùng hỏng), teacher 1-camera của ta 50.0, student 21.2.
 - **Baseline distill (bản VLA-OPD của ta) đạt 93.0** trên LIBERO-Object với lr giảm cosine (VLA-OPD công bố 93.8) và
   86.2 với lr cố định; khoảng hụt của bản lr cố định là do quá trình distill dao động (sụp từng task ở vòng cuối).
-  LIBERO-Plus của baseline: 48.1 (lr cố định; bản cosine đang chấm).
+  LIBERO-Plus của baseline: 48.1 (lr cố định), 51.4 (lr cosine) — ngang teacher (50.0), Camera vẫn 5%.
 - **Idea ban đầu (loss depth trên state on-policy) không hơn baseline**: 86.2 so với 86.2 trên bản chuẩn, 45.0 so với
   48.1 trên LIBERO-Plus. Trên state của teacher thì depth có giúp (73.2 → 85.0; LIBERO-Plus 39.0 → 49.3), chưa chắc
   cỡ bao nhiêu (một seed).
@@ -92,7 +92,8 @@ số episode), teacher gán nhãn và lái từ ảnh chuẩn của **cùng stat
 | | Chuẩn (500 ep) | LIBERO-Plus | Camera | Light | Noise | Robot-init | Layout |
 |---|---|---|---|---|---|---|---|
 | Teacher | 95.2 | 50.0 | 13–20 | 30 | 40–43 | 45–55 | 58–62 |
-| B2 (baseline distill) | 86.2 | 48.1 | 13 | 62 | 22 | 47 | 48 |
+| B2 (baseline distill, lr cố định) | 86.2 | 48.1 | 13 | 62 | 22 | 47 | 48 |
+| B2 với lr cosine | 93.0 | 51.4 | 5 | 63 | 25 | 48 | 52 |
 | **V1** (nhiễu thị giác) | **87.8** | **56.4** | **42** | **75** | **53** | 45 | 45 |
 | V2 (V1 + depth trên ảnh nhiễu) | 77.0 | 50.2 | 23 | 75 | 43 | 47 | 37 |
 
