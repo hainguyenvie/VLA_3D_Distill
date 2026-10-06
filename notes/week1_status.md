@@ -446,6 +446,19 @@ của chunk đi theo vật (1 = theo hết, 0 = không phản ứng).
 | sớm (≥ 3 query trước khi kẹp) / muộn | 1152 / 696 | 0.00 / 0.03 | −0.011 / 0.022 | 8% / 26% |
 | dời 3 cm / 6 cm | 924 / 924 | 0.00 / 0.00 | | 15% / 15% |
 
+| Teacher full-SFT (95%) | n | p trung vị | p trung bình | tỉ lệ p > 0.25 |
+|---|---|---|---|---|
+| mọi state | 1848 | 0.03 | 0.12 | 27% |
+| sớm (≥ 3 query trước khi kẹp) | 1152 | 0.00 | 0.01 | 12% |
+| **muộn (< 3 query trước khi kẹp)** | 696 | **0.27** | **0.31** | **52%** |
+| dời 3 cm / 6 cm | 924 / 924 | 0.02 / 0.03 | 0.15 / 0.10 | 31% / 24% |
+
+Teacher cũng không phản ứng khi còn xa vật (chunk 8 bước đầu là chuyển động chung "đi vào vùng làm việc"), nhưng
+**khi đã gần vật nó bám theo**: trung vị 27% độ dời được bù ngay trong một chunk, 52% state có phản ứng rõ; student ở
+cùng pha chỉ 3% / 26%. Tức "đi theo vật" ở policy 95% là một hành vi pha cuối, và đó đúng là pha quyết định cú kẹp
+(dung sai 2.5 cm). Hệ quả cho phương pháp: distill hiệu action từ teacher có tín hiệu thật ở các state gần vật; ở
+state xa, cặp phản thực nên có trọng số thấp hoặc dùng độ dời lớn hơn.
+
 Student **không phản ứng** với vật bị dời: chuyển động của chunk gần như y nguyên dù vật đã ở chỗ khác 6 cm, kể cả
 trên các episode nó sẽ thành công. Đây là bằng chứng trực tiếp nhất cho "phát lại quỹ đạo": cùng với probe offset
 (feature biết vật ở đâu, sai < 1 cm), nó nói rõ thông tin có nhưng không đi vào action. Teacher đang được đo cùng probe
