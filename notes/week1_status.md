@@ -420,6 +420,19 @@ headroom *thị giác* của backbone OFT đã lấy được sau 4 vòng (kho�
 20.000 demo nhiễu; phần còn lại nằm đúng ở **Robot-init và Layout** — không đổi, vì render lại ảnh không đổi trạng thái.
 Đối chứng A1 (cùng vòng lặp, không nhiễu) đang xếp hàng trên L40; adapter vòng 20 sẽ được chấm 500 episode + LIBERO-Plus.
 
+## D2: che proprio của OFT lúc test (06/10)
+
+| Proprio | LIBERO chuẩn (100 ep) | Robot-init (60 task) | Layout (60 task) |
+|---|---|---|---|
+| bình thường | 96.8 (500 ep) | 27–28 | 67 |
+| nhiễu Gauss σ = 0.3 (chuẩn hoá) | — | 32 | 67 |
+| về 0 | 95 | **17** | 62 |
+
+OFT gần như không cần proprio trong phân phối (95 khi che hẳn), nhưng che proprio làm Robot-init *tệ hơn*, nhiễu
+không đổi gì rõ (sai số chuẩn 6 điểm). Giả thuyết "proprio là lối tắt gây hỏng Robot-init" **không được ủng hộ** với
+OFT; lỗi nằm ở cách action gắn với cảnh nhìn thấy. (Model 1 camera không proprio đạt 45–55 ở Robot-init có lẽ vì lý do
+khác: nó nhìn tay kẹp trong ảnh và không có đầu vào nào "nhắc" tư thế quen.)
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
