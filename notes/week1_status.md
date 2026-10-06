@@ -280,6 +280,9 @@ cả hai máy trước khi so với số đã công bố.
 | Student sau distill không-3D (reverse-KL, state student, **vòng 20**; 86.2% trên 500 episode chuẩn) | 48.1 | 13.3 | 61.7 | 21.7 | 46.7 | 48.3 | 80.0 | 65.0 |
 | Student sau distill không-3D (reverse-KL, state teacher, vòng 20; 73.2% trên 500 episode chuẩn) | 39.0 | 5.0 | 50.0 | 15.0 | 48.3 | 38.3 | 63.3 | 53.3 |
 | **B4**: state student + loss depth, vòng 20 (86.2% trên 500 episode chuẩn) | 45.0 | 8.3 | 50.0 | 16.7 | 41.7 | 51.7 | 68.3 | 78.3 |
+| **B3**: state teacher + loss depth, vòng 20 (85.0% trên 500 episode chuẩn) | 49.3 | 10.0 | 53.3 | 21.7 | 48.3 | 48.3 | 85.0 | 78.3 |
+| **V1**: state hỗn hợp + nhiễu thị giác, vòng 20 (87.8% chuẩn) | **56.4** | **41.7** | **75.0** | **53.3** | 45.0 | 45.0 | 73.3 | 61.7 |
+| **V2**: V1 + loss depth trên ảnh nhiễu, vòng 20 (77.0% chuẩn; checkpoint cuối sụp, vòng 16–18 đạt 92% / 100 ep) | 50.2 | 23.3 | 75.0 | 43.3 | 36.7 | 46.7 | 66.7 | 60.0 |
 | Teacher full-SFT | 49.8 | 13.3 | 30.0 | 43.3 | 55.0 | 58.3 | 73.3 | 75.0 |
 
 Loss depth trên cảnh chuẩn cũng không giúp trên LIBERO-Plus: B4 45.0% so với 48.1% của B2 cùng vòng (chênh trong
@@ -367,6 +370,25 @@ cùng state mô phỏng. Đây là chỗ 3D thật sự cần: muốn có ảnh 
 - Điều phải nói rõ khi báo cáo: dải nhiễu được chọn rộng cỡ LIBERO-Plus (họ quay camera tới ±75° và kéo xa tới
   2 lần), nên đây **không còn là zero-shot theo loại nhiễu**; không dùng demo mới và không dùng task / file nhiễu
   của LIBERO-Plus. Mốc so công bằng là student / teacher cùng backbone và OFT train trên data nhiễu (79.5).
+
+## Kết quả bước sửa (06/10, một seed)
+
+| | LIBERO-Object chuẩn (500 ep) | LIBERO-Plus (420 task) | Camera | Light | Noise |
+|---|---|---|---|---|---|
+| Teacher | 95.2 | 50.0 | 13–20 | 30 | 40–43 |
+| B2 (baseline distill) | 86.2 | 48.1 | 13 | 62 | 22 |
+| **V1** (nhiễu thị giác, teacher nhìn sạch) | **87.8** | **56.4** | **42** | **75** | **53** |
+| V2 (V1 + depth) | 77.0 | 50.2 | 23 | 75 | 43 |
+
+- V1 là kết quả đầu tiên đạt mốc 2 đã đặt (student vượt chính teacher của nó trên LIBERO-Plus, ≥ 55), và không
+  tụt trên bản chuẩn. Mức tăng nằm đúng ba loại nhiễu được render lại lúc train (Camera +29, Noise +31, Light +13);
+  Robot-init, Layout, Language, Background không đổi trong mức nhiễu.
+- V2 không hơn V1: checkpoint cuối của V2 là một checkpoint sụp (76% / 100 ep ở vòng 20, trong khi vòng 16–18 đạt
+  92%), nên số này chủ yếu đo sự bất ổn cuối run chứ chưa đo được hiệu ứng của depth dưới nhiễu. Cần chạy lại với
+  lr giảm dần (và thêm seed) trước khi kết luận.
+- Baseline với lr cosine (1e-4 → 1e-5): eval 100 episode ổn định 91–96 từ vòng 12 (vòng 18: 96, không task nào
+  dưới 80); 500 episode đang chấm. Nếu giữ được mức này thì baseline chạm mốc "trong 3 điểm quanh VLA-OPD".
+- Đang chạy tiếp: V1 seed 8 (H200) và V1 + lr cosine (L40), mỗi run kèm eval 500 episode và LIBERO-Plus.
 
 ## Việc đang chạy / tiếp theo
 
