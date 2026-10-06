@@ -433,6 +433,24 @@ không đổi gì rõ (sai số chuẩn 6 điểm). Giả thuyết "proprio là 
 OFT; lỗi nằm ở cách action gắn với cảnh nhìn thấy. (Model 1 camera không proprio đạt 45–55 ở Robot-init có lẽ vì lý do
 khác: nó nhìn tay kẹp trong ảnh và không có đầu vào nào "nhắc" tư thế quen.)
 
+## D1: probe phản thực — dời vật thì action có đi theo không? (06/10, L40)
+
+`scripts/probe_counterfactual.py`: 231 state tiếp cận (trước lần kẹp đầu) từ 77 episode của student, mỗi state khôi
+phục lại trong simulator rồi dời vật đích ±3 / ±6 cm theo x / y, render lại, hỏi policy; p = phần chuyển động ngang
+của chunk đi theo vật (1 = theo hết, 0 = không phản ứng).
+
+| Student 1-traj | n | p trung vị | p trung bình | tỉ lệ p > 0.25 |
+|---|---|---|---|---|
+| mọi state | 1848 | **0.00** | 0.001 | 15% |
+| episode thành công / hỏng | 888 / 960 | 0.00 / 0.00 | 0.013 / −0.010 | 14% / 16% |
+| sớm (≥ 3 query trước khi kẹp) / muộn | 1152 / 696 | 0.00 / 0.03 | −0.011 / 0.022 | 8% / 26% |
+| dời 3 cm / 6 cm | 924 / 924 | 0.00 / 0.00 | | 15% / 15% |
+
+Student **không phản ứng** với vật bị dời: chuyển động của chunk gần như y nguyên dù vật đã ở chỗ khác 6 cm, kể cả
+trên các episode nó sẽ thành công. Đây là bằng chứng trực tiếp nhất cho "phát lại quỹ đạo": cùng với probe offset
+(feature biết vật ở đâu, sai < 1 cm), nó nói rõ thông tin có nhưng không đi vào action. Teacher đang được đo cùng probe
+để biết "đi theo vật" trông như thế nào ở một policy 95%.
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
