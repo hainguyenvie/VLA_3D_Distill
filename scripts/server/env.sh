@@ -32,6 +32,15 @@ if [ "${LIBERO_VARIANT:-}" = plus ]; then
       "$LIBERO_DIR/libero/libero" "$LIBERO_DIR/libero/libero" "$LIBERO_DIR/libero/libero" "$W/data/libero_hdf5" "$LIBERO_DIR/libero/libero" \
       > "$LIBERO_CONFIG_PATH/config.yaml"
   fi
+elif [ "${LIBERO_VARIANT:-}" = pro ]; then  # LIBERO-PRO: object / position / swap / task / env perturbations
+  LIBERO_DIR="$W/third_party/LIBERO-PRO"
+  export LIBERO_CONFIG_PATH="$W/.libero_pro"
+  if [ ! -f "$LIBERO_CONFIG_PATH/config.yaml" ]; then
+    mkdir -p "$LIBERO_CONFIG_PATH"
+    printf 'benchmark_root: %s\nbddl_files: %s/bddl_files\ninit_states: %s/init_files\ndatasets: %s\nassets: %s/assets\n' \
+      "$LIBERO_DIR/libero/libero" "$LIBERO_DIR/libero/libero" "$LIBERO_DIR/libero/libero" "$W/data/libero_hdf5" "$LIBERO_DIR/libero/libero" \
+      > "$LIBERO_CONFIG_PATH/config.yaml"
+  fi
 else
   LIBERO_DIR="$W/third_party/LIBERO"
 fi

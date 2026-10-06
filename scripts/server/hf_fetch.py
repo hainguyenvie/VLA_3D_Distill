@@ -2,7 +2,7 @@
 """Download public HF model repos into plain folders and verify every LFS file by sha256.
 
 Stdlib only (runs with the system python, no env needed):
-    python3 hf_fetch.py <out_root> <repo_id> [<repo_id> ...]
+    python3 hf_fetch.py [--dataset] <out_root> <repo_id> [<repo_id> ...]
 Each repo lands in <out_root>/<repo_id with '/' -> '__'>/ ; resumable; a file `.hf_fetch.json` with the
 pinned revision and file list is written only after every file passed its size / sha256 check.
 """
@@ -14,9 +14,11 @@ import sys
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-API = "https://huggingface.co/api/models/{repo}"
-TREE = "https://huggingface.co/api/models/{repo}/tree/{rev}?recursive=1"
-RESOLVE = "https://huggingface.co/{repo}/resolve/{rev}/{path}"
+# `--dataset` switches the three endpoints to the dataset namespace
+KIND = "datasets" if "--dataset" in sys.argv else "models"
+API = "https://huggingface.co/api/" + KIND + "/{repo}"
+TREE = "https://huggingface.co/api/" + KIND + "/{repo}/tree/{rev}?recursive=1"
+RESOLVE = "https://huggingface.co/" + ("datasets/" if KIND == "datasets" else "") + "{repo}/resolve/{rev}/{path}"
 
 
 def get_json(url):
@@ -67,7 +69,8 @@ def fetch_repo(out_root, repo):
 
 
 if __name__ == "__main__":
-    root, repos = sys.argv[1], sys.argv[2:]
+    args = [a for a in sys.argv[1:] if a != "--dataset"]
+    root, repos = args[0], args[1:]
     for r in repos:
         fetch_repo(root, r)
     print("FETCH_DONE", flush=True)
