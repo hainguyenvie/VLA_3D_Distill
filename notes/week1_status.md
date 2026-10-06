@@ -400,6 +400,8 @@ cùng state mô phỏng. Đây là chỗ 3D thật sự cần: muốn có ảnh 
 - Baseline lr cosine trên LIBERO-Plus: **51.4** (teacher 50.0): distill không-3D ổn định thì chạm teacher, không hơn;
   Camera vẫn 5%. V1 (56.4) hơn baseline ổn định 5 điểm, toàn bộ ở Camera / Noise / Light. So công bằng hơn cho V1 là
   bản V1 + lr cosine đang chạy trên L40.
+- V1 seed 8 (H200, lr cố định): eval 100 ep 83 → 81 → 75 ở ba vòng cuối, adapter cuối **77.2** trên 500 episode
+  (seed 7: 87.8). Hai seed của V1 cho 87.8 và 77.2: nhiễu giữa seed lớn, phần lớn do cú tụt ở vòng cuối.
 - V1 + lr cosine (L40) đã train xong: eval 100 episode 52 → 33 → 56 → 66 → 45 → 65 → 77 → 82 → 87 → 89 → **64 ở vòng
   20**. Khác với cos_b2 (ổn định tới cuối), nhánh có nhiễu thị giác vẫn sụp ở vòng cuối dù lr đã về 1e-5; nguyên nhân
   chưa rõ (một lô episode xấu ở vòng cuối? lr cuối vẫn quá cao cho nhánh này?). Số 500 episode và LIBERO-Plus của
@@ -479,6 +481,9 @@ Layout đang được đo trong cùng harness (`scripts/server/pi05_anchors.sh`)
 | | Object chuẩn | PRO lan (đổi câu lệnh) | PRO object (đổi vật) | **PRO swap (đổi chỗ vật)** | **PRO task (đổi mục tiêu)** | PRO position |
 |---|---|---|---|---|---|---|
 | π0.5 (LeRobot, fine-tune LIBERO) | 100 | 100 | 94 | **17** | **0** | **10** (dời x 0.3 theo file temp_x0.3 của LIBERO-PRO) |
+
+LIBERO-Plus Object (60 task mỗi loại): **Robot-init 83, Layout 82** — π0.5 bản fine-tune LIBERO không yếu ở Robot-init
+trên Object (OFT: 27), nên trục còn trống của π0.5 là **vị trí vật của LIBERO-PRO** (position 10, swap 17, task 0).
 
 Đúng như LIBERO-PRO và ECT mô tả: π0.5 miễn nhiễm với câu lệnh / vật đổi màu, nhưng sụp khi **vị trí** vật đổi (swap
 17%, trong đó 7/10 task bằng 0) và khi mục tiêu đổi (0%). ECT công bố swap Object 38 → 71 với protocol riêng của họ;
