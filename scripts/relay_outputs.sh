@@ -15,9 +15,10 @@ H200_ADAPTERS="b2_student_states_rkl_s7/adapter_iter0020 b2p_teacher_states_rkl_
   long_b2_student_states_rkl_s7/adapter_iter0040 v1_mixed_viewaug_rkl_s7/adapter_iter0020
   v1_mixed_viewaug_rkl_s8/adapter_iter0020 oft_a2_viewaug_s7/adapter_iter0004 ${EXTRA_H200:-}"
 H200_ROLLOUTS="plus_oft_steps"
-L40_ADAPTERS="v2_mixed_viewaug_depth_rkl_s7/adapter_iter0020 cos_v1_mixed_viewaug_rkl_s7/adapter_iter0018
-  cos_v1_mixed_viewaug_rkl_s7/adapter_iter0020 ${EXTRA_L40:-}"
-L40_ROLLOUTS="b0_object_student plus_fullsft_steps probe_offset_teacher"
+# L40 -> laptop runs at ~0.3 MB/s: only small files and logs come from there; its rollouts (B0, teacher on
+# LIBERO-Plus) are cheaper to regenerate on the 8x H200 node (about 30 minutes) than to relay (many hours)
+L40_ADAPTERS="${EXTRA_L40:-}"
+L40_ROLLOUTS="probe_offset_teacher"
 SMALL=(--include='*/' --include='*.json' --include='*.jsonl' --include='*.csv' --include='*.txt' --include='*.md' --exclude='*')
 
 pull() {  # pull <ssh alias> <remote root> <label> <adapters> <rollouts>
