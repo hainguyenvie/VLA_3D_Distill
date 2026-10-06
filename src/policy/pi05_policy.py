@@ -123,16 +123,18 @@ class Pi05Policy:
         return v[..., : x_t.shape[-1]]
 
     # ------------------------------------------------------------------ LoRA
-    def add_lora(self, rank: int = 32, adapter_path: Optional[str] = None):
-        """LoRA on the attention / MLP projections of the PaliGemma language model and the action expert."""
+    def add_lora(self, rank: int = 32, adapter_path: Optional[str] = None, scope: str = "all"):
+        """LoRA on the attention / MLP projections. scope "all": every such projection (vision tower included);
+        "llm": only the PaliGemma language model and the action expert (the image encoder stays frozen)."""
         from peft import LoraConfig, PeftModel, get_peft_model
 
         if adapter_path:
             self.peft = PeftModel.from_pretrained(self.vla.model, adapter_path, is_trainable=True)
             self.vla.model = self.peft
         else:
-            cfg = LoraConfig(r=rank, lora_alpha=min(rank, 16), lora_dropout=0.0,
-                             target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+            proj = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+            targets = proj if scope == "all" else r".*(language_model|gemma_expert).*\.(" + "|".join(proj) + ")"
+            cfg = LoraConfig(r=rank, lora_alpha=min(rank, 16), lora_dropout=0.0, target_modules=targets,
                              init_lora_weights="gaussian")
             self.peft = get_peft_model(self.vla.model, cfg)
             self.vla.model = self.peft  # PI05Policy calls self.model.<...>: route it through the adapters
