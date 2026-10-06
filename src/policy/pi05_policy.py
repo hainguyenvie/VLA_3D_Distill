@@ -47,6 +47,7 @@ class Pi05Policy:
             overrides["tokenizer_processor"] = {"tokenizer_name": tok}
         self.pre, self.post = make_pre_post_processors(self.vla.config, pretrained_path=checkpoint, preprocessor_overrides=overrides)
         self.chunk = self.vla.config.chunk_size
+        self.fixed_noise = True  # deterministic sampling (see `_noise`); the LeRobot eval draws fresh noise per call
 
     # ---------------------------------------------------------------- inputs
     @staticmethod
@@ -64,20 +65,62 @@ class Pi05Policy:
         return self.pre(raw)
 
     # --------------------------------------------------------------- forward
+    def _noise(self, bsize: int) -> torch.Tensor:
+        """Sampling noise. With `fixed_noise` every call draws the same rows (row i depends only on i), so two calls on
+        two versions of the same batch (e.g. a scene and its counterfactual) differ only through the observation."""
+        shape = (bsize, self.chunk, self.vla.config.max_action_dim)
+        g = torch.Generator(device="cpu").manual_seed(1234) if self.fixed_noise else None
+        return torch.randn(shape, generator=g).to(self.device, dtype=torch.float32)
+
+    @torch.no_grad()
+    def chunk_norm(self, images, task_descriptions, obs) -> torch.Tensor:
+        """Normalised 50-step chunk (B, 50, 7), as the flow head predicts it (before un-normalisation)."""
+        b = self.batch(images, task_descriptions, obs)
+        return self.vla.predict_action_chunk(b, noise=self._noise(len(images)))
+
     @torch.no_grad()
     def chunk_env(self, images, task_descriptions, obs) -> np.ndarray:
         """Full 50-step chunk in environment units (B, 50, 7); gripper -1 open, +1 close."""
-        b = self.batch(images, task_descriptions, obs)
-        norm = self.vla.predict_action_chunk(b)
-        return self.post(norm).float().cpu().numpy()
+        return self.post(self.chunk_norm(images, task_descriptions, obs)).float().cpu().numpy()
 
     def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None,
             obs=None):
-        """Returns dict(actions (B, n_action_steps, 7)) with the gripper in [0, 1] (1 = open), as the other policies."""
-        chunk = self.chunk_env(images, task_descriptions, obs)[:, : self.n_action_steps]
+        """Returns dict(actions (B, n_action_steps, 7) with the gripper in [0, 1] (1 = open), as the other policies;
+        actions_norm (B, 50, 7): the full normalised chunk, the distillation target)."""
+        norm = self.chunk_norm(images, task_descriptions, obs)
+        chunk = self.post(norm).float().cpu().numpy()[:, : self.n_action_steps]
         out = chunk.copy()
         out[..., -1] = 0.5 * (1.0 - np.clip(chunk[..., -1], -1.0, 1.0))  # env convention -> [0, 1], 1 = open
-        return {"actions": out, "actions_env": chunk}
+        return {"actions": out, "actions_env": chunk, "actions_norm": norm.float().cpu().numpy()}
+
+    def velocity(self, images, task_descriptions, obs, x_t: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
+        """Flow velocity v(o, x_t, t) of the action expert (B, 50, 7); differentiable (the training forward of
+        PI05Pytorch.forward without its loss). x_t: (B, 50, 7) normalised noisy chunk; time: (B,)."""
+        from lerobot.policies.pi05.modeling_pi05 import make_att_2d_masks, pad_vector
+
+        b = self.batch(images, task_descriptions, obs)
+        m = self.vla.model
+        images_, img_masks = self.vla._preprocess_images(b)
+        tokens, masks = b["observation.language.tokens"], b["observation.language.attention_mask"]
+        x = pad_vector(x_t, self.vla.config.max_action_dim)
+        prefix_embs, prefix_pad, prefix_att = m.embed_prefix(images_, img_masks, tokens, masks)
+        suffix_embs, suffix_pad, suffix_att, adarms_cond = m.embed_suffix(x, time)
+        if m.paligemma_with_expert.paligemma.language_model.layers[0].self_attn.q_proj.weight.dtype == torch.bfloat16:
+            suffix_embs, prefix_embs = suffix_embs.to(torch.bfloat16), prefix_embs.to(torch.bfloat16)
+        pad = torch.cat([prefix_pad, suffix_pad], dim=1)
+        att = torch.cat([prefix_att, suffix_att], dim=1)
+        att_4d = m._prepare_attention_masks_4d(make_att_2d_masks(pad, att))
+        pos = torch.cumsum(pad, dim=1) - 1
+
+        def fwd(prefix_embs, suffix_embs, att_4d, pos, adarms_cond):
+            (_, suffix_out), _ = m.paligemma_with_expert.forward(attention_mask=att_4d, position_ids=pos, past_key_values=None,
+                                                                 inputs_embeds=[prefix_embs, suffix_embs], use_cache=False,
+                                                                 adarms_cond=[None, adarms_cond])
+            return suffix_out
+
+        out = m._apply_checkpoint(fwd, prefix_embs, suffix_embs, att_4d, pos, adarms_cond)
+        v = m.action_out_proj(out[:, -self.chunk :].to(torch.float32))
+        return v[..., : x_t.shape[-1]]
 
     # ------------------------------------------------------------------ LoRA
     def add_lora(self, rank: int = 32, adapter_path: Optional[str] = None):
@@ -86,11 +129,13 @@ class Pi05Policy:
 
         if adapter_path:
             self.peft = PeftModel.from_pretrained(self.vla.model, adapter_path, is_trainable=True)
+            self.vla.model = self.peft
         else:
             cfg = LoraConfig(r=rank, lora_alpha=min(rank, 16), lora_dropout=0.0,
                              target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
                              init_lora_weights="gaussian")
             self.peft = get_peft_model(self.vla.model, cfg)
+            self.vla.model = self.peft  # PI05Policy calls self.model.<...>: route it through the adapters
         params = [p for p in self.peft.parameters() if p.requires_grad]
         for p in params:
             p.data = p.data.float()
