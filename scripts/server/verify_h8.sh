@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verification of a fresh workspace on the 8x H200 node: correctness gates on GPU 0, then anchor evaluations already
 # measured on the old machines, in parallel on GPUs 1-5 (also tests concurrent EGL rendering next to CUDA contexts).
-# Launch detached: setsid nohup bash repo/scripts/server/verify_tensara.sh > logs/verify_tensara.log 2>&1 < /dev/null &
+# Launch detached: setsid nohup bash repo/scripts/server/verify_h8.sh > logs/verify_h8.log 2>&1 < /dev/null &
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/env.sh"

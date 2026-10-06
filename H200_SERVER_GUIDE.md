@@ -13,7 +13,7 @@
 [8 Chạy job](#8-chạy-job-và-theo-dõi) · [9 Bẫy](#9-bẫy-đã-dẫm-phải) · [10 Dọn dẹp](#10-dọn-dẹp) ·
 [11 Kỷ luật](#11-kỷ-luật-thí-nghiệm) · [12 Backup](#12-backup) · [13 Checklist](#13-checklist-mở-đầu-mỗi-phiên)
 
-## 0a. Từ 06/10: máy chính là node 8×H200 (`TENSARA_SSH`, `TENSARA_REMOTE_ROOT`)
+## 0a. Từ 06/10: máy chính là node 8×H200 (`H8_SSH`, `H8_REMOTE_ROOT`)
 
 Operator chuyển project sang node 8×H200 (06/10); 1×H200 và 2×L40 hết lượt dùng. Phần dưới §0 mô tả hai máy cũ,
 giữ lại làm lịch sử và vì các bài học vẫn đúng.
@@ -30,12 +30,12 @@ giữ lại làm lịch sử và vì các bài học vẫn đúng.
 Dựng workspace từ đầu (đã làm 06/10, khoảng 25 phút):
 
 ```bash
-scripts/server/bootstrap_tensara.sh          # từ laptop: tạo workspace + envs/tools (rsync), rồi sync repo
+scripts/server/bootstrap_h8.sh          # từ laptop: tạo workspace + envs/tools (rsync), rồi sync repo
 # trên node, trong workspace:
 setsid nohup bash repo/scripts/server/build_env.sh        > logs/build_env.log 2>&1 < /dev/null &
 setsid nohup bash repo/scripts/server/fetch_checkpoints.sh > logs/hf_fetch_all.log 2>&1 < /dev/null &
-setsid nohup bash repo/scripts/server/setup_tensara.sh     > logs/setup_tensara.log 2>&1 < /dev/null &  # LIBERO-Plus, LIBERO-PRO, env pi05
-setsid nohup bash repo/scripts/server/verify_tensara.sh    > logs/verify_tensara.log 2>&1 < /dev/null &  # cổng + mốc
+setsid nohup bash repo/scripts/server/setup_h8.sh     > logs/setup_h8.log 2>&1 < /dev/null &  # LIBERO-Plus, LIBERO-PRO, env pi05
+setsid nohup bash repo/scripts/server/verify_h8.sh    > logs/verify_h8.log 2>&1 < /dev/null &  # cổng + mốc
 ```
 
 - **Render bằng GPU (EGL) dùng được**, kể cả nhiều tiến trình render cạnh model CUDA trên 8 card cùng lúc (khác máy

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # First runs on the 8x H200 node: the jobs that were still running when the old machines were retired, rerun from
 # scratch so that every arm of a comparison shares one machine / renderer (EGL here). One card each, all at once.
-# Launch detached: setsid nohup bash repo/scripts/server/tensara_round1.sh > logs/tensara_round1.log 2>&1 < /dev/null &
+# Launch detached: setsid nohup bash repo/scripts/server/h8_round1.sh > logs/h8_round1.log 2>&1 < /dev/null &
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/env.sh"
@@ -30,4 +30,4 @@ SUITE=libero_10 STUDENT=Haozhan72__Openvla-oft-SFT-libero10-traj1 TEACHER=Haozha
   run_train 4 long_cos_b2_student_states_rkl_s7 --mode rkl --iters 40 --states_per_iter 2048 --batch_size 8 --grad_accum 1 \
   --lr 1e-4 --lr_min 1e-5 --grad_checkpointing --eval_every 4 --eval_trials 10 --seed 7 --state_source student &
 wait
-log "TENSARA_ROUND1_DONE"
+log "H8_ROUND1_DONE"

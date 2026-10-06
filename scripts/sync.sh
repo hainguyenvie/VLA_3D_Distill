@@ -13,12 +13,12 @@ push() {  # push <ssh alias> <remote root, relative to the remote home> <label> 
   ssh -n "$1" "echo $REV > $2/repo/REVISION"
   echo "synced $REV -> $3"
 }
-# the 8x H200 node has no system rsync: the workspace carries its own (envs/tools, see scripts/server/bootstrap_tensara.sh)
-TENSARA_RSYNC="${TENSARA_REMOTE_ROOT:+$TENSARA_REMOTE_ROOT/envs/tools/bin/rsync}"
+# the 8x H200 node has no system rsync: the workspace carries its own (envs/tools, see scripts/server/bootstrap_h8.sh)
+H8_RSYNC="${H8_REMOTE_ROOT:+$H8_REMOTE_ROOT/envs/tools/bin/rsync}"
 case "${1:-all}" in
   l40) push "$L40_SSH" "$L40_REMOTE_ROOT" l40 ;;
   h200) push "${H200_SSH:-}" "${H200_REMOTE_ROOT:-}" h200 ;;
-  tensara) push "${TENSARA_SSH:-}" "${TENSARA_REMOTE_ROOT:-}" tensara "$TENSARA_RSYNC" ;;
-  all) push "${TENSARA_SSH:-}" "${TENSARA_REMOTE_ROOT:-}" tensara "$TENSARA_RSYNC" ;;  # the only active machine since 06/10
-  *) echo "usage: scripts/sync.sh [tensara|l40|h200|all]" >&2; exit 2 ;;
+  h8) push "${H8_SSH:-}" "${H8_REMOTE_ROOT:-}" h8 "$H8_RSYNC" ;;
+  all) push "${H8_SSH:-}" "${H8_REMOTE_ROOT:-}" h8 "$H8_RSYNC" ;;  # the only active machine since 06/10
+  *) echo "usage: scripts/sync.sh [h8|l40|h200|all]" >&2; exit 2 ;;
 esac
