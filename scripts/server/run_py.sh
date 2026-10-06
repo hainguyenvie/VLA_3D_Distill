@@ -17,6 +17,7 @@ until [ "$(avail)" -ge "$MIN_FREE_GB" ]; do log "waiting for RAM: $(avail) GB av
 # about 17 GiB while it loads and collects, 38 GiB once it trains), so two waiting jobs cannot take the same room.
 case "$SCRIPT" in
   scripts/train_opd.py) NEED="${MIN_FREE_GPU_GB:-42}"; HOLD=1200 ;;
+  scripts/train_oft_distill.py) NEED="${MIN_FREE_GPU_GB:-44}"; HOLD=1200 ;;
   scripts/eval_*.py|scripts/takeover_eval.py|scripts/probe_*.py|scripts/relabel_rollouts.py|scripts/check_policy.py) NEED="${MIN_FREE_GPU_GB:-22}"; HOLD=240 ;;
   *) NEED="${MIN_FREE_GPU_GB:-0}"; HOLD=0 ;;
 esac

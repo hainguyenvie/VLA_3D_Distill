@@ -51,10 +51,11 @@ class ContinuousPolicy(TokenPolicy):
         scaled = 2 * (proprio - self.prop_low) / (self.prop_high - self.prop_low + 1e-8) - 1
         return np.clip(np.where(self.prop_mask, scaled, proprio), -1.0, 1.0)
 
-    @torch.inference_mode()
-    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None,
-            obs=None):
-        """Returns dict(actions (B, 8, 7) unnormalised). Deterministic: `sample` is ignored (regression head)."""
+    def forward_norm(self, images, task_descriptions, obs, pils=None) -> torch.Tensor:
+        """Normalised action chunk (B, 8, 7) in [-1, 1]; differentiable (used for distillation into the LoRA student).
+
+        `obs[i]` carries the wrist frame and the proprio fields (eef_pos, eef_quat, gripper_qpos) of state i.
+        """
         inputs = self.build_inputs(images, task_descriptions, pils)
         wrist = preprocess_batch([o["wrist_rgb"] for o in obs], self.center_crop)
         wrist_pv = self.image_processor.preprocess(wrist, return_tensors="pt")["pixel_values"]
@@ -64,7 +65,29 @@ class ContinuousPolicy(TokenPolicy):
             prop = self.proprio_projector(torch.from_numpy(proprio).to(self.device, dtype=torch.bfloat16)).unsqueeze(1)
             out, idx, _ = self._run_llm(inputs, extra_tokens=prop)
             h = out.hidden_states[-1][torch.arange(idx.shape[0], device=idx.device)[:, None], idx]
-            norm = self.action_head.predict_action(h)  # (B, 8, 7) in [-1, 1]
-        norm = norm.float().cpu().numpy().reshape(-1, NUM_ACTIONS_CHUNK, ACTION_DIM)
+            norm = self.action_head.predict_action(h)
+        return norm.float().reshape(-1, NUM_ACTIONS_CHUNK, ACTION_DIM)
+
+    @torch.inference_mode()
+    def act(self, images, task_descriptions, sample: bool = False, temperature: float = 1.0, generator=None, pils=None,
+            obs=None):
+        """Returns dict(actions (B, 8, 7) unnormalised, actions_norm (B, 8, 7) in [-1, 1]). Deterministic: `sample` is
+        ignored (regression head)."""
+        norm = self.forward_norm(images, task_descriptions, obs, pils).cpu().numpy()
         actions = np.where(self.act_mask, 0.5 * (norm + 1) * (self.act_high - self.act_low + 1e-8) + self.act_low, norm)
-        return {"actions": actions}
+        return {"actions": actions, "actions_norm": norm}
+
+
+class AdapterOff:
+    """The same policy with its LoRA adapters disabled: the frozen base model as a teacher that shares the weights
+    (and the GPU memory) of the student it is distilled into."""
+
+    def __init__(self, policy):
+        self.policy = policy
+
+    def __getattr__(self, name):
+        return getattr(self.policy, name)
+
+    def act(self, *args, **kwargs):
+        with self.policy.peft.disable_adapter():
+            return self.policy.act(*args, **kwargs)

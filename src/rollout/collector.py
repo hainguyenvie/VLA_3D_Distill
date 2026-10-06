@@ -98,7 +98,8 @@ class Collector:
                 return
             self.vec.reset(i, ep[0], ep[1], perturb=self.perturb)
             slots[i] = {"task_id": ep[0], "trial_id": ep[1], "steps": {k: [] for k in STEP_KEYS}, "t": [],
-                        "bins": [], "logits": [], "actions": [], "label_logits": {k: [] for k in self.labelers},
+                        "bins": [], "logits": [], "actions": [], "actions_norm": [],
+                        "label_logits": {k: [] for k in self.labelers}, "label_actions": {k: [] for k in self.labelers},
                         "obs": None, "t0": time.time()}
 
         for i in range(self.vec.num_envs):
@@ -131,7 +132,10 @@ class Collector:
             out = self.policy.act(images, descs, sample=self.sample, temperature=self.temperature, generator=self.gen, pils=pils,
                                   obs=cur if getattr(self.policy, "needs_obs", False) else None)
             t2 = time.perf_counter()
-            label_logits = {k: p.act(clean, descs, pils=clean_pils)["logits"] for k, p in self.labelers.items()}
+            labels = {k: p.act(clean, descs, pils=clean_pils, obs=cur if getattr(p, "needs_obs", False) else None)
+                      for k, p in self.labelers.items()}
+            label_logits = {k: v["logits"] for k, v in labels.items() if "logits" in v}
+            label_actions = {k: v["actions_norm"] for k, v in labels.items() if "actions_norm" in v}
             t3 = time.perf_counter()
             env_actions = postprocess_actions(out["actions"])
             for j, i in enumerate(act_idx):
@@ -144,8 +148,12 @@ class Collector:
                     s["bins"].append(out["bins"][j].numpy().astype(np.uint8))
                     s["logits"].append(out["logits"][j].numpy().astype(np.float16))
                 s["actions"].append(out["actions"][j].astype(np.float32))
-                for k in self.labelers:
+                if "actions_norm" in out:  # regression-head policies: the normalised chunk is the distillation target
+                    s["actions_norm"].append(out["actions_norm"][j].astype(np.float32))
+                for k in label_logits:
                     s["label_logits"][k].append(label_logits[k][j].numpy().astype(np.float16))
+                for k in label_actions:
+                    s["label_actions"][k].append(label_actions[k][j].astype(np.float32))
                 self.vec.step(i, env_actions[j])
             finished = []
             t4 = time.perf_counter()
@@ -179,15 +187,22 @@ class Collector:
             "seconds": round(time.time() - s["t0"], 1), "entropy": token_stats(logits)["entropy"] if logits is not None else None,
         }
         for k, v in s["label_logits"].items():
-            st = token_stats(logits, torch.from_numpy(np.stack(v).astype(np.float32)))
-            rec[f"kl_{k}"], rec[f"agree_{k}"] = st["kl"], st["agree"]
+            if v and logits is not None:
+                st = token_stats(logits, torch.from_numpy(np.stack(v).astype(np.float32)))
+                rec[f"kl_{k}"], rec[f"agree_{k}"] = st["kl"], st["agree"]
+        for k, v in s["label_actions"].items():
+            if v and s["actions_norm"]:  # mean |student - teacher| over the chunk, normalised action units
+                rec[f"l1_{k}"] = float(np.abs(np.stack(v) - np.stack(s["actions_norm"])).mean())
         arrays = None
         if (out_dir and save_steps) or self._keep_steps:
             arrays = {k: np.stack(v) for k, v in s["steps"].items() if v}
             arrays.update(t=np.array(s["t"]), actions=np.stack(s["actions"]), final_sim_state=final["sim_state"])
             if s["logits"]:
                 arrays.update(bins=np.stack(s["bins"]), logits=np.stack(s["logits"]))
-            arrays.update({f"logits_{k}": np.stack(v) for k, v in s["label_logits"].items()})
+            if s["actions_norm"]:
+                arrays["actions_norm"] = np.stack(s["actions_norm"])
+            arrays.update({f"logits_{k}": np.stack(v) for k, v in s["label_logits"].items() if v})
+            arrays.update({f"actions_{k}": np.stack(v) for k, v in s["label_actions"].items() if v})
         if out_dir:
             eid = f"t{s['task_id']:02d}_n{s['trial_id']:02d}"
 
