@@ -474,6 +474,19 @@ trên các episode nó sẽ thành công. Đây là bằng chứng trực tiếp
 bình 135 bước. Mốc π0.5 trên LIBERO-PRO Object (swap / task / lan / object / position) và LIBERO-Plus Robot-init /
 Layout đang được đo trong cùng harness (`scripts/server/pi05_anchors.sh`).
 
+## Mốc π0.5 trong harness của ta (06/10, 10 init state × 10 task, horizon 280)
+
+| | Object chuẩn | PRO lan (đổi câu lệnh) | PRO object (đổi vật) | **PRO swap (đổi chỗ vật)** | **PRO task (đổi mục tiêu)** | PRO position |
+|---|---|---|---|---|---|---|
+| π0.5 (LeRobot, fine-tune LIBERO) | 100 | 100 | 94 | **17** | **0** | đang đo |
+
+Đúng như LIBERO-PRO và ECT mô tả: π0.5 miễn nhiễm với câu lệnh / vật đổi màu, nhưng sụp khi **vị trí** vật đổi (swap
+17%, trong đó 7/10 task bằng 0) và khi mục tiêu đổi (0%). ECT công bố swap Object 38 → 71 với protocol riêng của họ;
+số 17 của ta là theo file swap chính thức của LIBERO-PRO. Đây là headroom cho hướng cặp thế giới trên π0.5.
+
+V1 + lr cosine, adapter cuối trên 500 episode chuẩn: **73.6** (task 0: 2%, task 5: 40%) — xác nhận sụp ở vòng cuối
+(eval 100 ep: 89 ở vòng 18 → 64 ở vòng 20). LIBERO-Plus của adapter này đang chấm; cần chấm thêm adapter vòng 18.
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
