@@ -1,4 +1,4 @@
-# Máy chủ — hướng dẫn dùng cho project VLA 3D Distill (2×L40 + H200)
+# Máy chủ — hướng dẫn dùng cho project VLA 3D Distill (8×H200 từ 06/10; trước đó 2×L40 + 1×H200)
 
 > **File duy nhất về máy chủ của project này** (On-Policy 3D / Gaussian Distillation for VLA). Viết lại
 > 05/10/2026 từ bản của project `3dgs_in_refiner`, sau khi probe trực tiếp máy 2×L40. Các bài học chung
@@ -12,6 +12,42 @@
 [6 Môi trường](#6-môi-trường-python--mô-phỏng) · [7 Data và trọng số](#7-dataset-và-trọng-số) ·
 [8 Chạy job](#8-chạy-job-và-theo-dõi) · [9 Bẫy](#9-bẫy-đã-dẫm-phải) · [10 Dọn dẹp](#10-dọn-dẹp) ·
 [11 Kỷ luật](#11-kỷ-luật-thí-nghiệm) · [12 Backup](#12-backup) · [13 Checklist](#13-checklist-mở-đầu-mỗi-phiên)
+
+## 0a. Từ 06/10: máy chính là node 8×H200 (`TENSARA_SSH`, `TENSARA_REMOTE_ROOT`)
+
+Operator chuyển project sang node 8×H200 (06/10); 1×H200 và 2×L40 hết lượt dùng. Phần dưới §0 mô tả hai máy cũ,
+giữ lại làm lịch sử và vì các bài học vẫn đúng.
+
+| | Node 8×H200 |
+|---|---|
+| GPU | 8 × H200 141 GB, driver 590.48 |
+| CPU / RAM | container k8s, **cgroup 32 CPU / 512 GiB** (máy có 192 core, 2 TB nhưng phần của ta là vậy); có thể dùng chung với bên khác: giữ load dưới khoảng 24 |
+| Đĩa | 3,5 TB, còn khoảng 500 GB (06/10); `~/projects/` có thư mục của project khác: không đụng |
+| Shell / giờ | bash, UTC |
+| Có sẵn | git, tmux, curl, `uv` + `micromamba` ở `~/.local/bin`; **không có rsync hệ thống** |
+| Mạng | HF khoảng 50 MB/s (tải song song theo range: `HF_CONNS`, `HF_FILES` trong `hf_fetch.py`) |
+
+Dựng workspace từ đầu (đã làm 06/10, khoảng 25 phút):
+
+```bash
+scripts/server/bootstrap_tensara.sh          # từ laptop: tạo workspace + envs/tools (rsync), rồi sync repo
+# trên node, trong workspace:
+setsid nohup bash repo/scripts/server/build_env.sh        > logs/build_env.log 2>&1 < /dev/null &
+setsid nohup bash repo/scripts/server/fetch_checkpoints.sh > logs/hf_fetch_all.log 2>&1 < /dev/null &
+setsid nohup bash repo/scripts/server/setup_tensara.sh     > logs/setup_tensara.log 2>&1 < /dev/null &  # LIBERO-Plus, LIBERO-PRO, env pi05
+setsid nohup bash repo/scripts/server/verify_tensara.sh    > logs/verify_tensara.log 2>&1 < /dev/null &  # cổng + mốc
+```
+
+- **Render bằng GPU (EGL) dùng được**, kể cả nhiều tiến trình render cạnh model CUDA trên 8 card cùng lúc (khác máy
+  1×H200 cũ). Container không có file vendor glvnd nên phải trỏ tay: `<workspace>/machine.env` (ngoài git) đặt
+  `__EGL_VENDOR_LIBRARY_FILENAMES=<workspace>/.egl/10_nvidia.json` (nội dung: ICD `libEGL_nvidia.so.0`) và
+  `MUJOCO_GL=egl`. Lỗi `EGLError` khi thoát tiến trình (lúc giải phóng context) là vô hại.
+- Container thiếu `libGL.so.1` (OpenCV cần): cài `libgl libegl libglvnd` từ conda-forge vào `envs/oft`, không cài hệ thống.
+- Đã kiểm 06/10 (cùng 100 episode LIBERO-Object, greedy): student 1-traj 50, full-SFT 96, OFT 99, π0.5 100;
+  LIBERO-Plus OFT 71.2 (máy cũ 50–53 / 95–96 / 96.8 / 100 / 70.2–71.4). Một eval 100 episode khoảng 5–8 phút.
+- Chọn card: các script nhận `GPU=<i>` (train_opd.sh, oft_track.sh, final_evals.sh, …); mỗi run một card.
+- Chuyển dữ liệu từ máy cũ: **chỉ qua laptop** (`scripts/relay_outputs.sh pull|push`) hoặc nguồn công khai (HF,
+  GitHub); không bao giờ nối hai server với nhau.
 
 ## 0. Hiện trạng (05/10)
 
