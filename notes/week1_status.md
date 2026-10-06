@@ -386,8 +386,10 @@ cùng state mô phỏng. Đây là chỗ 3D thật sự cần: muốn có ảnh 
 - V2 không hơn V1: checkpoint cuối của V2 là một checkpoint sụp (76% / 100 ep ở vòng 20, trong khi vòng 16–18 đạt
   92%), nên số này chủ yếu đo sự bất ổn cuối run chứ chưa đo được hiệu ứng của depth dưới nhiễu. Cần chạy lại với
   lr giảm dần (và thêm seed) trước khi kết luận.
-- Baseline với lr cosine (1e-4 → 1e-5): eval 100 episode ổn định 91–96 từ vòng 12 (vòng 18: 96, không task nào
-  dưới 80); 500 episode đang chấm. Nếu giữ được mức này thì baseline chạm mốc "trong 3 điểm quanh VLA-OPD".
+- **Baseline với lr cosine (1e-4 → 1e-5): 93.0% trên 500 episode** (theo task 86 / 98 / 98 / 72 / 94 / 92 / 100 / 96 /
+  100 / 94; không task nào sụp), so với 93.8 của VLA-OPD: **mốc "trong 3 điểm" đã đạt**. Đường cong eval 100 episode:
+  49 → 45 → 77 → 86 → 88 → 92 → 91 → 91 → 96 → 95. Khoảng hụt 86.2 của bản lr cố định là do dao động cuối run, không
+  phải do ngân sách hay LoRA. Từ đây mọi nhánh mới dùng lr cosine.
 - Đang chạy tiếp: V1 seed 8 (H200) và V1 + lr cosine (L40), mỗi run kèm eval 500 episode và LIBERO-Plus.
 
 ## Việc đang chạy / tiếp theo

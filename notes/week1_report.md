@@ -10,9 +10,9 @@ bối cảnh paper: [related_work.md](related_work.md); nhật ký tái lập: [
   (95.3), OpenVLA-OFT chuẩn 96.8 (98.4). Hai máy / hai renderer cho số khớp nhau trên Object.
 - **LIBERO chuẩn đã bão hoà; headroom nằm ở LIBERO-Plus.** Trên 420 task LIBERO-Plus Object: OFT chuẩn 70.2, Spatial
   Forcing 71.9 (chỉ hơn 1.7 điểm, 91/420 task cả hai cùng hỏng), teacher 1-camera của ta 50.0, student 21.2.
-- **Baseline distill (bản VLA-OPD của ta) đạt 86.2** trên LIBERO-Object (VLA-OPD công bố 93.8) và 48.1 trên LIBERO-Plus.
-  Khoảng hụt là do quá trình distill dao động ở lr cố định (sụp từng task ở vòng cuối); bản lr giảm cosine đang ổn định
-  ở 91–96 (eval 100 episode), số 500 episode đang chấm.
+- **Baseline distill (bản VLA-OPD của ta) đạt 93.0** trên LIBERO-Object với lr giảm cosine (VLA-OPD công bố 93.8) và
+  86.2 với lr cố định; khoảng hụt của bản lr cố định là do quá trình distill dao động (sụp từng task ở vòng cuối).
+  LIBERO-Plus của baseline: 48.1 (lr cố định; bản cosine đang chấm).
 - **Idea ban đầu (loss depth trên state on-policy) không hơn baseline**: 86.2 so với 86.2 trên bản chuẩn, 45.0 so với
   48.1 trên LIBERO-Plus. Trên state của teacher thì depth có giúp (73.2 → 85.0; LIBERO-Plus 39.0 → 49.3), chưa chắc
   cỡ bao nhiêu (một seed).
@@ -62,7 +62,8 @@ thích nghi; 3D feature alignment (SF) chỉ thêm 1.7 điểm và còn tụt �
   cuối; bỏ task sụp của mỗi bên vẫn hơn ở 6/8 task). Cách đọc tạm: depth neo feature nên những gì học trên khung hình
   của teacher chuyển sang khung hình của student tốt hơn; trên state on-policy không có khoảng cách phân phối đó.
 - Mọi run ở lr cố định đều dao động và sụp 1 task ở cuối (B2 task 5: 60 → 64 → 46 → 30 qua các checkpoint). Bản lr
-  cosine (1e-4 → 1e-5) ổn định 91–96 từ vòng 12.
+  cosine (1e-4 → 1e-5) của B2 đạt **93.0** trên 500 episode (không task nào dưới 72), tức mốc 1 (trong 3 điểm quanh
+  VLA-OPD) đã đạt trên Object; ma trận 2×2 cần chạy lại ở chế độ ổn định này trước khi đọc hiệu ứng của depth.
 
 LIBERO-Plus của các adapter cuối: B2 48.1, B2′ 39.0, B3 49.3, B4 45.0 (teacher 50.0).
 
@@ -107,7 +108,7 @@ số episode), teacher gán nhãn và lái từ ảnh chuẩn của **cùng stat
 
 | Mục tiêu | Mốc | Trạng thái |
 |---|---|---|
-| 1. Baseline tái lập trong 3 điểm quanh VLA-OPD (Object 93.8), rồi 4 suite ≥ 90 | Object ≥ 91 | 86.2 với lr cố định; lr cosine 91–96 (100 ep), đang chấm 500 ep. Long: teacher RL 85.5 (công bố 91.7), distill 16 → 59 ở vòng 20/40 |
+| 1. Baseline tái lập trong 3 điểm quanh VLA-OPD (Object 93.8), rồi 4 suite ≥ 90 | Object ≥ 91 | **93.0 với lr cosine (đạt)**; 86.2 với lr cố định. Long: teacher RL 85.5 (công bố 91.7), distill 16 → 62 ở vòng 36/40 (VLA-OPD 78.9 sau 50 bước) |
 | 2. Student vượt teacher trên LIBERO-Plus (≥ 55) | ≥ 55 | **56.4** (V1, một seed); seed 2 đang chạy |
 | 3. OFT chuẩn trên LIBERO-Plus, Robot-init ≥ 50 | ≥ 75 tổng | chưa làm (cần phần train cho head hồi quy) |
 | 4. RoboTwin 2.0, 3 seed | — | chưa làm |
