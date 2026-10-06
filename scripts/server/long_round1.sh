@@ -16,6 +16,6 @@ SR="$(python3 -c "import json; print(json.load(open('outputs/week1/long_teacher_
 log "teacher success rate on LIBERO-Long: $SR"
 python3 -c "import sys; sys.exit(0 if float('$SR') >= float('${MIN_TEACHER_SR:-0.85}') else 1)" || { log "LONG_GATE_FAILED"; exit 1; }
 if [ -n "$AFTER" ]; then until grep -q "${AFTER#*:}" "${AFTER%%:*}" 2>/dev/null; do sleep 60; done; fi
-SUITE=libero_10 STUDENT="$STUDENT" TEACHER="$TEACHER" TAG=long_ MODE=rkl ITERS="${ITERS:-40}" EVAL_EVERY=4 NUM_ENVS=6 \
+SUITE=libero_10 STUDENT="$STUDENT" TEACHER="$TEACHER" TAG="${TAG:-long_}" MODE=rkl ITERS="${ITERS:-40}" EVAL_EVERY=4 NUM_ENVS=6 \
   bash "$HERE/matrix_2x2.sh" "$SEED" b2
 log "LONG_ROUND1_DONE"

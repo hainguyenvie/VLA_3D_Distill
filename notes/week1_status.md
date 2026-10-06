@@ -350,6 +350,12 @@ dùng làm teacher cho Long.
 Student 1-traj của Long, eval đầu của run distill (100 episode, greedy): **17%** (paper 17.3); theo task 0 / 20 / 60 /
 10 / 0 / 30 / 30 / 0 / 0 / 20.
 
+**Distill không-3D trên Long (state student, reverse-KL, lr cố định 1e-4, 40 vòng × 2048 state, H200):** eval 100
+episode mỗi 4 vòng: 16 → 31 → 42 → 40 → 48 → 59 → 51 → 55 → 51 → 62 → 57; adapter cuối trên **200 episode: 59.0%**
+(theo task 40 / 45 / 75 / 95 / 25 / 70 / 60 / 75 / 30 / 75). VLA-OPD công bố 78.9 sau 50 bước (teacher của họ 90.7, của
+ta 85.5). Khoảng cách 20 điểm; cùng kiểu dao động như Object ở lr cố định (59 → 51 → 55 → 51 → 62 → 57). Bản lr cosine
+đang xếp hàng.
+
 ## Bước sửa theo failure analysis: distill dưới nhiễu thị giác, teacher nhìn cảnh sạch (đang chạy)
 
 Chuỗi lập luận: (1) loss depth trên cảnh chuẩn không đổi kết quả (B4 = B2), vì trong phân phối feature đã đủ hình
