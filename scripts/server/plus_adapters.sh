@@ -13,7 +13,7 @@ for spec in "$@"; do
   until [ -f "$A/adapter_config.json" ]; do sleep 60; done
   sleep 30  # let the adapter files finish writing
   [ -f "$O/plus_${run}_iter${it}/summary.json" ] && { log "skip $spec"; continue; }
-  LIBERO_VARIANT=plus bash "$HERE/run_py.sh" 0 scripts/eval_libero_plus.py --ckpt "$STUDENT" --lora "$A" --suite libero_object \
+  LIBERO_VARIANT=plus bash "$HERE/run_py.sh" "${GPU:-0}" scripts/eval_libero_plus.py --ckpt "$STUDENT" --lora "$A" --suite libero_object \
     --per_category 60 --num_envs "${NUM_ENVS:-5}" --out "$O/plus_${run}_iter${it}" || log "FAILED $spec"
 done
 log "PLUS_ADAPTERS_DONE $*"
