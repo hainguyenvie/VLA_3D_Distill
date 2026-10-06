@@ -3,7 +3,7 @@
 # are never connected to each other).   scripts/relay_outputs.sh pull | push      (re-runnable: rsync skips what is there)
 #   pull: small result files (json/jsonl/csv/txt, no rollout arrays), logs, the adapters listed below and the
 #         rollouts the probes need -> $RELAY/{h200,l40}
-#   push: $RELAY/{h200,l40}/outputs -> <h8 workspace>/outputs ; logs -> logs/{h200,l40}/
+#   push: $RELAY/{h200,l40}/outputs/week1 -> <workspace>/outputs/old_{h200,l40}/ ; logs -> logs/old_{h200,l40}/
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . ./infra.env
@@ -30,10 +30,11 @@ pull() {  # pull <ssh alias> <remote root> <label> <adapters> <rollouts>
   for r in $5; do rsync -a "$ssh:$root/$O/$r" "$dst/$O/"; echo "pulled $3:$r"; done
 }
 push() {  # push <label>
+  # kept apart from the new machine's own runs (same run names are being rerun there): outputs/old_<machine>/
   local src="$RELAY/$1" root="$H8_REMOTE_ROOT" rs="--rsync-path=$H8_REMOTE_ROOT/envs/tools/bin/rsync"
-  ssh -n "$H8_SSH" "mkdir -p $root/$O $root/logs/$1"
-  rsync -a "$rs" "$src/$O/" "$H8_SSH:$root/$O/"
-  rsync -a "$rs" "$src/logs/" "$H8_SSH:$root/logs/$1/"
+  ssh -n "$H8_SSH" "mkdir -p $root/outputs/old_$1 $root/logs/old_$1"
+  rsync -a "$rs" "$src/$O/" "$H8_SSH:$root/outputs/old_$1/"
+  rsync -a "$rs" "$src/logs/" "$H8_SSH:$root/logs/old_$1/"
   echo "pushed $1"
 }
 case "${1:-}" in
