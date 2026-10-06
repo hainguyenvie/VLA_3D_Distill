@@ -28,6 +28,11 @@ VIEW_AUG = dict(p_clean=0.25, azimuth=75.0, elevation=15.0, distance=(1.0, 2.0),
 
 _PERT_RNG = None
 
+# Counterfactual worlds for training rollouts (`LiberoVecEnv(counterfactual=...)`, switched on per reset): at every
+# rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
+# vector of this length range (metres); the simulator state itself is not changed.
+COUNTERFACTUAL = dict(delta=(0.02, 0.08))
+
 
 def sample_perturbation(rng: np.random.Generator, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Concrete perturbation of one episode, or None for the nominal scene."""
@@ -142,7 +147,7 @@ class EnvRunner:
             )
             self.env.seed(0)  # upstream: the seed affects object positions even with a fixed initial state
         self.t, self.done, self.closed = 0, False, False
-        self.pert = None
+        self.pert, self.cf = None, None
 
     def _cameras(self, enabled: bool) -> None:
         robo = self.env.env
@@ -159,6 +164,8 @@ class EnvRunner:
         if self.pert:
             out["rgb_clean"] = out["rgb"]
             out.update(self._stash)
+        if self.cf:
+            out.update(self._stash_cf)
         return out
 
     def _hook_camera(self) -> None:
@@ -171,6 +178,8 @@ class EnvRunner:
             img = sensor(obs_cache)
             if self.pert:
                 self._stash = self._perturbed_view()
+            if self.cf:
+                self._stash_cf = self._counterfactual_view()
             return img
 
         both.__modality__ = sensor.__modality__
@@ -216,6 +225,37 @@ class EnvRunner:
             else:
                 getattr(m, k)[:] = v
         mujoco.mj_camlight(m, d)  # world poses of cameras and lights only; the physics state is not touched
+
+    def _counterfactual_view(self) -> Dict[str, Any]:
+        """Frames of the same instant with the target object moved horizontally by a fresh random vector; the
+        simulator is put back exactly afterwards (positions only; no physics step happens in between)."""
+        import mujoco
+        import robosuite.macros as macros
+        from robosuite.utils.mjcf_utils import IMAGE_CONVENTION_MAPPING
+
+        global _PERT_RNG
+        if _PERT_RNG is None:
+            _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
+        robo, res = self.env.env, self.cfg["resolution"]
+        conv = IMAGE_CONVENTION_MAPPING[macros.IMAGE_CONVENTION]
+        m, d = robo.sim.model._model, robo.sim.data._data
+        lo, hi = self.cfg["counterfactual"]["delta"]
+        ang, mag = _PERT_RNG.uniform(0, 2 * np.pi), _PERT_RNG.uniform(lo, hi)
+        delta = np.array([mag * np.cos(ang), mag * np.sin(ang)])
+        a = self._cf_addr
+        saved = d.qpos[a : a + 2].copy()
+        d.qpos[a : a + 2] = saved + delta
+        mujoco.mj_kinematics(m, d)  # body poses only; nothing dynamic is touched
+        out = {"cf_delta": delta.astype(np.float32)}
+        for cam, key in (("agentview", "rgb_cf"), ("robot0_eye_in_hand", "wrist_rgb_cf")):
+            if cam == "robot0_eye_in_hand" and not self.cfg.get("wrist"):
+                continue
+            img = robo.sim.render(camera_name=cam, width=res, height=res, depth=False)
+            out[key] = np.ascontiguousarray(img[::conv][::-1, ::-1])
+        d.qpos[a : a + 2] = saved
+        mujoco.mj_kinematics(m, d)
+        out["target_pos_cf"] = _target_pos(robo) + np.array([delta[0], delta[1], 0.0], dtype=np.float32)
+        return out
 
     def _perturbed_view(self) -> Dict[str, Any]:
         import robosuite.macros as macros
@@ -268,9 +308,10 @@ class EnvRunner:
         return dict(self._obs(obs), t=self.t, done=bool(self.done), closed_before=bool(self.closed),
                     active=not (self.done or self.t >= self.cfg["max_steps"]))
 
-    def reset(self, init_state, perturb=False) -> Dict[str, Any]:
+    def reset(self, init_state, perturb=False, counterfactual: bool = False) -> Dict[str, Any]:
         """Start an episode. `perturb`: True draws this episode's visual perturbation from the configured ranges; a
-        dict (as returned by `sample_perturbation`) applies exactly that one."""
+        dict (as returned by `sample_perturbation`) applies exactly that one. `counterfactual`: also render every
+        query with the target object displaced (see COUNTERFACTUAL)."""
         robo = self.env.env
         cams = [name for name in robo._observables if name.endswith(("_image", "_depth"))]
         with self.lock:  # a (hard) reset rebuilds the simulator and its render context
@@ -279,8 +320,8 @@ class EnvRunner:
             for name in cams:
                 robo.modify_observable(name, "enabled", True)
             self.env.reset()
-            self.pert = None
-            if self.cfg.get("perturb"):
+            self.pert, self.cf = None, None
+            if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
             # sampling-timer state of each camera at the start of a control step (identical at every step)
@@ -291,6 +332,12 @@ class EnvRunner:
             self._start_perturbation(perturb)
         elif perturb and self.cfg.get("perturb"):
             self._start_perturbation()
+        if counterfactual and self.cfg.get("counterfactual"):
+            names = getattr(robo, "obj_of_interest", None) or []
+            addr = robo.sim.model.get_joint_qpos_addr(f"{names[0]}_joint0") if names else None
+            if addr is not None:
+                self._cf_addr = int(addr[0] if isinstance(addr, (tuple, list, np.ndarray)) else addr)
+                self.cf = True
         self.t = -self.cfg["num_steps_wait"]
         out = self._run([DUMMY_ACTION] * self.cfg["num_steps_wait"], stop_at_end=False)  # upstream ignores `done` here
         self.t, self.done, self.closed = 0, False, False
@@ -314,7 +361,7 @@ class EnvRunner:
             self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
                            for name in cams}
             self._cameras(False)
-        self.pert = None
+        self.pert, self.cf = None, None
         robot = robo.robots[0]
         # PandaGripper.format_action accumulates [-1, 1] * 0.01 * sign(cmd) per substep and saturates within 4 steps
         robot.gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))
@@ -343,12 +390,12 @@ def _worker(conn, cfg: Dict[str, Any], lock) -> None:
         while True:
             cmd, arg = conn.recv()
             if cmd in ("reset", "restore"):
-                task_id, bddl, state, t0, gripper_cmd, perturb = arg
+                task_id, bddl, state, t0, gripper_cmd, perturb, cf = arg
                 if task_id != cur_task:
                     if runner is not None:
                         runner.close()
                     runner, cur_task = EnvRunner(bddl, cfg, lock), task_id  # imports only the env stack, never torch
-                conn.send(("ok", runner.reset(state, perturb) if cmd == "reset" else runner.restore(state, t0, gripper_cmd)))
+                conn.send(("ok", runner.reset(state, perturb, cf) if cmd == "reset" else runner.restore(state, t0, gripper_cmd)))
             elif cmd == "step":
                 conn.send(("ok", runner.step(arg)))
             elif cmd == "close":
@@ -368,11 +415,13 @@ def mem_available_gb() -> float:
 
 class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
-                 depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None):
+                 depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None,
+                 counterfactual: Optional[Dict[str, Any]] = None):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
-                        depth=depth, wrist=wrist, perturb=perturb)  # perturb: ranges as in VIEW_AUG, used per reset
+                        depth=depth, wrist=wrist, perturb=perturb,  # perturb: ranges as in VIEW_AUG, used per reset
+                        counterfactual=counterfactual)  # as in COUNTERFACTUAL, used per reset
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs
@@ -391,16 +440,17 @@ class LiberoVecEnv:
             self.conns.append(parent)
             self.procs.append(p)
 
-    def reset(self, i: int, task_id: int, trial_id: int, perturb: bool = False) -> None:
+    def reset(self, i: int, task_id: int, trial_id: int, perturb: bool = False, counterfactual: bool = False) -> None:
         """Ask env i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
-        self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0, -1.0, perturb)))
+        self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0, -1.0, perturb,
+                                      counterfactual)))
 
     def restore(self, i: int, task_id: int, sim_state: np.ndarray, t0: int, gripper_cmd: float) -> None:
         """Ask env i to continue an episode of task `task_id` from a logged simulator state at step `t0`.
 
         `gripper_cmd` is the last gripper command executed before that state (-1 open, +1 close).
         """
-        self.conns[i].send(("restore", (task_id, self._bddl(task_id), sim_state, t0, gripper_cmd, False)))
+        self.conns[i].send(("restore", (task_id, self._bddl(task_id), sim_state, t0, gripper_cmd, False, False)))
 
     def step(self, i: int, actions: np.ndarray) -> None:
         self.conns[i].send(("step", actions))

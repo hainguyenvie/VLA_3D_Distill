@@ -17,7 +17,8 @@ import torch
 from src.policy.token_policy import TokenPolicy, preprocess_batch
 from src.rollout.vec_env import LiberoVecEnv, mem_available_gb, postprocess_actions
 
-STEP_KEYS = ("rgb", "depth", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "sim_state", "target_pos")
+STEP_KEYS = ("rgb", "depth", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "sim_state", "target_pos",
+             "rgb_cf", "wrist_rgb_cf", "cf_delta", "target_pos_cf")
 
 
 def token_stats(logits: torch.Tensor, ref_logits: Optional[torch.Tensor] = None) -> Dict[str, float]:
@@ -34,13 +35,13 @@ def token_stats(logits: torch.Tensor, ref_logits: Optional[torch.Tensor] = None)
 class Collector:
     def __init__(self, vec: LiberoVecEnv, policy: TokenPolicy, labelers: Optional[Dict[str, TokenPolicy]] = None,
                  sample: bool = False, temperature: float = 1.0, seed: int = 7, task_ids: Optional[Sequence[int]] = None,
-                 perturb: bool = False, actor_view: str = "rgb"):
+                 perturb: bool = False, actor_view: str = "rgb", counterfactual: bool = False):
         """`perturb` asks the envs for visually perturbed episodes (see `vec_env.VIEW_AUG`): `rgb` is then the perturbed
         frame and `rgb_clean` the nominal one. The acting policy is fed `actor_view`; labelers always get the nominal
         frame (a privileged teacher). The logged `rgb` stays the perturbed frame either way."""
         self.vec, self.policy, self.labelers = vec, policy, labelers or {}
         self.sample, self.temperature = sample, temperature
-        self.perturb, self.actor_view = perturb, actor_view
+        self.perturb, self.actor_view, self.counterfactual = perturb, actor_view, counterfactual
         self.min_free_gb = float(os.environ.get("MIN_FREE_GB_RUN", 4))
         assert not getattr(policy, "raw_images", False) or not self.labelers, "shared preprocessing follows the actor"
         self.timing = {"preprocess": 0.0, "act": 0.0, "label": 0.0, "env": 0.0, "other": 0.0, "rounds": 0}
@@ -96,10 +97,11 @@ class Collector:
             if ep is None:
                 slots[i] = None
                 return
-            self.vec.reset(i, ep[0], ep[1], perturb=self.perturb)
+            self.vec.reset(i, ep[0], ep[1], perturb=self.perturb, counterfactual=self.counterfactual)
             slots[i] = {"task_id": ep[0], "trial_id": ep[1], "steps": {k: [] for k in STEP_KEYS}, "t": [],
                         "bins": [], "logits": [], "actions": [], "actions_norm": [],
                         "label_logits": {k: [] for k in self.labelers}, "label_actions": {k: [] for k in self.labelers},
+                        "label_cf": {k: [] for k in self.labelers},
                         "obs": None, "t0": time.time()}
 
         for i in range(self.vec.num_envs):
@@ -136,6 +138,14 @@ class Collector:
                       for k, p in self.labelers.items()}
             label_logits = {k: v["logits"] for k, v in labels.items() if "logits" in v}
             label_actions = {k: v["actions_norm"] for k, v in labels.items() if "actions_norm" in v}
+            label_cf = {}
+            if self.labelers and all("rgb_cf" in o for o in cur):  # counterfactual world: the labelers also see it
+                cf_obs = [dict(o, wrist_rgb=o.get("wrist_rgb_cf", o.get("wrist_rgb"))) for o in cur]
+                cf_imgs = [o["rgb_cf"] for o in cur]
+                cf_pils = None if getattr(self.policy, "raw_images", False) else preprocess_batch(cf_imgs, self.policy.center_crop)
+                for k, p in self.labelers.items():
+                    v = p.act(cf_imgs, descs, pils=cf_pils, obs=cf_obs if getattr(p, "needs_obs", False) else None)
+                    label_cf[k] = v["actions_norm"] if "actions_norm" in v else v["logits"]
             t3 = time.perf_counter()
             env_actions = postprocess_actions(out["actions"])
             for j, i in enumerate(act_idx):
@@ -154,6 +164,8 @@ class Collector:
                     s["label_logits"][k].append(label_logits[k][j].numpy().astype(np.float16))
                 for k in label_actions:
                     s["label_actions"][k].append(label_actions[k][j].astype(np.float32))
+                for k in label_cf:
+                    s["label_cf"][k].append(np.asarray(label_cf[k][j], dtype=np.float32))
                 self.vec.step(i, env_actions[j])
             finished = []
             t4 = time.perf_counter()
@@ -203,6 +215,7 @@ class Collector:
                 arrays["actions_norm"] = np.stack(s["actions_norm"])
             arrays.update({f"logits_{k}": np.stack(v) for k, v in s["label_logits"].items() if v})
             arrays.update({f"actions_{k}": np.stack(v) for k, v in s["label_actions"].items() if v})
+            arrays.update({f"cf_{k}": np.stack(v) for k, v in s["label_cf"].items() if v})  # labels on the counterfactual world
         if out_dir:
             eid = f"t{s['task_id']:02d}_n{s['trial_id']:02d}"
 
