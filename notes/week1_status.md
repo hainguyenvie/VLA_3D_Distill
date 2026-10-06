@@ -451,6 +451,13 @@ trên các episode nó sẽ thành công. Đây là bằng chứng trực tiếp
 (feature biết vật ở đâu, sai < 1 cm), nó nói rõ thông tin có nhưng không đi vào action. Teacher đang được đo cùng probe
 để biết "đi theo vật" trông như thế nào ở một policy 95%.
 
+## Nhánh π0.5: cổng kiểm tra đã qua (06/10)
+
+`lerobot/pi05_libero_finetuned` qua wrapper của ta (`src/policy/pi05_policy.py`, tokenizer bản không gated, thực thi
+10/50 bước mỗi chunk, horizon 280): **100/100 episode LIBERO-Object** (10 init state × 10 task; LeRobot báo 99.0), trung
+bình 135 bước. Mốc π0.5 trên LIBERO-PRO Object (swap / task / lan / object / position) và LIBERO-Plus Robot-init /
+Layout đang được đo trong cùng harness (`scripts/server/pi05_anchors.sh`).
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
