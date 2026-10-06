@@ -217,3 +217,31 @@ lấy làm đích.
 - **Distilling Realizable Students from Unrealizable Teachers (2505.09546)**, **Student-Informed Teacher Training
   (ICLR 2025)**: distill có bất đối xứng thông tin teacher–student là chủ đề đã chín trong robot learning; reviewer sẽ
   đọc "teacher nhìn sạch, student nhìn nhiễu" là privileged distillation + domain randomization.
+
+## 9. Bổ sung 06/10 (chiều): vấn đề "phát lại quỹ đạo" đã được đặt tên và chữa một phần; bảng LIBERO-Plus thật
+
+Vấn đề ta chẩn đoán (hình học có trong feature nhưng action đi theo thói quen / proprio) đã được nhiều bài 2026 nêu:
+- **Memory Trap** (Affordance Field Intervention, CVPR 2026): VLA phát lại quỹ đạo đã thuộc thay vì thích nghi với cảnh
+  mới; can thiệp lúc test bằng trường affordance.
+- **Perturbot (2610.04616)** [V]: "shortcut priors" (salience capture, noun lock-in, motor inertia), đo bằng GroundFscore
+  (cặp sửa null / sửa nhân quả); chữa bằng can thiệp dữ liệu (distractor, caption chi tiết, relabel đoạn hỏng); π0.5
+  robot thật 42 → 84. Không dùng state mô phỏng, không on-policy.
+- **When Instructions Retrieve Trajectories (2609.39971)** [V]: 69% failure là đi theo quỹ đạo quen; proprio/trạng thái
+  nội bộ dẫn dắt việc chọn quỹ đạo. Chữa bằng **Equivariant Counterfactual Training (ECT)**: cặp phản thực
+  "cùng câu lệnh, cảnh khác, action khác" dựng bằng biến đổi hình học demo (đối xứng, dịch) rồi replay trong simulator;
+  loss BC trên cả hai. LIBERO-PRO Object swap 38.3 → 70.8; robot thật 3/40 → 35/40. **Đây gần như là ý "cặp thế giới"
+  của ta, trên demo thay vì state on-policy, không teacher.**
+- **Motion-Centric Action Frames (2605.11809)**: token proprio gây lối tắt state → action; thay bằng khung action theo
+  chuyển động. **Direct Action-Head Injection of a Grounded 3D Point (2606.27663)**: tiêm một điểm 3D đã grounding vào
+  action head, đảo chiều sụp đổ dưới nhiễu vị trí của LIBERO-PRO.
+
+**Bảng LIBERO-Plus (4 suite) trong PatchWAM (2609.25961, Table 5)** [V]: π0 68.8 (Robot 21.1), OpenVLA*-Full 73.0
+(49.6), π0.5 77.4 (41.7), π0.5 + AXIS 89.5 (78.2), CAC-VLA 90.1 (78.4), **QuoVLA 90.3 (Robot 87.6, zero-shot)**,
+Anchor-Align 90.8 (59.1), Hermite-VLAReg 91.4 (85.4), PatchWAM 91.8 (71.0; train trên data nhiễu), ABot-M0.5 83.4
+(87.4). Tức SOTA thật trên LIBERO-Plus là **90–92 tổng, 85–88 ở Robot-init**, không phải 70 của OFT. Các số này
+không phân biệt rõ zero-shot / có data nhiễu cho mọi dòng; QuoVLA được ghi là zero-shot.
+
+Hệ quả: (1) "Robot-init chưa ai lấy được" chỉ đúng trong họ OFT; ở các backbone flow / WAM đã lên 78–88. (2) Mọi claim
+"vượt SOTA" trên LIBERO-Plus phải so với 90+, ngoài tầm của OFT 7B một camera / hai camera. (3) Chỗ chưa ai làm: cặp
+phản thực dựng **trên state on-policy** (nơi failure được quyết định, theo takeover) với nhãn teacher, và cho post-training
+của một checkpoint có sẵn; ECT làm trên demo, VLA-OPD on-policy nhưng không phản thực.
