@@ -142,4 +142,12 @@ class Pi05Policy:
         return params
 
     def save_lora(self, path: str) -> None:
-        self.peft.save_pretrained(path)
+        """Adapter weights + config in the PEFT layout (PeftModel.from_pretrained loads it). PEFT's own
+        save_pretrained fails on the model card of a non-transformers config, so it is written directly."""
+        from peft.utils import get_peft_model_state_dict
+        from safetensors.torch import save_file
+
+        os.makedirs(path, exist_ok=True)
+        self.peft.peft_config["default"].save_pretrained(path)
+        state = {k: v.detach().cpu().contiguous() for k, v in get_peft_model_state_dict(self.peft).items()}
+        save_file(state, os.path.join(path, "adapter_model.safetensors"))
