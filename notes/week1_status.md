@@ -511,6 +511,28 @@ xoá luôn phần robustness đã học. Adapter vòng 18 đang được chấm 
   nên "depth giúp trên state teacher" ở lr cố định (85.0 so với 73.2) phần lớn là tác dụng ổn định hoá, không phải
   hình học; cos_b2p (state teacher, không depth, cosine) đang ở vòng 10 (85%) để chốt.
 
+## Chẩn đoán π0.5 trên máy 8×H200 (06/10 tối)
+
+Rollout greedy có lưu state (20 init state × 10 task, horizon 280), phân loại failure và probe phản thực:
+
+| | Object chuẩn | LIBERO-PRO swap (đổi chỗ vật) | LIBERO-PRO position (dời x) |
+|---|---|---|---|
+| Thành công | 98.5 | **18.5** | **10.5** |
+| Kiểu hỏng chính | rơi khi mang (3) | **nhặt nhầm vật 148/163** (lệch 21 cm) | rơi / đặt sai 86, nhầm vật 50, near miss 28 |
+| Probe p (chunk bù độ dời của vật đích) | **0.91** (sát vật 1.43) | **0.00** (tập hỏng −0.04) | — |
+
+- π0.5 có vòng điều khiển kín tốt trên cảnh quen (dời vật 3–6 cm thì chunk dời theo, khác student 1-traj có p = 0).
+- Khi đổi chỗ vật, nó đi tới **vị trí quen** và gắp vật đang ở đó, bỏ qua tên vật trong câu lệnh: lỗi nằm ở **chọn
+  đích theo vị trí đã thuộc**, không ở điều khiển. Khớp với chẩn đoán "instructions retrieve trajectories" (ECT).
+- Hệ quả: π0.5 đóng băng không làm teacher cho trường hợp này được (nó mắc đúng lỗi cần sửa).
+
+**Phương pháp chỉnh lại (đang chạy):** on-policy counterfactual distillation với thế giới **đổi chỗ**: ở mỗi state
+trước khi kẹp mà student tự đi tới, đổi chỗ vật đích với một vật khác (chỉ đổi pose khi render, vật lý không đổi),
+đổi câu lệnh sang tên vật đang đứng ở vị trí cũ của đích; hành động đúng là chunk gốc (nhãn chính xác, không cần
+teacher giỏi hơn). Loss flow matching ghép cặp (chung noise / time) + số hạng nhất quán giữa hai thế giới. π0.5 gốc
+chỉ làm neo cho cảnh chuẩn. Ba nhánh cùng ngân sách (20 vòng × 1024 state): swap, shift (dời vật, teacher gán nhãn),
+và distill on-policy không phản thực; đánh giá trên Object, năm ô LIBERO-PRO Object, LIBERO-Plus Robot / Layout.
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
