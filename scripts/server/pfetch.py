@@ -19,7 +19,7 @@ def content_length(url):
     return int(sizes[-1]) if sizes else None
 
 
-def fetch(url, out, conns=16):
+def fetch(url, out, conns=16, chunk=CHUNK):
     if os.path.exists(out) and os.path.getsize(out) > 0:
         return out
     size = None
@@ -31,7 +31,7 @@ def fetch(url, out, conns=16):
         raise RuntimeError(f"no content-length for {url}")
     parts = out + ".parts"
     os.makedirs(parts, exist_ok=True)
-    chunks = [(i, s, min(s + CHUNK, size) - 1) for i, s in enumerate(range(0, size, CHUNK))]
+    chunks = [(i, s, min(s + chunk, size) - 1) for i, s in enumerate(range(0, size, chunk))]
 
     def get(c):
         i, s, e = c

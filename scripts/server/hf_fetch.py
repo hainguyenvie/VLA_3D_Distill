@@ -14,6 +14,14 @@ import sys
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pfetch  # noqa: E402
+
+# Files above BIG bytes are fetched as CONNS parallel 64 MB ranges (env HF_CONNS; each connection is one curl,
+# a few % of a core) while FILES files download at once (env HF_FILES): keep FILES x CONNS modest on a shared node.
+BIG = 256 << 20
+CONNS = int(os.environ.get("HF_CONNS", 8))
+FILES = int(os.environ.get("HF_FILES", 4))
 # `--dataset` switches the three endpoints to the dataset namespace
 KIND = "datasets" if "--dataset" in sys.argv else "models"
 API = "https://huggingface.co/api/" + KIND + "/{repo}"
@@ -42,7 +50,13 @@ def fetch_one(repo, rev, entry, dst_dir):
     for attempt in range(5):
         if not (os.path.exists(dst) and os.path.getsize(dst) == size):
             url = RESOLVE.format(repo=repo, rev=rev, path=entry["path"])
-            subprocess.run(["curl", "-sL", "--retry", "5", "-C", "-", "-o", dst, url], check=False)
+            if size > BIG and CONNS > 1:  # one connection tops out well below the link: split into parallel ranges
+                try:
+                    pfetch.fetch(url, dst, CONNS, chunk=64 << 20)
+                except Exception as e:  # noqa: BLE001  (falls back to a single resumable stream below)
+                    print(f"[warn] ranged fetch of {entry['path']} failed ({e}); single stream", flush=True)
+            if not (os.path.exists(dst) and os.path.getsize(dst) == size):
+                subprocess.run(["curl", "-sL", "--retry", "5", "-C", "-", "-o", dst, url], check=False)
         if os.path.exists(dst) and os.path.getsize(dst) == size and (want is None or sha256(dst) == want):
             return entry["path"], size, want
         if os.path.exists(dst) and os.path.getsize(dst) >= size:
@@ -60,7 +74,7 @@ def fetch_repo(out_root, repo):
     files = [e for e in get_json(TREE.format(repo=repo, rev=rev)) if e["type"] == "file"]
     total = sum(e.get("lfs", {}).get("size", e["size"]) for e in files)
     print(f"[start] {repo}@{rev[:8]}: {len(files)} files, {total / 1e9:.2f} GB", flush=True)
-    with ThreadPoolExecutor(4) as ex:
+    with ThreadPoolExecutor(FILES) as ex:
         done = list(ex.map(lambda e: fetch_one(repo, rev, e, dst_dir), files))
     with open(marker + ".tmp", "w") as f:
         json.dump({"repo": repo, "revision": rev, "files": [{"path": p, "size": s, "sha256": h} for p, s, h in done]}, f, indent=1)
