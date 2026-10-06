@@ -4,7 +4,7 @@
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 W="$(dirname "$REPO")"
 export W REPO
-export PY="$W/envs/oft/bin/python"
+export PY="$W/envs/${PY_ENV:-oft}/bin/python"  # PY_ENV=pi05 selects the pi0.5 environment
 export HF_HOME="$W/checkpoints/hf"
 export TORCH_HOME="$W/checkpoints/torch"
 export PIP_CACHE_DIR="$W/.cache/pip"
