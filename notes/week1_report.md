@@ -111,7 +111,7 @@ số episode), teacher gán nhãn và lái từ ảnh chuẩn của **cùng stat
 |---|---|---|
 | 1. Baseline tái lập trong 3 điểm quanh VLA-OPD (Object 93.8), rồi 4 suite ≥ 90 | Object ≥ 91 | **93.0 với lr cosine (đạt)**; 86.2 với lr cố định. Long: teacher RL 85.5 (công bố 91.7); distill lr cố định 59.0 trên 200 ep (VLA-OPD 78.9); bản lr cosine xếp hàng |
 | 2. Student vượt teacher trên LIBERO-Plus (≥ 55) | ≥ 55 | **56.4** (V1, một seed); seed 2 đang chạy |
-| 3. OFT chuẩn trên LIBERO-Plus, Robot-init ≥ 50 | ≥ 75 tổng | chưa làm (cần phần train cho head hồi quy) |
+| 3. OFT chuẩn trên LIBERO-Plus, Robot-init ≥ 50 | ≥ 75 tổng | **A2 vòng 4: 82.1 tổng** (OFT 70.2, SF 71.9; Camera 92, Noise 98) — nhưng Robot-init 23, Layout 65 không đổi; đối chứng A1 và vòng 20 đang chạy |
 | 4. RoboTwin 2.0, 3 seed | — | chưa làm |
 
 ## 8. Hạn chế và rủi ro

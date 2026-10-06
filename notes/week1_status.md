@@ -402,6 +402,24 @@ cùng state mô phỏng. Đây là chỗ 3D thật sự cần: muốn có ảnh 
   bản V1 + lr cosine đang chạy trên L40.
 - Đang chạy tiếp: V1 seed 8 (H200) và V1 + lr cosine (L40), mỗi run kèm eval 500 episode và LIBERO-Plus.
 
+## Nhánh OFT chuẩn: tự distill dưới nhiễu thị giác (A2), kết quả giữa chừng (06/10)
+
+A2 = checkpoint OFT chính thức, teacher là chính nó (đóng băng, nhìn ảnh sạch), student là nó + LoRA nhìn ảnh render
+lại dưới nhiễu, state hỗn hợp, loss L1, lr cosine. **Adapter vòng 4/20 trên cùng 420 task LIBERO-Plus: 82.1%** (OFT
+gốc 70.2, Spatial Forcing 71.9). So cặp với OFT gốc: 58 task được sửa, 8 task hỏng thêm, 67 cả hai cùng hỏng.
+
+| | Tổng | Camera | Noise | Light | Background | Language | Layout | Robot-init |
+|---|---|---|---|---|---|---|---|---|
+| OFT gốc | 70.2 | 48 | 65 | 90 | 98 | 97 | 67 | 27 |
+| Spatial Forcing | 71.9 | 57 | 42 | 100 | 97 | 100 | 70 | 38 |
+| **A2 vòng 4** | **82.1** | **92** | **98** | **100** | 98 | 98 | 65 | 23 |
+| OFT train trên 20k demo nhiễu (công bố, 4 suite) | 79.5 | 93 | 89 | 95 | 94 | 86 | 78 | 30 |
+
+Theo mức khó: 89 / 89 / 82 / 83 / 71 (L1 → L5). Eval cảnh chuẩn giữ 98% (100 episode) ở mọi vòng. Đọc: toàn bộ
+headroom *thị giác* của backbone OFT đã lấy được sau 4 vòng (khoảng 8k state, không demo mới), ngang mức OFT train trên
+20.000 demo nhiễu; phần còn lại nằm đúng ở **Robot-init và Layout** — không đổi, vì render lại ảnh không đổi trạng thái.
+Đối chứng A1 (cùng vòng lặp, không nhiễu) đang xếp hàng trên L40; adapter vòng 20 sẽ được chấm 500 episode + LIBERO-Plus.
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
