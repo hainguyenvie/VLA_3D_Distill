@@ -201,3 +201,19 @@ lấy làm đích.
 - Benchmark có thể chuyển sang nếu cần: **LIBERO-VPro (2609.24350)** (robustness thị giác vòng kín), **RoboRecover
   (2609.28952)** (phục hồi sau lệch thực thi; liên quan trực tiếp tới kết quả takeover "sau lần kẹp hỏng thì không
   cứu được"), RoboTwin 2.0 (benchmark thứ hai của hầu hết các bài cùng nhánh).
+
+## 8. Bổ sung 06/10: các bài đã làm "render lại cùng state" và "distill phụ thuộc thị giác"
+
+- **Cross-View Action Consistency (2608.06965)** [V, abstract]: reset MuJoCo về đúng state của **demo** LIBERO, render góc
+  camera chuẩn và góc nhiễu, loss nhất quán giữa vận tốc flow của hai góc (VLA flow-based, không teacher). LIBERO-Plus
+  nhánh Camera: 79.8 → **87.2** (3 seed); đối chứng ghép cặp ngẫu nhiên sụp còn 25.8. Robot thật: 53.3 → 74.4 ở camera
+  lạ. Không đụng Robot-init / Layout. → "cùng state vật lý, render lại góc khác" đã có người làm trên demo.
+- **Grounding Actions in Camera Space (2508.13103)**, **From Fixed to Free Cameras (2607.05396)**: render nhiều góc camera
+  cho mỗi trajectory demo; VistaBot (2604.21914), VISTA (2409.03685; InfiNoVA báo VISTA gần như không phục hồi được).
+- **VA-OPD (2605.21924)** và **CW-OPD (2609.38777)** [V, abstract], cho VLM: on-policy distillation chuẩn làm student
+  khớp câu trả lời của teacher **mà không tăng mức phụ thuộc vào bằng chứng thị giác**; CW-OPD dựng cặp "thế giới" chỉ
+  khác ở bằng chứng quyết định câu trả lời và distill **sự thay đổi** của teacher giữa hai thế giới. Chưa có bản cho
+  VLA / action. Khớp với failure analysis của ta (hình học có trong feature nhưng action không dùng; phát lại quỹ đạo).
+- **Distilling Realizable Students from Unrealizable Teachers (2505.09546)**, **Student-Informed Teacher Training
+  (ICLR 2025)**: distill có bất đối xứng thông tin teacher–student là chủ đề đã chín trong robot learning; reviewer sẽ
+  đọc "teacher nhìn sạch, student nhìn nhiễu" là privileged distillation + domain randomization.
