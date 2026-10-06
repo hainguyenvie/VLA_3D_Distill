@@ -533,6 +533,39 @@ teacher giỏi hơn). Loss flow matching ghép cặp (chung noise / time) + số
 chỉ làm neo cho cảnh chuẩn. Ba nhánh cùng ngân sách (20 vòng × 1024 state): swap, shift (dời vật, teacher gán nhãn),
 và distill on-policy không phản thực; đánh giá trên Object, năm ô LIBERO-PRO Object, LIBERO-Plus Robot / Layout.
 
+## Kết quả cuối đợt đầu trên máy 8×H200 (07/10 tối)
+
+**Nhánh OFT, cùng máy, cùng vòng lặp, chỉ khác có render lại dưới nhiễu (adapter vòng 20):**
+
+| | Chuẩn (500 ep) | LIBERO-Plus | Camera | Noise | Light | Robot | Layout | BG | Lang |
+|---|---|---|---|---|---|---|---|---|---|
+| OFT gốc | 96.8 | 70.2 | 48 | 65 | 90 | 27 | 67 | 98 | 97 |
+| A1 (đối chứng: tự distill, ảnh chuẩn) | 97.0 | 68.8 | 45 | 68 | 85 | 27 | 63 | 95 | 98 |
+| **A2 (tự distill, ảnh render lại dưới nhiễu)** | **97.0** | **81.9** | **97** | **95** | 83 | 33 | 72 | 93 | 100 |
+
+A2 − A1 = **+13.1** trên LIBERO-Plus, cảnh chuẩn không đổi; A1 ≈ OFT gốc nên mức tăng không đến từ việc fine-tune.
+Vượt Spatial Forcing (71.9) và OFT train trên 20k demo nhiễu (79.5, công bố, 4 suite). Một seed.
+
+**Nhánh π0.5 (adapter vòng 20, 200 episode mỗi ô LIBERO-PRO; Robot / Layout của LIBERO-Plus 120 task):**
+
+| | Object | PRO swap | PRO position | PRO object | PRO lan | PRO task | Plus Robot / Layout |
+|---|---|---|---|---|---|---|---|
+| π0.5 gốc | 98.5 | 18.5 | 10.5 | 94 | 100 | 0 | 83 / 82 |
+| base (distill on-policy) | 99.0 | 15.5 | 11.0 | 93 | 99.5 | 0 | 83 / 85 |
+| shift (dời vật, teacher gán nhãn) | 99.0 | 18.0 | 15.5 | 93 | 99 | 0 | 87 / 83 |
+| swap (đổi chỗ, nhãn chính xác) | 96.5 | **23.0** | 0.5 | 83 | 97 | 0 | 68 / 67 |
+| swap nhẹ tay (lr 2e-5, encoder đóng băng) | 86.0 | 26.0 | 3.5 | 78 | 87.5 | 0 | — |
+| swap off-policy (state của π0.5 gốc) | 86.0 | 25.5 | 0.0 | 71.5 | 85.5 | 0 | — |
+
+- Phản thực đổi chỗ như đã thiết kế **có hại**: +5–8 trên ô swap nhưng dời vị trí sụp về 0, Robot / Layout −15. Nguyên
+  nhân (phân tích của tôi): trong cặp đổi chỗ, vật được gọi tên luôn đứng ở vị trí quỹ đạo gốc đi tới, nên cặp không
+  bao giờ đòi đi tới chỗ mới; policy học "đi tới vị trí quen bất kể tên" còn chặt hơn. Thiết kế tiếp theo phải có cặp
+  mà hành động đúng đi tới vị trí khác với nhãn biết chắc (ví dụ phản chiếu 3D cả cảnh và quỹ đạo).
+- shift trung tính (position +4.5, trong sai số).
+
+**Nhánh token trên máy mới:** cos_b2 87.4 (500 ep) / 48.8 LIBERO-Plus; cos_b2p 84.6 / 45.2 (máy cũ, render CPU: 93.0 /
+51.4 cho cos_b2). LIBERO-Long lr cosine: eval 100 episode 62% ở vòng 40 (lr cố định: 57–62; VLA-OPD 78.9).
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
