@@ -380,6 +380,8 @@ class LiberoVecEnv:
         # GPU rendering is serialised across workers: concurrent EGL rendering from several processes gets them
         # killed by the driver on the H200 machine (NVRM Xid 31). The CPU renderer needs no lock.
         lock = ctx.Lock() if os.environ.get("MUJOCO_GL", "egl") == "egl" else None
+        self.lock = lock  # kept alive here: a spawned worker rebuilds the semaphore when it starts, which may be
+        # after the constructor returned; if the parent had dropped it by then the worker dies with FileNotFoundError
         self.conns, self.procs = [], []
         for _ in range(num_envs):
             parent, child = ctx.Pipe()

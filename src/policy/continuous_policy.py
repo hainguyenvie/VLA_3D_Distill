@@ -32,6 +32,7 @@ def proprio_state(obs) -> np.ndarray:
 
 class ContinuousPolicy(TokenPolicy):
     needs_obs = True  # `act` needs the full observation (wrist image, proprio), not only the third-person frame
+    proprio_mode = "normal"  # diagnostic ablations of the proprio input: "zero" | "noise"
 
     def __init__(self, checkpoint: str, unnorm_key: str, device: str = "cuda:0", center_crop: bool = True):
         super().__init__(checkpoint, unnorm_key, device, center_crop)
@@ -61,6 +62,10 @@ class ContinuousPolicy(TokenPolicy):
         wrist_pv = self.image_processor.preprocess(wrist, return_tensors="pt")["pixel_values"]
         inputs["pixel_values"] = torch.cat([inputs["pixel_values"], wrist_pv.to(self.device, dtype=torch.bfloat16)], dim=1)
         proprio = self._normalize_proprio(np.stack([proprio_state(o) for o in obs]))
+        if self.proprio_mode == "zero":
+            proprio = np.zeros_like(proprio)
+        elif self.proprio_mode == "noise":
+            proprio = np.clip(proprio + np.random.default_rng().normal(0, 0.3, proprio.shape), -1.0, 1.0)
         with torch.autocast("cuda", dtype=torch.bfloat16):
             prop = self.proprio_projector(torch.from_numpy(proprio).to(self.device, dtype=torch.bfloat16)).unsqueeze(1)
             out, idx, _ = self._run_llm(inputs, extra_tokens=prop)

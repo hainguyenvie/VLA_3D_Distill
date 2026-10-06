@@ -21,10 +21,13 @@ def main():
     ap.add_argument("--suite", default="libero_object")
     ap.add_argument("--out", required=True)
     ap.add_argument("--per_category", type=int, default=60)
+    ap.add_argument("--categories", default="", help="comma-separated subset of perturbation types (default: all)")
     ap.add_argument("--num_envs", type=int, default=7)
     ap.add_argument("--max_steps", type=int, default=512, help="openvla-oft uses 220 / 280 / 300 / 520 for spatial / object / goal / 10")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--save_steps", action="store_true", help="keep per-query arrays (steps/*.npz) for failure analysis")
+    ap.add_argument("--proprio_mode", default="normal", choices=["normal", "zero", "noise"],
+                    help="diagnostic: ablate the proprio input of a standard OFT policy")
     ap.add_argument("--oracle_xy", action="store_true",
                     help="diagnostic: privileged horizontal servo on the target until the first grasp (src/policy/oracle.py)")
     args = ap.parse_args()
@@ -40,7 +43,10 @@ def main():
     entries = [e for e in json.load(open(cls_path))[args.suite] if e["name"] in name_to_id]
     rng = np.random.default_rng(args.seed)
     chosen = []
+    wanted = {c.strip() for c in args.categories.split(",") if c.strip()}
     for cat in sorted({e["category"] for e in entries}):
+        if wanted and cat not in wanted:
+            continue
         pool = [e for e in entries if e["category"] == cat]
         k = len(pool) if args.per_category <= 0 else min(args.per_category, len(pool))
         chosen += [pool[i] for i in rng.permutation(len(pool))[:k]]
@@ -56,6 +62,9 @@ def main():
     policy = load_policy(args.ckpt, args.suite, "cuda:0")  # plain path, raw:<path> or oft:<path>
     if args.lora:
         policy.add_lora(adapter_path=args.lora)
+    if args.proprio_mode != "normal":
+        assert hasattr(policy, "proprio_projector"), "--proprio_mode needs a standard OFT policy (oft:)"
+        policy.proprio_mode = args.proprio_mode
     if args.oracle_xy:
         from src.policy.oracle import ApproachOracle
 

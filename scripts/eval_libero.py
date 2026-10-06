@@ -35,6 +35,8 @@ def parse():
     ap.add_argument("--depth", action="store_true", help="also log metric depth of the agent view")
     ap.add_argument("--no_steps", action="store_true", help="do not write steps/*.npz")
     ap.add_argument("--device", default="cuda:0")
+    ap.add_argument("--proprio_mode", default="normal", choices=["normal", "zero", "noise"],
+                    help="diagnostic: ablate the proprio input of a standard OFT policy")
     ap.add_argument("--oracle_xy", action="store_true",
                     help="diagnostic: privileged horizontal servo on the target until the first grasp (src/policy/oracle.py)")
     return ap.parse_args()
@@ -65,6 +67,9 @@ def main():
     for spec in args.label:
         name, path = spec.split("=", 1)
         labelers[name] = load_policy(path, args.suite, args.device, target=policy)
+    if args.proprio_mode != "normal":
+        assert hasattr(policy, "proprio_projector"), "--proprio_mode needs a standard OFT policy (oft:)"
+        policy.proprio_mode = args.proprio_mode
     if args.oracle_xy:
         from src.policy.oracle import ApproachOracle
 
