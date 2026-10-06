@@ -400,7 +400,10 @@ cùng state mô phỏng. Đây là chỗ 3D thật sự cần: muốn có ảnh 
 - Baseline lr cosine trên LIBERO-Plus: **51.4** (teacher 50.0): distill không-3D ổn định thì chạm teacher, không hơn;
   Camera vẫn 5%. V1 (56.4) hơn baseline ổn định 5 điểm, toàn bộ ở Camera / Noise / Light. So công bằng hơn cho V1 là
   bản V1 + lr cosine đang chạy trên L40.
-- Đang chạy tiếp: V1 seed 8 (H200) và V1 + lr cosine (L40), mỗi run kèm eval 500 episode và LIBERO-Plus.
+- V1 + lr cosine (L40) đã train xong: eval 100 episode 52 → 33 → 56 → 66 → 45 → 65 → 77 → 82 → 87 → 89 → **64 ở vòng
+  20**. Khác với cos_b2 (ổn định tới cuối), nhánh có nhiễu thị giác vẫn sụp ở vòng cuối dù lr đã về 1e-5; nguyên nhân
+  chưa rõ (một lô episode xấu ở vòng cuối? lr cuối vẫn quá cao cho nhánh này?). Số 500 episode và LIBERO-Plus của
+  adapter cuối đang chấm; cần xem thêm adapter vòng 18.
 
 ## Nhánh OFT chuẩn: tự distill dưới nhiễu thị giác (A2), kết quả giữa chừng (06/10)
 
