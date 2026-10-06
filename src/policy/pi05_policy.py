@@ -30,9 +30,13 @@ class Pi05Policy:
         from lerobot.policies.factory import make_pre_post_processors
         from lerobot.policies.pi05.modeling_pi05 import PI05Policy
 
+        from lerobot.configs.policies import PreTrainedConfig
+
         self.checkpoint, self.device, self.n_action_steps = checkpoint, torch.device(device), n_action_steps
-        self.vla = PI05Policy.from_pretrained(checkpoint)
-        self.vla.config.device = str(self.device)
+        cfg = PreTrainedConfig.from_pretrained(checkpoint)
+        cfg.compile_model = False  # batches of varying size; torch.compile would recompile and slows the first calls
+        cfg.device = str(self.device)
+        self.vla = PI05Policy.from_pretrained(checkpoint, config=cfg)
         self.vla.to(self.device).eval()
         overrides = {"device_processor": {"device": str(self.device)}}
         tok = tokenizer or (os.path.join(os.path.dirname(checkpoint.rstrip("/")), TOKENIZER_FALLBACK)

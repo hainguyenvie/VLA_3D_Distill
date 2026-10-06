@@ -89,3 +89,18 @@ Nhận xét:
 - AUC dự đoán "episode sẽ hỏng" từ KL: 0.75 chỉ với 5 query đầu, 0.99 với cả episode.
 - Lưu ý: teacher gán nhãn ở đây là checkpoint RLinf, vốn lệch pipeline; cần lặp lại với teacher full-SFT
   trước khi dùng các số này làm luận cứ.
+
+## pi0.5 (LeRobot PyTorch port) — môi trường và cổng kiểm tra (06/10)
+
+- `envs/pi05`: venv `--system-site-packages` trên env oft (dùng chung robosuite 1.4.1 / mujoco 3.2.3 / LIBERO deps và
+  libOSMesa), cài `lerobot==0.4.4`, **`numpy==1.26.4`** (lerobot kéo numpy 2 → robosuite/opencv vỡ ABI), và
+  `transformers` từ nhánh fork `huggingface/transformers@fix/lerobot_openpi` (bản PyPI bị π0.5 từ chối:
+  "incorrect transformer version"; extra `lerobot[pi]` không có trong wheel 0.4.4 nhưng pyproject ghi rõ nhánh này).
+  Cảnh báo xung đột pip với gói `openvla-oft` của env oft chỉ là metadata, env oft không bị đụng.
+- Checkpoint `lerobot/pi05_libero_finetuned` (7.5 GB, 97.5 trên LIBERO theo LeRobot). Tokenizer PaliGemma gated →
+  dùng bản không gated (`checkpoints/paligemma_tokenizer_fallback`, Gemma 257k, thêm BOS, pad phải) cho đến khi có
+  đăng nhập HF; gate rollout sẽ cho biết có tương đương không.
+- Protocol LeRobot/openpi: ảnh 256×256 xoay 180° (trùng repo), state 8 chiều eef + axis-angle + gripper (trùng
+  `proprio_state`), thực thi 10/50 bước mỗi chunk, gripper theo quy ước môi trường (−1 mở, +1 đóng; wrapper đổi về
+  [0, 1] cho collector).
+- Gate forward trên CPU (`scripts/check_pi05.py`) qua; gate rollout 100 episode Object chờ GPU.
