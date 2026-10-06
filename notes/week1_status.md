@@ -493,6 +493,24 @@ V1 + lr cosine, adapter cuối trên 500 episode chuẩn: **73.6** (task 0: 2%, 
 (eval 100 ep: 89 ở vòng 18 → 64 ở vòng 20). LIBERO-Plus của adapter sụp này: **41.2** (Camera 12, Noise 40): cú sụp cuối
 xoá luôn phần robustness đã học. Adapter vòng 18 đang được chấm LIBERO-Plus để biết mức thật của V1 cosine.
 
+## Cập nhật 06/10 chiều: seed 2 của V1, ma trận 2×2 ở lr cosine, V1 cosine
+
+| Run | LIBERO-Object chuẩn (500 ep) | LIBERO-Plus (420) | Camera | Light | Noise | Robot | Layout |
+|---|---|---|---|---|---|---|---|
+| V1 seed 7 (lr cố định) | 87.8 | 56.4 | 42 | 75 | 53 | 45 | 45 |
+| **V1 seed 8** (lr cố định) | 77.2 | **60.2** | 40 | 75 | 53 | 52 | 55 |
+| V1 + lr cosine, adapter 18 / 20 | — / 73.6 | 47.9 / 41.2 | 25 / 12 | 53 / 55 | 43 / 40 | 42 / 32 | 43 / 37 |
+| cos_b2 (baseline ổn định) | 93.0 | 51.4 | 5 | 63 | 25 | 48 | 52 |
+| cos_b3 (state teacher + depth, cosine) | 83.6 | 41.2 | 8 | 30 | 18 | 43 | 52 |
+
+- Hai seed của V1 cho 56.4 và 60.2 trên LIBERO-Plus (baseline ổn định 51.4, teacher 50): mức tăng +5 đến +9 lặp lại
+  được, dù số trên bản chuẩn dao động mạnh (87.8 / 77.2) vì cú tụt ở vòng cuối.
+- V1 với lr cosine lại **kém hơn** bản lr cố định trên LIBERO-Plus (47.9 ở adapter 18, Camera 25): lr nhỏ ở các vòng
+  cuối có vẻ không đủ để tiếp thu các state nhiễu; cần hiểu thêm trước khi chuẩn hoá lr cosine cho nhánh có nhiễu.
+- Ở chế độ lr ổn định, **state teacher + depth (cos_b3) thua rõ baseline on-policy** (83.6 / 41.2 so với 93.0 / 51.4),
+  nên "depth giúp trên state teacher" ở lr cố định (85.0 so với 73.2) phần lớn là tác dụng ổn định hoá, không phải
+  hình học; cos_b2p (state teacher, không depth, cosine) đang ở vòng 10 (85%) để chốt.
+
 ## Việc đang chạy / tiếp theo
 
 - H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
