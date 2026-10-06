@@ -37,7 +37,7 @@ def main():
 
     from src.rollout.vec_env import LiberoVecEnv
 
-    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=args.ckpt.startswith("oft:"))
+    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=args.ckpt.startswith(("oft:", "pi05:")))
     cls_path = os.path.join(os.path.dirname(L.__file__), "benchmark", "task_classification.json")
     name_to_id = {vec.suite.get_task(i).name: i for i in range(vec.suite.n_tasks)}
     entries = [e for e in json.load(open(cls_path))[args.suite] if e["name"] in name_to_id]

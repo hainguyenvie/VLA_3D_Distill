@@ -49,7 +49,7 @@ def main():
     from src.rollout.vec_env import LiberoVecEnv
 
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, args.num_steps_wait, depth=args.depth,
-                       wrist=args.ckpt.startswith("oft:"))
+                       wrist=args.ckpt.startswith(("oft:", "pi05:")))
 
     import torch
 
