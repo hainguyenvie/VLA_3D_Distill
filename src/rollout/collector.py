@@ -43,7 +43,9 @@ class Collector:
         self.sample, self.temperature = sample, temperature
         self.perturb, self.actor_view, self.counterfactual = perturb, actor_view, counterfactual
         self.min_free_gb = float(os.environ.get("MIN_FREE_GB_RUN", 4))
-        assert not getattr(policy, "raw_images", False) or not self.labelers, "shared preprocessing follows the actor"
+        # the default-pipeline preprocessing is shared with labelers only when the actor uses it too
+        assert not getattr(policy, "raw_images", False) or all(getattr(p, "raw_images", False) for p in self.labelers.values()), \
+            "shared preprocessing follows the actor"
         self.timing = {"preprocess": 0.0, "act": 0.0, "label": 0.0, "env": 0.0, "other": 0.0, "rounds": 0}
         self._saver = ThreadPoolExecutor(2)  # npz compression off the rollout loop (zlib releases the GIL)
         self._jsonl_lock = threading.Lock()
