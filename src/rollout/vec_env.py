@@ -52,6 +52,49 @@ def mirror_quat(q_wxyz: np.ndarray) -> np.ndarray:
     mujoco.mju_mat2Quat(q, Rm.reshape(-1))
     return q
 
+def rotate_world(m, d, center, theta: float, free_addrs, arm_q1: int, fixed_bodies, qvel_too: bool = False) -> None:
+    """Rotate a LIBERO world by `theta` about the vertical axis through `center` (x, y): free objects (qpos, and their
+    world-frame linear velocity if `qvel_too`), the fixed bodies hanging off the world (furniture, tables: their model
+    pose), and the arm by its first joint. Kinematics are not recomputed here."""
+    import mujoco
+
+    c, s = np.cos(theta), np.sin(theta)
+    qz = np.array([np.cos(theta / 2), 0.0, 0.0, np.sin(theta / 2)])
+
+    def rot_xy(p):
+        x, y = p[0] - center[0], p[1] - center[1]
+        p[0], p[1] = center[0] + c * x - s * y, center[1] + s * x + c * y
+
+    q = np.zeros(4)
+    for a in free_addrs:  # free joints: x y z, then quaternion w x y z
+        rot_xy(d.qpos[a : a + 3])
+        mujoco.mju_mulQuat(q, qz, d.qpos[a + 3 : a + 7].copy())
+        d.qpos[a + 3 : a + 7] = q
+        if qvel_too:
+            j = [k for k in range(m.njnt) if m.jnt_qposadr[k] == a][0]
+            v = d.qvel[m.jnt_dofadr[j] : m.jnt_dofadr[j] + 2]
+            v[0], v[1] = c * v[0] - s * v[1], s * v[0] + c * v[1]  # angular velocity of a free joint is body-local
+    for b in fixed_bodies:
+        rot_xy(m.body_pos[b])
+        mujoco.mju_mulQuat(q, qz, m.body_quat[b].copy())
+        m.body_quat[b] = q
+    d.qpos[arm_q1] += theta
+
+
+def world_fixed_bodies(robo) -> List[int]:
+    """Bodies attached directly to the world that do not move on their own and are not the robot or the floor:
+    furniture and tables. They are part of the scene a rotation counterfactual has to rotate."""
+    m = robo.sim.model._model
+    robot_root = robo.sim.model.body_name2id(robo.robots[0].robot_model.root_body)
+    free_bodies = {int(m.jnt_bodyid[j]) for j in range(m.njnt) if m.jnt_type[j] == 0}
+    out = []
+    for b in range(1, m.nbody):
+        name = robo.sim.model.body_id2name(b) or ""
+        if m.body_parentid[b] == 0 and b != robot_root and b not in free_bodies and not name.startswith("floor"):
+            out.append(b)
+    return out
+
+
 # Counterfactual worlds for training rollouts (`LiberoVecEnv(counterfactual=...)`, switched on per reset): at every
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
@@ -414,27 +457,24 @@ class EnvRunner:
         out["cf_eef_quat"] = np.array([x, y, z, w], dtype=np.float32)  # xyzw, as robosuite reports it
 
     def _rotate_view(self, robo, res, conv, theta: float) -> Dict[str, Any]:
-        """Frames of the scene rotated by `theta` about the first joint's vertical axis (movable objects and arm), and
-        the proprio the robot has there; the simulator's arrays are restored exactly afterwards."""
+        """Frames of the scene rotated by `theta` about the first joint's vertical axis (movable objects, furniture and
+        tables, and the arm), and the proprio the robot has there; the simulator's and model's arrays are restored
+        exactly afterwards."""
         import mujoco
 
         m, d = robo.sim.model._model, robo.sim.data._data
         saved = {k: getattr(d, k).copy() for k in self._KIN}
+        fb = self._rot_fixed
+        saved_model = (m.body_pos[fb].copy(), m.body_quat[fb].copy())
         c, s, ctr = np.cos(theta), np.sin(theta), self._rot_center
-        qz = np.array([np.cos(theta / 2), 0.0, 0.0, np.sin(theta / 2)])
         out = {}
         try:
-            for a in self._mirror_obj_addrs:  # free joints: x y z, then quaternion w x y z
-                x, y = d.qpos[a] - ctr[0], d.qpos[a + 1] - ctr[1]
-                d.qpos[a], d.qpos[a + 1] = ctr[0] + c * x - s * y, ctr[1] + s * x + c * y
-                q = np.zeros(4)
-                mujoco.mju_mulQuat(q, qz, d.qpos[a + 3 : a + 7].copy())
-                d.qpos[a + 3 : a + 7] = q
-            d.qpos[self._mirror_arm_addrs[0]] += theta
+            rotate_world(m, d, ctr, theta, self._mirror_obj_addrs, self._mirror_arm_addrs[0], fb)
             mujoco.mj_kinematics(m, d)
             mujoco.mj_camlight(m, d)
             self._render_cf(robo, res, conv, out)
         finally:
+            m.body_pos[fb], m.body_quat[fb] = saved_model
             for k, v in saved.items():
                 getattr(d, k)[:] = v
         tp = _target_pos(robo)
@@ -624,6 +664,7 @@ class EnvRunner:
             self._mirror_y0 = float(robo.sim.data._data.xpos[robo.sim.model.body_name2id(robot.robot_model.root_body)][1])
             j1 = robo.sim.model.joint_name2id(robot.robot_joints[0])
             self._rot_center = np.array(robo.sim.data._data.xanchor[j1][:2], dtype=np.float64)  # first joint's axis
+            self._rot_fixed = world_fixed_bodies(robo)
             self._mirror_arm_addrs = [int(a) for a in robot._ref_joint_pos_indexes]
             self._mirror_obj_addrs = []
             for n in robo.objects_dict:

@@ -591,6 +591,32 @@ giống hệt (lạc khi chuyển 84, 73% còn cầm vật lúc hết giờ). Ad
 **Chỗ headroom nằm:** (1) swap: chọn đích sai từ những query đầu (~75% tập); (2) position: độ chính xác kẹp ở chỗ lạ
 và thời gian, sau đó mới đến chọn đích.
 
+**Vật đích của LIBERO-Object chỉ nằm ở 2 ô** (07/10, `scripts/analyze_target_slots.py`): A = (−0.12, −0.24) cho task 0, 4, 6, 7, 8 và
+B = (+0.05, −0.10) cho task 1, 2, 3, 5, 9. Các ô C (−0.15, +0.06), D (+0.10, −0.20), E (+0.15, +0.03), F (−0.20, −0.08)
+chỉ chứa vật phụ. Ô swap đưa vật đích tới:
+
+| Task | Vật đích | Ô gốc → ô swap | π0.5 | xoay s8 (vòng 8) |
+|---|---|---|---|---|
+| 0 | alphabet soup | A → F | 0.35 | **0.95** |
+| 1 | cream cheese | B → A | 0.90 | **1.00** |
+| 3 | bbq sauce | B → A | 0.30 | **1.00** |
+| 6 | butter | A → B | 0.30 | **0.90** |
+| 2 | salad dressing | B → F | 0 | 0 |
+| 4 | ketchup | A → E | 0 | 0 |
+| 5 | tomato sauce | B → A | 0 | 0 |
+| 7 | milk | A → B | 0 | 0 |
+| 8 | chocolate pudding | A → D | 0 | 0 |
+| 9 | orange juice | B → C | 0 | 0 |
+
+- Vật đích tới một ô **chưa từng là ô đích** (C, D, E: task 4, 8, 9) → 0 với mọi model. Phép xoay chỉ dời vật dọc cung
+  tròn có bán kính của A (0.54 m) và B (0.66 m) quanh trục khớp 1; C, D, E nằm ở bán kính 0.45, 0.73, 0.75 → không phủ.
+- **Dự đoán (ghi trước khi có số):** coshift dời vật đích tự do 8–30 cm trong vùng bày vật nên sẽ cải thiện task 4, 8, 9
+  nhiều hơn xoay. Nếu không → lỗi ở đó không phải do vị trí.
+- Task 5, 7 (đích tới A / B nhưng vẫn 0) chưa giải thích được bằng hình học; có thể là nhận dạng vật (tomato sauce /
+  milk) — cần xem state.
+- Ô position: vật đích tới chỗ trống, ô quen để trống → π0.5 vẫn đi tới vật (nhặt được ~50%). Tức lỗi swap là **bị hút
+  về vật đang đứng ở ô quen**, cộng với thực thi kém ở chỗ lạ.
+
 ## Phản thực mới: tổng quát hơn và nhắm đúng lỗi (07/10)
 
 Nguyên lý chung: dựng thế giới phản thực bằng một phép biến đổi 3D mà ta biết chính xác action phải biến đổi theo,
@@ -615,8 +641,12 @@ Robot / Layout). Đo trần π0.5 gốc trên Spatial / Goal / Long (chuẩn + �
 card 4 và 6 (`scripts/server/pi05_arm.sh`); khi chạy tiếp, bộ sinh số ngẫu nhiên được seed lại theo (seed, vòng 3),
 tức vẫn tất định nhưng không trùng từng bit với một lần chạy liền mạch. Card 2 và 3 để trống cho người dùng.
 
-Đo trần (π0.5 gốc, 200 tập): Spatial chuẩn 98.5, **Spatial ô swap 42.0**; Goal chuẩn 98.5 → lỗi đi theo vị trí quen
-không chỉ có ở Object.
+Đo trần (π0.5 gốc, 200 tập): Spatial chuẩn 98.5, **Spatial ô swap 42.0**; Goal chuẩn 98.5, **Goal ô swap 26.0**; Long
+chuẩn 94.0, **Long ô swap 9.0** → lỗi đi theo vị trí quen không chỉ có ở Object.
+
+Ô position với 400 bước thay vì 280 (π0.5 gốc): **21.5** (từ 10.5). Khoảng 11 điểm là do hết giờ, nhưng vẫn còn 74 tập
+lạc khi chuyển, 46% trong số đó đến bước 400 vẫn cầm vật, lơ lửng cách giỏ ~11 cm: không chỉ là thiếu thời gian, mà
+policy không hoàn tất được việc đặt vật khi vật được nhặt từ chỗ lạ. Còn lại: nhầm vật 52, near miss 23.
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 

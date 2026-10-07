@@ -36,6 +36,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--mode", choices=["mirror", "rotate"], default="mirror")
     ap.add_argument("--theta", type=float, default=0.3, help="rotate mode: angle (radians)")
+    ap.add_argument("--steps", default="", help="rotate mode: eval run dir with steps/*.npz and episodes.jsonl to replay")
+    ap.add_argument("--episodes", type=int, default=20)
     args = ap.parse_args()
     if args.mode == "rotate":
         return check_rotate(args)
@@ -139,33 +141,45 @@ def quat_mul_xyzw(a, b):
 
 def check_rotate(args):
     """Gate for the rotation counterfactual: [1] nominal untouched, [2] rendered robot = rotated robot, [3] replay of
-    rotated actions from the rotated initial state follows the rotated nominal track, plus a contact sheet."""
+    rotated random chunks from the rotated initial state (objects, furniture, tables and arm rotated in the physics)
+    follows the rotated nominal track, [4] with --steps: logged successful episodes replayed in the rotated world with
+    rotated actions still succeed (the label is right for the whole task, contacts included). Contact sheet."""
+    import glob
+
     import mujoco
     from libero.libero import benchmark, get_libero_path
     from PIL import Image
 
+    from src.rollout.vec_env import postprocess_actions, rotate_world, world_fixed_bodies
+
     os.makedirs(args.out, exist_ok=True)
     suite = benchmark.get_benchmark_dict()[args.suite]()
-    task = suite.get_task(args.task)
-    bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-    init = np.asarray(suite.get_task_init_states(args.task))[0]
+    th = args.theta
+
+    def make(task):
+        t = suite.get_task(task)
+        bddl = os.path.join(get_libero_path("bddl_files"), t.problem_folder, t.bddl_file)
+        cfg = dict(suite=args.suite, max_steps=600, num_steps_wait=10, resolution=256, depth=False, wrist=True, perturb=None,
+                   counterfactual=dict(COUNTERFACTUAL, mode="rotate", theta=(th, th)))
+        return EnvRunner(bddl, cfg, contextlib.nullcontext()), np.asarray(suite.get_task_init_states(task))
+
+    r, inits = make(args.task)
+    init = inits[0]
     rng = np.random.default_rng(0)
     chunks = [np.concatenate([rng.uniform(-0.4, 0.4, (8, 3)), rng.uniform(-0.05, 0.05, (8, 3)), -np.ones((8, 1))], axis=1)
               for _ in range(args.chunks)]
-    th = args.theta
-    cfg = dict(suite=args.suite, max_steps=512, num_steps_wait=10, resolution=256, depth=False, wrist=True, perturb=None,
-               counterfactual=dict(COUNTERFACTUAL, mode="rotate", theta=(th, th)))
-    r = EnvRunner(bddl, cfg, contextlib.nullcontext())
     ref = [r.reset(init)] + [r.step(c) for c in chunks]
     cf = [r.reset(init, counterfactual=True)] + [r.step(c) for c in chunks]
     d_state = max(float(np.abs(a["sim_state"] - b["sim_state"]).max()) for a, b in zip(ref, cf))
     d_rgb = max(int(np.abs(a["rgb"].astype(int) - b["rgb"].astype(int)).max()) for a, b in zip(ref, cf))
     d_wrist = max(int(np.abs(a["wrist_rgb"].astype(int) - b["wrist_rgb"].astype(int)).max()) for a, b in zip(ref, cf))
     print(f"[1] nominal untouched: |state| {d_state:.1e}, rgb {d_rgb}, wrist {d_wrist}")
+    robo = r.env.env
     ctr = r._rot_center
-    m, dd = r.env.env.sim.model._model, r.env.env.sim.data._data
-    j1 = r.env.env.sim.model.joint_name2id(r.env.env.robots[0].robot_joints[0])
-    print(f"    rotation centre {np.round(ctr, 4).tolist()}, first joint axis {np.round(dd.xaxis[j1], 4).tolist()}")
+    m, dd = robo.sim.model._model, robo.sim.data._data
+    j1 = robo.sim.model.joint_name2id(robo.robots[0].robot_joints[0])
+    print(f"    rotation centre {np.round(ctr, 4).tolist()}, first joint axis {np.round(dd.xaxis[j1], 4).tolist()}, "
+          f"fixed bodies rotated: {[robo.sim.model.body_id2name(b) for b in r._rot_fixed]}")
 
     def rot_pos(p, t):
         c, s = np.cos(t), np.sin(t)
@@ -177,41 +191,80 @@ def check_rotate(args):
     dp = max(float(np.linalg.norm(o["cf_eef_pos"] - rot_pos(o["eef_pos"], t))) for o, t in zip(cf, ths))
     dq = max(quat_dist(o["cf_eef_quat"], quat_mul_xyzw(qz(t), o["eef_quat"])) for o, t in zip(cf, ths))
     print(f"[2] max |eef pos - rotated| {dp * 1000:.2f} mm, max orientation error {dq:.2f} deg (angles {np.round(ths, 3).tolist()})")
+    rows = [np.concatenate([o["rgb"], o["rgb_cf"], o["wrist_rgb"], o["wrist_rgb_cf"]], axis=1) for o in cf[:4]]
+    Image.fromarray(np.concatenate(rows, axis=0)).save(os.path.join(args.out, "rotate_sheet.jpg"), quality=85)
 
-    # [3] dynamic equivariance: replay rotated actions from the rotated initial state
-    o0 = r.reset(init, counterfactual=True)
-    nq = m.nq
-    st = np.array(r.env.get_sim_state(), dtype=np.float64)
-    qpos, qvel = st[1 : 1 + nq].copy(), st[1 + nq :].copy()
     c, s = np.cos(th), np.sin(th)
-    for a in r._mirror_obj_addrs:
-        qpos[a : a + 3] = rot_pos(qpos[a : a + 3], th)
-        q = np.zeros(4)
-        mujoco.mju_mulQuat(q, np.array([np.cos(th / 2), 0, 0, np.sin(th / 2)]), qpos[a + 3 : a + 7].copy())
-        qpos[a + 3 : a + 7] = q
-        va = int(m.jnt_dofadr[[j for j in range(m.njnt) if m.jnt_qposadr[j] == a][0]])
-        vx, vy = qvel[va], qvel[va + 1]
-        qvel[va], qvel[va + 1] = c * vx - s * vy, s * vx + c * vy  # linear velocity is world-frame; angular is local
-    qpos[r._mirror_arm_addrs[0]] += th
-    mst = np.concatenate([st[:1], qpos, qvel])
-    nominal = [o0] + [r.step(ch) for ch in chunks]
-    r.restore(mst, nominal[0]["t"], -1.0)
 
     def rot_act(ch):
         out = ch.copy()
         for i, j in ((0, 1), (3, 4)):
-            out[:, i], out[:, j] = c * ch[:, i] - s * ch[:, j], s * ch[:, i] + c * ch[:, j]
+            out[..., i], out[..., j] = c * ch[..., i] - s * ch[..., j], s * ch[..., i] + c * ch[..., j]
         return out
 
+    def rotated_restore(r, st, t0):
+        """Restore `st` in a world rotated by th (furniture moved in the model, kept for the rest of the episode)."""
+        robo = r.env.env
+        r.restore(st, t0, -1.0)  # rebuilds the simulator; the model is fresh
+        m, d = robo.sim.model._model, robo.sim.data._data
+        nq = m.nq
+        d.qpos[:], d.qvel[:] = st[1 : 1 + nq], st[1 + nq :]
+        addrs = []
+        for n in robo.objects_dict:
+            try:
+                a = robo.sim.model.get_joint_qpos_addr(f"{n}_joint0")
+            except Exception:
+                continue
+            addrs.append(int(a[0] if isinstance(a, (tuple, list, np.ndarray)) else a))
+        arm_q1 = int(robo.robots[0]._ref_joint_pos_indexes[0])
+        rotate_world(m, d, ctr, th, addrs, arm_q1, world_fixed_bodies(robo), qvel_too=True)
+        st2 = np.concatenate([st[:1], d.qpos.copy(), d.qvel.copy()])
+        robot = robo.robots[0]
+        robo.sim.set_state_from_flattened(st2)
+        robo.sim.forward()
+        robot.controller.update(force=True)
+        robot.controller.reset_goal()
+
+    # [3] random chunks from the rotated initial state
+    o0 = r.reset(init)
+    st = np.array(r.env.get_sim_state(), dtype=np.float64)
+    nominal = [o0] + [r.step(ch) for ch in chunks]
+    rotated_restore(r, st, nominal[0]["t"])
     rotated = [r.step(rot_act(ch)) for ch in chunks]
     errs = [float(np.linalg.norm(b["eef_pos"] - rot_pos(a["eef_pos"], th))) for a, b in zip(nominal[1:], rotated)]
     qerrs = [quat_dist(b["eef_quat"], quat_mul_xyzw(qz(th), a["eef_quat"])) for a, b in zip(nominal[1:], rotated)]
     print(f"[3] rotated replay: eef track error per chunk (mm) {np.round(np.array(errs) * 1000, 2).tolist()}")
     print(f"    orientation error per chunk (deg) {np.round(np.array(qerrs), 2).tolist()}")
     r.close()
-    rows = [np.concatenate([o["rgb"], o["rgb_cf"], o["wrist_rgb"], o["wrist_rgb_cf"]], axis=1) for o in cf[:4]]
-    Image.fromarray(np.concatenate(rows, axis=0)).save(os.path.join(args.out, "rotate_sheet.jpg"), quality=85)
     ok = d_state < 1e-9 and d_rgb == 0 and d_wrist == 0 and dp < 0.005 and dq < 2.0 and max(errs) < 0.02 and max(qerrs) < 3.0
+
+    # [4] whole logged successful episodes, nominal vs rotated replay
+    if args.steps:
+        import json
+
+        succ = {}
+        for line in open(os.path.join(args.steps, "episodes.jsonl")):
+            e = json.loads(line)
+            succ[(int(e["task_id"]), int(e["trial_id"]))] = bool(e["success"])
+        files = sorted(glob.glob(os.path.join(args.steps, "steps", "t*_n*.npz")),
+                       key=lambda f: (os.path.basename(f)[4:6], os.path.basename(f)[1:3]))
+        files = [f for f in files if succ.get((int(os.path.basename(f)[1:3]), int(os.path.basename(f)[5:7])))][: args.episodes]
+        res = []
+        for f in files:
+            z = np.load(f, allow_pickle=True)
+            task = int(os.path.basename(f)[1:3])
+            r, _ = make(task)
+            acts = postprocess_actions(z["actions"])
+            st0 = np.array(z["sim_state"][0], dtype=np.float64)
+            r.restore(st0, int(z["t"][0]), -1.0)
+            nom = any(r.step(a)["done"] for a in acts)
+            rotated_restore(r, st0, int(z["t"][0]))
+            rot = any(r.step(rot_act(a))["done"] for a in acts)
+            res.append((nom, rot))
+            r.close()
+        res = np.array(res)
+        print(f"[4] logged successes replayed open-loop: nominal {res[:, 0].sum()}/{len(res)}, rotated {res[:, 1].sum()}/{len(res)}")
+        ok = ok and res[:, 1].sum() >= 0.8 * res[:, 0].sum()
     print("CHECK_ROTATE_OK" if ok else "CHECK_ROTATE_FAILED")
 
 
