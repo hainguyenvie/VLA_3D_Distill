@@ -189,13 +189,15 @@ def check_post(args):
         m, d = robo.sim.model._model, robo.sim.data._data  # a reset rebuilds the simulator: fetch after it
         r._coshift_setup(robo)
         r._cs_z0 = float(z["sim_state"][0][1 + r._cs_target + 2])
+        # resting heights must come from the start of the episode, not from this (lifted) state
+        r._cs_carry = {n: (a, float(z["sim_state"][0][1 + a + 2])) for n, (a, _) in r._cs_carry.items()}
         sh = r._coshift_place_post(d)
         if sh is None:
             print(f"    {os.path.basename(f)}: {getattr(r, '_cs_why', '?')} (query {k})")
             r.close()
             continue
         d.qpos[:] = st[1 : 1 + m.nq]
-        for a in (r._cs_target, r._cs_others[r._cs_container]):
+        for a in (r._cs_held, r._cs_others[r._cs_container]):
             d.qpos[a : a + 2] += sh
         err = r._ik_shift(m, d, sh)
         st2 = st.copy()

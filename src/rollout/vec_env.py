@@ -356,7 +356,10 @@ class EnvRunner:
         self._cs_name, self._cs_body = names[0], robo.obj_body_id[names[0]]
         self._cs_target = qadr(names[0])
         self._cs_z0 = float(d.qpos[self._cs_target + 2]) if self._cs_target is not None else 0.0
-        self._cs_container = names[1] if len(names) > 1 else None
+        # objects the task carries (multi-object tasks carry several): free objects of interest before the container
+        self._cs_carry = {n: (qadr(n), float(d.qpos[qadr(n) + 2])) for n in names[:-1]
+                          if n in robo.obj_body_id and qadr(n) is not None}
+        self._cs_container = names[-1] if len(names) > 1 else None  # the place target is named last (Object, Spatial, Long)
         self._cs_others = {n: qadr(n) for n in robo.objects_dict if n != names[0] and n in robo.obj_body_id and qadr(n) is not None}
         self._cs_r = {n: radius(robo.obj_body_id[n]) for n in [names[0]] + list(self._cs_others)}
         # furniture standing on the table (not the table itself): a moved container must keep clear of it
@@ -575,15 +578,18 @@ class EnvRunner:
         no container / no free spot for it."""
         if self._cs_container not in self._cs_others:
             return None
-        ta, ca = self._cs_target, self._cs_others[self._cs_container]
-        held = (d.qpos[ta + 2] - self._cs_z0 > 0.02
-                and np.linalg.norm(d.qpos[ta : ta + 3] - d.site_xpos[self._cs_site]) < 0.12)
+        ca = self._cs_others[self._cs_container]
+        held = [a for a, z0 in self._cs_carry.values()
+                if d.qpos[a + 2] - z0 > 0.02 and np.linalg.norm(d.qpos[a : a + 3] - d.site_xpos[self._cs_site]) < 0.12]
         if not held:
             self._cs_why = "not held"
             return None
+        ta = self._cs_held = held[0]
         lo, hi = self.cfg["counterfactual"].get("coshift_post", COUNTERFACTUAL["coshift_post"])
         xy_c = d.qpos[ca : ca + 2].copy()
-        others = {n: d.qpos[a : a + 2].copy() for n, a in self._cs_others.items() if n != self._cs_container}
+        riders = self._riding_container(d, exclude=ta)
+        others = {n: d.qpos[a : a + 2].copy() for n, a in self._cs_others.items()
+                  if n != self._cs_container and a != ta and a not in riders}
         allxy = np.array([xy_c, d.qpos[ta : ta + 2]] + list(others.values()))
         # containers sit at the edge of the object area: let them go a little beyond it, and accept a small overlap of
         # bounding circles (they are conservative) with the objects standing on the table
@@ -599,6 +605,17 @@ class EnvRunner:
                 return new - xy_c
         self._cs_why = "no free spot"
         return None
+
+    def _riding_container(self, d, exclude=None) -> List[int]:
+        """qpos addresses of free objects already lying in / on the container (they move with it)."""
+        ca = self._cs_others[self._cs_container]
+        r_c, out = self._cs_r[self._cs_container], []
+        for n, a in self._cs_others.items():
+            if a in (ca, exclude, getattr(self, "_cs_held", None)):
+                continue
+            if np.linalg.norm(d.qpos[a : a + 2] - d.qpos[ca : ca + 2]) < 0.8 * r_c and d.qpos[a + 2] > d.qpos[ca + 2] - 0.01:
+                out.append(a)
+        return out
 
     def _relocate_view(self, robo, res, conv) -> Dict[str, Any]:
         """Frames with the container moved to a free spot (hand and held target unchanged), and the scripted placer's
@@ -617,10 +634,10 @@ class EnvRunner:
             if self.closed and self._cs_ok:
                 shift = self._coshift_place_post(d)
             if shift is not None:
-                ca = self._cs_others[self._cs_container]
-                d.qpos[ca : ca + 2] += shift
+                for a in self._riding_container(d) + [self._cs_others[self._cs_container]]:
+                    d.qpos[a : a + 2] += shift
                 mujoco.mj_kinematics(m, d)
-            ta, ca = self._cs_target, self._cs_others.get(self._cs_container)
+            ta, ca = getattr(self, "_cs_held", self._cs_target), self._cs_others.get(self._cs_container)
             eef = d.site_xpos[self._cs_site].copy()
             if shift is not None:
                 out["cf_label"] = placer_chunk(eef, d.qpos[ta : ta + 3].copy(), d.qpos[ca : ca + 3].copy()).astype(np.float32)
@@ -654,14 +671,14 @@ class EnvRunner:
                 sh = self._coshift_place_post(d) if phase in ("post", "both") else None
                 place = None if sh is None else (sh, None)
             shift, swap = place if place is not None else (np.zeros(2), None)
-            ta = self._cs_target
+            ta = self._cs_held if (post and place is not None) else self._cs_target
             if swap is not None:
                 a = self._cs_others[swap]
                 d.qpos[a : a + 2] = d.qpos[ta : ta + 2]
             d.qpos[ta : ta + 2] += shift
-            if post and place is not None:  # the container moves with the hand and the held target
-                ca = self._cs_others[self._cs_container]
-                d.qpos[ca : ca + 2] += shift
+            if post and place is not None:  # the container (and what already lies in it) moves with the hand and held target
+                for a in self._riding_container(d, exclude=ta) + [self._cs_others[self._cs_container]]:
+                    d.qpos[a : a + 2] += shift
             err = self._ik_shift(m, d, shift)
             mujoco.mj_kinematics(m, d)
             mujoco.mj_camlight(m, d)
