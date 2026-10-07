@@ -55,7 +55,7 @@ def mirror_quat(q_wxyz: np.ndarray) -> np.ndarray:
 # Counterfactual worlds for training rollouts (`LiberoVecEnv(counterfactual=...)`, switched on per reset): at every
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
-COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35))
+COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5)
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
@@ -63,6 +63,12 @@ COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35))
 # angle (|theta| in `theta`, radians, either sign) and so is the arm (q1 += theta); the camera, the table and the
 # robot base stay. The correct action is the nominal one rotated by theta (dx dy and rx ry), so the label is exact and
 # needs no symmetric scene, no renamed instruction and no knowledge of which object is the target.
+# mode "coshift": the target object and the robot's hand are moved together by the same horizontal vector (the hand by
+# inverse kinematics, keeping its orientation), to a free spot of the area the objects occupy or, with probability
+# `p_swap`, onto another object's spot (that object takes the target's). The hand-target geometry is unchanged, so
+# the nominal chunk is the correct action until it starts carrying the target (the training masks the rest); the
+# other objects and the container stay, so the target is somewhere else relative to everything the policy could have
+# memorised. Only pre-grasp queries are valid (`cf_valid`); needs the target's identity, nothing else.
 # mode "swap": the target object and another movable object (not the container) exchange their horizontal positions;
 # the counterfactual instruction names the object now standing where the target was (`cf_target_name`), so the
 # correct action is unchanged and known exactly (it is the action of the nominal world).
@@ -260,6 +266,46 @@ class EnvRunner:
                 getattr(m, k)[:] = v
         mujoco.mj_camlight(m, d)  # world poses of cameras and lights only; the physics state is not touched
 
+    def _coshift_setup(self, robo) -> None:
+        """Addresses for the coshift counterfactual: target and other free objects, arm joints, horizontal radii."""
+        m, d = robo.sim.model._model, robo.sim.data._data
+        names = getattr(robo, "obj_of_interest", None) or []
+        if not names or names[0] not in robo.obj_body_id:
+            return
+        robot = robo.robots[0]
+        jid = [robo.sim.model.joint_name2id(j) for j in robot.robot_joints]
+        self._cs_arm_q = np.array([m.jnt_qposadr[j] for j in jid])
+        self._cs_arm_v = np.array([m.jnt_dofadr[j] for j in jid])
+        self._cs_lo, self._cs_hi = m.jnt_range[jid, 0], m.jnt_range[jid, 1]
+        self._cs_site = robot.eef_site_id
+
+        def qadr(n):
+            try:
+                a = robo.sim.model.get_joint_qpos_addr(f"{n}_joint0")
+            except Exception:  # fixed object
+                return None
+            return int(a[0] if isinstance(a, (tuple, list, np.ndarray)) else a)
+
+        def radius(root):  # horizontal reach of the subtree's collision geoms around the root body's position
+            r = 0.0
+            for g in range(m.ngeom):
+                b = int(m.geom_bodyid[g])
+                if not (b == root or self._is_descendant(m, b, root)) or not (m.geom_contype[g] or m.geom_conaffinity[g]):
+                    continue
+                c, h = m.geom_aabb[g, :3], m.geom_aabb[g, 3:]
+                corners = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]) * h + c
+                w = corners @ d.geom_xmat[g].reshape(3, 3).T + d.geom_xpos[g]
+                r = max(r, float(np.linalg.norm(w[:, :2] - d.xpos[root][:2], axis=1).max()))
+            return r
+
+        self._cs_name, self._cs_body = names[0], robo.obj_body_id[names[0]]
+        self._cs_target = qadr(names[0])
+        self._cs_container = names[1] if len(names) > 1 else None
+        self._cs_others = {n: qadr(n) for n in robo.objects_dict if n != names[0] and n in robo.obj_body_id and qadr(n) is not None}
+        self._cs_r = {n: radius(robo.obj_body_id[n]) for n in [names[0]] + list(self._cs_others)}
+        if self._cs_target is not None:
+            self.cf = True
+
     def _counterfactual_view(self) -> Dict[str, Any]:
         """Frames of the same instant with the target object moved horizontally by a fresh random vector.
 
@@ -278,6 +324,8 @@ class EnvRunner:
         d = robo.sim.data._data
         if self.cfg["counterfactual"].get("mode") == "mirror":
             return self._mirror_view(robo, res, conv)
+        if self.cfg["counterfactual"].get("mode") == "coshift":
+            return self._coshift_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "rotate":
             lo, hi = self.cfg["counterfactual"].get("theta", COUNTERFACTUAL["theta"])
             return self._rotate_view(robo, res, conv, float(_PERT_RNG.choice([-1, 1]) * _PERT_RNG.uniform(lo, hi)))
@@ -315,7 +363,7 @@ class EnvRunner:
         return out
 
     _KIN = ("qpos", "xpos", "xquat", "xmat", "xipos", "ximat", "geom_xpos", "geom_xmat", "site_xpos", "site_xmat",
-            "cam_xpos", "cam_xmat", "light_xpos", "light_xdir")
+            "cam_xpos", "cam_xmat", "light_xpos", "light_xdir", "xanchor", "xaxis")
 
     def _mirror_view(self, robo, res, conv) -> Dict[str, Any]:
         """Frames of the reflected scene at this instant, and the proprio the robot has there. The simulator's
@@ -394,6 +442,98 @@ class EnvRunner:
         out["target_pos_cf"] = np.array([ctr[0] + c * x - s * y, ctr[1] + s * x + c * y, tp[2]], dtype=np.float32)
         out["cf_delta"] = (out["target_pos_cf"] - tp)[:2].astype(np.float32)
         out["cf_theta"] = np.float32(theta)
+        return out
+
+    _COM = ("subtree_com", "cdof", "cinert")  # also written by mj_comPos (needed for Jacobians)
+
+    def _ik_shift(self, m, d, dxy) -> float:
+        """Move the arm so that the end-effector site is displaced by (dx, dy, 0) with its orientation unchanged
+        (damped least squares on the arm joints, from the current configuration). Returns the remaining error
+        (metres + radians)."""
+        import mujoco
+
+        sid, qa, va = self._cs_site, self._cs_arm_q, self._cs_arm_v
+        mujoco.mj_kinematics(m, d)
+        mujoco.mj_comPos(m, d)
+        p_goal = d.site_xpos[sid] + np.array([dxy[0], dxy[1], 0.0])
+        R_goal = d.site_xmat[sid].reshape(3, 3).copy()
+        jacp, jacr = np.zeros((3, m.nv)), np.zeros((3, m.nv))
+        err = np.inf
+        for _ in range(100):
+            e_p = p_goal - d.site_xpos[sid]
+            R_err = R_goal @ d.site_xmat[sid].reshape(3, 3).T  # world-frame rotation still to do
+            q = np.zeros(4)
+            mujoco.mju_mat2Quat(q, R_err.reshape(-1))
+            e_r = np.zeros(3)
+            mujoco.mju_quat2Vel(e_r, q, 1.0)
+            err = float(np.linalg.norm(e_p) + np.linalg.norm(e_r))
+            if np.linalg.norm(e_p) < 2e-5 and np.linalg.norm(e_r) < 2e-4:
+                break
+            mujoco.mj_jacSite(m, d, jacp, jacr, sid)
+            J = np.vstack([jacp[:, va], jacr[:, va]])
+            e = np.concatenate([e_p, e_r])
+            dq = J.T @ np.linalg.solve(J @ J.T + 1e-4 * np.eye(6), e)
+            d.qpos[qa] = np.clip(d.qpos[qa] + dq, self._cs_lo, self._cs_hi)
+            mujoco.mj_kinematics(m, d)
+            mujoco.mj_comPos(m, d)
+        return err
+
+    def _coshift_place(self, d):
+        """Draw where the target goes: (shift of the target, other object that takes its spot or None), or None."""
+        cfg = self.cfg["counterfactual"]
+        lo, hi = cfg.get("coshift", COUNTERFACTUAL["coshift"])
+        ta = self._cs_target
+        xy_t = d.qpos[ta : ta + 2].copy()
+        others = {n: d.qpos[a : a + 2].copy() for n, a in self._cs_others.items()}
+        allxy = np.array([xy_t] + list(others.values()))
+        box_lo, box_hi = allxy.min(0) - 0.05, allxy.max(0) + 0.05  # the area the objects occupy now
+        movable = [n for n in others if n != self._cs_container]
+        for _ in range(40):
+            if movable and _PERT_RNG.random() < cfg.get("p_swap", 0.0):
+                y = movable[int(_PERT_RNG.integers(len(movable)))]
+                new, swap = others[y], y
+            else:
+                ang, mag = _PERT_RNG.uniform(0, 2 * np.pi), _PERT_RNG.uniform(lo, hi)
+                new, swap = xy_t + mag * np.array([np.cos(ang), np.sin(ang)]), None
+            dist = np.linalg.norm(new - xy_t)
+            if not (lo <= dist <= hi) or (new < box_lo).any() or (new > box_hi).any():
+                continue
+            clear = all(np.linalg.norm(new - (xy_t if n == swap else xy)) >= self._cs_r[self._cs_name] + self._cs_r[n] + 0.01
+                        for n, xy in others.items() if n != swap)
+            if clear:
+                return new - xy_t, swap
+        return None
+
+    def _coshift_view(self, robo, res, conv) -> Dict[str, Any]:
+        """Frames of the world in which the target and the hand moved together (see COUNTERFACTUAL), and the
+        proprio there; the simulator's arrays are restored exactly afterwards."""
+        global _PERT_RNG
+        if _PERT_RNG is None:
+            _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
+        import mujoco
+
+        m, d = robo.sim.model._model, robo.sim.data._data
+        saved = {k: getattr(d, k).copy() for k in self._KIN + self._COM}
+        out = {}
+        try:
+            place = None if self.closed else self._coshift_place(d)  # pre-grasp only
+            shift, swap = place if place is not None else (np.zeros(2), None)
+            ta = self._cs_target
+            if swap is not None:
+                a = self._cs_others[swap]
+                d.qpos[a : a + 2] = d.qpos[ta : ta + 2]
+            d.qpos[ta : ta + 2] += shift
+            err = self._ik_shift(m, d, shift)
+            mujoco.mj_kinematics(m, d)
+            mujoco.mj_camlight(m, d)
+            self._render_cf(robo, res, conv, out)
+            out["target_pos_cf"] = np.array(d.xpos[self._cs_body], dtype=np.float32)
+        finally:
+            for k, v in saved.items():
+                getattr(d, k)[:] = v
+        out["cf_delta"] = shift.astype(np.float32)
+        out["cf_valid"] = bool(place is not None and err < 1e-3)
+        out["cf_target_name"] = np.array(swap or "")  # the object that took the target's spot, if any
         return out
 
     @staticmethod
@@ -493,6 +633,8 @@ class EnvRunner:
                     continue
                 self._mirror_obj_addrs.append(int(a[0] if isinstance(a, (tuple, list, np.ndarray)) else a))
             self.cf = True
+        elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") == "coshift":
+            self._coshift_setup(robo)
         elif counterfactual and self.cfg.get("counterfactual"):
             names = getattr(robo, "obj_of_interest", None) or []
             if names and names[0] in robo.obj_body_id:

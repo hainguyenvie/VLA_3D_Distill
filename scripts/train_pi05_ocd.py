@@ -26,13 +26,17 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate"], default="swap",
+    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift"], default="swap",
                     help="swap: the target exchanges places with another object and the counterfactual instruction names "
                          "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
                          "target is displaced and the teacher labels the counterfactual world")
     ap.add_argument("--cf_delta", default="0.02,0.08", help="shift mode: displacement range of the target (metres)")
     ap.add_argument("--c7", type=float, default=0.7853981633974483, help="mirror mode: reflection centre of joint 7")
     ap.add_argument("--cf_theta", default="0.1,0.35", help="rotate mode: range of |rotation angle| (radians)")
+    ap.add_argument("--cf_coshift", default="0.08,0.3", help="coshift mode: range of the target's (and hand's) shift (metres)")
+    ap.add_argument("--p_swap", type=float, default=0.5, help="coshift mode: probability that the target takes another object's spot")
+    ap.add_argument("--coshift_margin", type=int, default=10,
+                    help="coshift mode: chunk steps kept after the chunk's first gripper-close command (the rest is masked)")
     ap.add_argument("--cf_max_query", type=int, default=0,
                     help="> 0: counterfactual pairs only on the first N queries of each episode (early-state intervention)")
     ap.add_argument("--lambda_cf", type=float, default=1.0)
@@ -60,7 +64,8 @@ def main():
     from src.rollout.vec_env import COUNTERFACTUAL, LiberoVecEnv
 
     cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")),
-                                          c7=args.c7, theta=tuple(float(x) for x in args.cf_theta.split(",")))
+                                          c7=args.c7, theta=tuple(float(x) for x in args.cf_theta.split(",")),
+                                          coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap)
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg)
 
     import torch
@@ -144,6 +149,16 @@ def main():
                 # how far the teacher itself is from equivariant: its own chunk in the transformed world vs the exact one
                 teacher_gap = float(np.abs(A["cf_teacher"] - exact).mean())
                 A["cf_teacher"] = exact
+            elif args.cf_mode == "coshift":
+                A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat")})
+                cf_ok[:] = cat("cf_valid").astype(bool) & ~A["closed_before"].astype(bool)
+                g = A["actions_teacher"][..., 6] * (student.act_std[6] + 1e-8) + student.act_mean[6]  # env convention, +1 close
+                first = np.where((g > 0).any(1), (g > 0).argmax(1), g.shape[1])
+                A["cf_mask"] = (np.arange(g.shape[1])[None] <= first[:, None] + args.coshift_margin).astype(np.float32)
+                ok = np.flatnonzero(cf_ok)  # the teacher's own chunk in the co-shifted world vs the exact one, on kept steps
+                diff = np.abs(A["cf_teacher"][ok] - A["actions_teacher"][ok]) * A["cf_mask"][ok][..., None]
+                teacher_gap = float(diff.sum() / max(A["cf_mask"][ok].sum() * 7, 1))
+                A["cf_teacher"] = A["actions_teacher"]  # hand-target geometry unchanged: the nominal chunk, until it carries
             elif args.cf_mode == "swap":
                 tgt, src = cat("cf_target_name"), cat("cf_source_name")
                 for k, d in enumerate(descs_all):  # pre-grasp states whose instruction names the target explicitly
@@ -186,8 +201,11 @@ def main():
                 v2 = student.velocity([A["rgb_cf"][k] for k in jc], [descs_cf[k] for k in jc], obs_list(A, jc, cf=True),
                                       te2 * n2 + (1 - te2) * a2, t2)
                 u2 = n2 - a2
-                loss = loss + ((v2 - u2) ** 2).mean()
-                lcf = (((v2 - v[sel]) - (u2 - u[sel])) ** 2).mean()
+                w = (torch.from_numpy(A["cf_mask"][jc]).to(student.device)[..., None] if "cf_mask" in A
+                     else torch.ones_like(u2[..., :1]))  # chunk steps for which the counterfactual label holds
+                wmean = lambda x: (x * w).sum() / (w.sum() * x.shape[-1])  # noqa: E731
+                loss = loss + wmean((v2 - u2) ** 2)
+                lcf = wmean(((v2 - v[sel]) - (u2 - u[sel])) ** 2)
                 loss = loss + args.lambda_cf * lcf
                 cf_losses.append(float(lcf))
             opt.zero_grad(set_to_none=True)
@@ -207,7 +225,7 @@ def main():
         if cf_losses:
             row["cf_loss"] = float(np.mean(cf_losses))
             row["cf_states"] = int(cf_ok[keep].sum())
-            if args.cf_mode in ("mirror", "rotate"):
+            if args.cf_mode in ("mirror", "rotate", "coshift"):
                 row["teacher_cf_gap"] = teacher_gap
             if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)
                 row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())
