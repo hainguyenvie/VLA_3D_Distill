@@ -814,6 +814,14 @@ Xoay / gộp kém base ở −0.25 (−8) nhưng hơn ở +0.25 (+4) → không 
 init của LIBERO-Plus đổi nhiều khớp, không chỉ khớp 1; lý do xoay giảm Robot (78, gộp 75) vẫn chưa rõ — cần phân loại
 lỗi trên chính ô Robot (eval có lưu state).
 
+**Chạy lại ô Robot init (60 tập, cùng 60 task, có lưu state, 07/10 18:10):** base s8 82 (lần trước 83), xoay s8 75 (78),
+coshift s8 **80 (90)**, gộp s8 **83 (75)**. Cùng adapter, cùng task mà lệch tới ±10: π0.5 lấy nhiễu theo hàng của batch
+(`fixed_noise`, hàng i chỉ phụ thuộc i), mà env nào nằm ở hàng nào phụ thuộc thứ tự env sẵn sàng → mỗi lần eval là một mẫu
+khác của policy ngẫu nhiên; với 60 tập, độ lệch chuẩn nhị thức ~5 điểm. Phân loại lỗi (11–15 tập hỏng mỗi model) không
+có kiểu lỗi riêng cho xoay. **Kết luận: các chênh lệch trên Plus Robot / Layout ở 60 tập (coshift +7, xoay −5) nằm trong
+nhiễu; không dùng làm kết luận.** Muốn khẳng định cần ≥ 240 tập mỗi model. Các ô PRO (200 tập) cũng chịu nhiễu kiểu này
+(~±3 điểm), nhỏ hơn các chênh lệch chính (position +8–10 qua 2–3 seed và 4 checkpoint).
+
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
 Lo ngại: gain có phụ thuộc đặc thù dữ liệu không? Kế hoạch:
