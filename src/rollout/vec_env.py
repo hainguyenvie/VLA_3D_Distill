@@ -121,6 +121,8 @@ COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshi
 # object stay), so the hand-to-goal relation changes; the label is the chunk of a privileged scripted placer that knows
 # where the container is (src/rollout/scripted.py), returned as `cf_label` (env convention). The only counterfactual
 # here whose correct action differs from a transformed nominal one.
+# mode "coreloc": "coshift" before the grasp (hand + target moved, nominal label) and "relocate" while carrying (container
+# moved, scripted-placer label `cf_label`).
 # mode "mix": at every query one of "rotate" and "coshift" (probability `p_coshift` for coshift, which falls back to
 # rotate after the grasp or when no placement is found); `cf_kind` says which (0 rotate, 1 coshift).
 # mode "swap": the target object and another movable object (not the container) exchange their horizontal positions;
@@ -390,6 +392,20 @@ class EnvRunner:
             return self._coshift_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "relocate":
             return self._relocate_view(robo, res, conv)
+        if self.cfg["counterfactual"].get("mode") == "coreloc":  # coshift before the grasp, relocate while carrying
+            robot = robo.robots[0]
+            if not self.closed:
+                out = self._coshift_view(robo, res, conv)
+                out["cf_label"] = np.zeros((50, 7), dtype=np.float32)
+            else:
+                out = self._relocate_view(robo, res, conv)
+                d = robo.sim.data._data
+                out["cf_eef_pos"] = np.array(d.site_xpos[robot.eef_site_id], dtype=np.float32)  # the hand does not move
+                w, x, y, z = d.xquat[robo.sim.model.body_name2id(robot.robot_model.eef_name)]
+                out["cf_eef_quat"] = np.array([x, y, z, w], dtype=np.float32)
+                out["cf_target_name"], out["cf_post"] = np.array(""), True
+                out["target_pos_cf"] = _target_pos(robo)
+            return out
         if self.cfg["counterfactual"].get("mode") == "mix":
             if self._cs_ok and _PERT_RNG.random() < self.cfg["counterfactual"].get("p_coshift", 0.5) and not self.closed:
                 out = self._coshift_view(robo, res, conv)
@@ -801,7 +817,7 @@ class EnvRunner:
                     continue
                 self._mirror_obj_addrs.append(int(a[0] if isinstance(a, (tuple, list, np.ndarray)) else a))
             self.cf = True
-        elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("coshift", "relocate"):
+        elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("coshift", "relocate", "coreloc"):
             self._coshift_setup(robo)
         elif counterfactual and self.cfg.get("counterfactual"):
             names = getattr(robo, "obj_of_interest", None) or []

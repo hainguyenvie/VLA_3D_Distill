@@ -26,7 +26,7 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix", "relocate"], default="swap",
+    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix", "relocate", "coreloc"], default="swap",
                     help="swap: the target exchanges places with another object and the counterfactual instruction names "
                          "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
                          "target is displaced and the teacher labels the counterfactual world")
@@ -177,6 +177,22 @@ def main():
                 # how far the teacher itself is from equivariant: its own chunk in the transformed world vs the exact one
                 teacher_gap = float(np.abs(A["cf_teacher"] - exact).mean())
                 A["cf_teacher"] = exact
+            elif args.cf_mode == "coreloc":  # before the grasp: coshift (nominal chunk, masked); while carrying: relocate
+                A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat")})
+                cf_ok[:] = cat("cf_valid").astype(bool)
+                post = A["closed_before"].astype(bool)
+                lab = cat("cf_label").astype(np.float64)
+                exact = A["actions_teacher"].copy()
+                exact[post] = ((lab[post] - student.act_mean) / (student.act_std + 1e-8)).astype(np.float32)
+                g = A["actions_teacher"][..., 6] * (student.act_std[6] + 1e-8) + student.act_mean[6]
+                first = np.where((g > 0).any(1), (g > 0).argmax(1), g.shape[1])
+                mask = (np.arange(g.shape[1])[None] <= first[:, None] + args.coshift_margin).astype(np.float32)
+                mask[post] = 1.0
+                A["cf_mask"] = mask
+                ok = np.flatnonzero(cf_ok)
+                teacher_gap = float((np.abs(A["cf_teacher"][ok] - exact[ok]) * mask[ok][..., None]).sum()
+                                    / max(mask[ok].sum() * 7, 1))
+                A["cf_teacher"] = exact
             elif args.cf_mode == "relocate":  # container moved while carrying; label = scripted placer (env convention)
                 cf_ok[:] = cat("cf_valid").astype(bool)
                 lab = cat("cf_label").astype(np.float64)
@@ -277,7 +293,7 @@ def main():
         if cf_losses:
             row["cf_loss"] = float(np.mean(cf_losses))
             row["cf_states"] = int(cf_ok[keep].sum())
-            if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate"):
+            if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate", "coreloc"):
                 row["teacher_cf_gap"] = teacher_gap
             if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)
                 row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())
