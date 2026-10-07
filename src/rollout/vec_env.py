@@ -55,10 +55,14 @@ def mirror_quat(q_wxyz: np.ndarray) -> np.ndarray:
 # Counterfactual worlds for training rollouts (`LiberoVecEnv(counterfactual=...)`, switched on per reset): at every
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
-COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08))
+COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35))
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
+# mode "rotate": every movable object is rotated about the vertical axis of the robot's first joint by a fresh random
+# angle (|theta| in `theta`, radians, either sign) and so is the arm (q1 += theta); the camera, the table and the
+# robot base stay. The correct action is the nominal one rotated by theta (dx dy and rx ry), so the label is exact and
+# needs no symmetric scene, no renamed instruction and no knowledge of which object is the target.
 # mode "swap": the target object and another movable object (not the container) exchange their horizontal positions;
 # the counterfactual instruction names the object now standing where the target was (`cf_target_name`), so the
 # correct action is unchanged and known exactly (it is the action of the nominal world).
@@ -274,6 +278,9 @@ class EnvRunner:
         d = robo.sim.data._data
         if self.cfg["counterfactual"].get("mode") == "mirror":
             return self._mirror_view(robo, res, conv)
+        if self.cfg["counterfactual"].get("mode") == "rotate":
+            lo, hi = self.cfg["counterfactual"].get("theta", COUNTERFACTUAL["theta"])
+            return self._rotate_view(robo, res, conv, float(_PERT_RNG.choice([-1, 1]) * _PERT_RNG.uniform(lo, hi)))
         moves = []  # (ids of a subtree, horizontal shift)
         out = {}
         if self.cfg["counterfactual"].get("mode", "shift") == "swap" and self._cf_others:
@@ -343,6 +350,50 @@ class EnvRunner:
                 getattr(d, k)[:] = v
         out["cf_delta"] = np.zeros(2, dtype=np.float32)
         out["target_pos_cf"] = _target_pos(robo) * np.array([1, -1, 1], dtype=np.float32) + np.array([0, 2 * y0, 0], dtype=np.float32)
+        return out
+
+    def _render_cf(self, robo, res, conv, out) -> None:
+        """Render the (already posed) counterfactual world and read the end effector's pose there."""
+        d = robo.sim.data._data
+        for cam, key in (("agentview", "rgb_cf"), ("robot0_eye_in_hand", "wrist_rgb_cf")):
+            if cam == "robot0_eye_in_hand" and not self.cfg.get("wrist"):
+                continue
+            img = robo.sim.render(camera_name=cam, width=res, height=res, depth=False)
+            out[key] = np.ascontiguousarray(img[::conv][::-1, ::-1])
+        robot = robo.robots[0]
+        out["cf_eef_pos"] = np.array(d.site_xpos[robot.eef_site_id], dtype=np.float32)
+        w, x, y, z = d.xquat[robo.sim.model.body_name2id(robot.robot_model.eef_name)]
+        out["cf_eef_quat"] = np.array([x, y, z, w], dtype=np.float32)  # xyzw, as robosuite reports it
+
+    def _rotate_view(self, robo, res, conv, theta: float) -> Dict[str, Any]:
+        """Frames of the scene rotated by `theta` about the first joint's vertical axis (movable objects and arm), and
+        the proprio the robot has there; the simulator's arrays are restored exactly afterwards."""
+        import mujoco
+
+        m, d = robo.sim.model._model, robo.sim.data._data
+        saved = {k: getattr(d, k).copy() for k in self._KIN}
+        c, s, ctr = np.cos(theta), np.sin(theta), self._rot_center
+        qz = np.array([np.cos(theta / 2), 0.0, 0.0, np.sin(theta / 2)])
+        out = {}
+        try:
+            for a in self._mirror_obj_addrs:  # free joints: x y z, then quaternion w x y z
+                x, y = d.qpos[a] - ctr[0], d.qpos[a + 1] - ctr[1]
+                d.qpos[a], d.qpos[a + 1] = ctr[0] + c * x - s * y, ctr[1] + s * x + c * y
+                q = np.zeros(4)
+                mujoco.mju_mulQuat(q, qz, d.qpos[a + 3 : a + 7].copy())
+                d.qpos[a + 3 : a + 7] = q
+            d.qpos[self._mirror_arm_addrs[0]] += theta
+            mujoco.mj_kinematics(m, d)
+            mujoco.mj_camlight(m, d)
+            self._render_cf(robo, res, conv, out)
+        finally:
+            for k, v in saved.items():
+                getattr(d, k)[:] = v
+        tp = _target_pos(robo)
+        x, y = tp[0] - ctr[0], tp[1] - ctr[1]
+        out["target_pos_cf"] = np.array([ctr[0] + c * x - s * y, ctr[1] + s * x + c * y, tp[2]], dtype=np.float32)
+        out["cf_delta"] = (out["target_pos_cf"] - tp)[:2].astype(np.float32)
+        out["cf_theta"] = np.float32(theta)
         return out
 
     @staticmethod
@@ -428,9 +479,11 @@ class EnvRunner:
             self._start_perturbation(perturb)
         elif perturb and self.cfg.get("perturb"):
             self._start_perturbation()
-        if counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") == "mirror":
+        if counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("mirror", "rotate"):
             robot = robo.robots[0]
             self._mirror_y0 = float(robo.sim.data._data.xpos[robo.sim.model.body_name2id(robot.robot_model.root_body)][1])
+            j1 = robo.sim.model.joint_name2id(robot.robot_joints[0])
+            self._rot_center = np.array(robo.sim.data._data.xanchor[j1][:2], dtype=np.float64)  # first joint's axis
             self._mirror_arm_addrs = [int(a) for a in robot._ref_joint_pos_indexes]
             self._mirror_obj_addrs = []
             for n in robo.objects_dict:

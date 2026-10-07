@@ -103,6 +103,16 @@ class Pi05Policy:
         a = a * np.array([1, -1, 1, -1, 1, -1, 1], dtype=a.dtype)
         return ((a - self.act_mean) / (self.act_std + 1e-8)).astype(np.float32)
 
+    def rotate_norm(self, a_norm: np.ndarray, theta: np.ndarray) -> np.ndarray:
+        """Rotate normalised chunks (B, T, 7) about the vertical axis by `theta` (B,): un-normalise, rotate (dx, dy) and
+        (rx, ry) (world-frame deltas), normalise."""
+        a = a_norm * (self.act_std + 1e-8) + self.act_mean
+        c, s = np.cos(theta)[:, None], np.sin(theta)[:, None]
+        r = a.copy()
+        for i, j in ((0, 1), (3, 4)):
+            r[..., i], r[..., j] = c * a[..., i] - s * a[..., j], s * a[..., i] + c * a[..., j]
+        return ((r - self.act_mean) / (self.act_std + 1e-8)).astype(np.float32)
+
     def velocity(self, images, task_descriptions, obs, x_t: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
         """Flow velocity v(o, x_t, t) of the action expert (B, 50, 7); differentiable (the training forward of
         PI05Pytorch.forward without its loss). x_t: (B, 50, 7) normalised noisy chunk; time: (B,)."""

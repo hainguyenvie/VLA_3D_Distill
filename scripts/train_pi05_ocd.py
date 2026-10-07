@@ -26,12 +26,13 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror"], default="swap",
+    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate"], default="swap",
                     help="swap: the target exchanges places with another object and the counterfactual instruction names "
                          "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
                          "target is displaced and the teacher labels the counterfactual world")
     ap.add_argument("--cf_delta", default="0.02,0.08", help="shift mode: displacement range of the target (metres)")
     ap.add_argument("--c7", type=float, default=0.7853981633974483, help="mirror mode: reflection centre of joint 7")
+    ap.add_argument("--cf_theta", default="0.1,0.35", help="rotate mode: range of |rotation angle| (radians)")
     ap.add_argument("--cf_max_query", type=int, default=0,
                     help="> 0: counterfactual pairs only on the first N queries of each episode (early-state intervention)")
     ap.add_argument("--lambda_cf", type=float, default=1.0)
@@ -59,7 +60,7 @@ def main():
     from src.rollout.vec_env import COUNTERFACTUAL, LiberoVecEnv
 
     cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")),
-                                          c7=args.c7)
+                                          c7=args.c7, theta=tuple(float(x) for x in args.cf_theta.split(",")))
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg)
 
     import torch
@@ -135,10 +136,14 @@ def main():
         if not args.no_cf:
             A.update({k: cat(k) for k in ("rgb_cf", "wrist_rgb_cf", "cf_teacher", "closed_before")})
             phrase = lambda n: str(n).rsplit("_", 1)[0].replace("_", " ")  # "alphabet_soup_1" -> "alphabet soup"  # noqa: E731
-            if args.cf_mode == "mirror":
+            if args.cf_mode in ("mirror", "rotate"):
                 A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat")})
-                cf_ok[:] = True  # the reflected scene is a valid world at every state
-                A["cf_teacher"] = student.mirror_norm(A["actions_teacher"])
+                cf_ok[:] = True  # the transformed scene is a valid world at every state
+                exact = (student.mirror_norm(A["actions_teacher"]) if args.cf_mode == "mirror"
+                         else student.rotate_norm(A["actions_teacher"], cat("cf_theta").astype(np.float64)))
+                # how far the teacher itself is from equivariant: its own chunk in the transformed world vs the exact one
+                teacher_gap = float(np.abs(A["cf_teacher"] - exact).mean())
+                A["cf_teacher"] = exact
             elif args.cf_mode == "swap":
                 tgt, src = cat("cf_target_name"), cat("cf_source_name")
                 for k, d in enumerate(descs_all):  # pre-grasp states whose instruction names the target explicitly
@@ -202,6 +207,8 @@ def main():
         if cf_losses:
             row["cf_loss"] = float(np.mean(cf_losses))
             row["cf_states"] = int(cf_ok[keep].sum())
+            if args.cf_mode in ("mirror", "rotate"):
+                row["teacher_cf_gap"] = teacher_gap
             if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)
                 row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())
         student.save_lora(last)
