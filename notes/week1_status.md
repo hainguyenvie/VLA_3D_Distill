@@ -793,6 +793,20 @@ nhãn cho những thế giới mà quan hệ tay–đích đổi: teacher π0.5 
 đặc quyền (biết vị trí đĩa) cho pha mang / đặt — bộ điều khiển kịch bản hoặc lập kế hoạch đi tới vị trí đĩa mới, như cách
 ECT dùng replay controller cho quỹ đạo đã biến đổi.
 
+**Phản thực "dời nơi đặt" (relocate) + teacher kịch bản có đặc quyền** (07/10 tối, `src/rollout/scripted.py`):
+- Khi đang mang vật (vật được cầm), chỉ dời nơi đặt (đĩa / giỏ) tới chỗ trống — tránh vật khác và đồ cố định (tủ, bếp);
+  tay và vật đang cầm giữ nguyên → **quan hệ tay–đích đổi thật**. Nhãn = chunk của bộ điều khiển kịch bản biết vị trí đĩa
+  (mang ở độ cao +15 cm trên đĩa, hạ xuống, thả khi vật cách mặt đĩa < 4.5 cm), sinh trên mô hình động học của OSC
+  (dịch chuyển mỗi bước ≈ g · a · 5 cm, g = 0.19 / 0.25 / 0.13 cho x / y / z, khớp từ log π0.5).
+- Cổng (`check_scripted_place.py`, 20 tập thành công, đĩa dời 10–40 cm): bộ điều khiển chạy vòng kín 19/20 (đĩa không dời
+  19/20); chạy theo chunk như student sẽ học (10 bước của chunk 50 bước, rồi lập lại) **18/20**. (Lần đầu 8/20: đĩa bị dời
+  vào chỗ tủ / bếp — đã thêm điều kiện tránh đồ cố định.)
+- Chạy thử: ~11% state có cặp; độ lệch giữa chunk của π0.5 và nhãn trong thế giới dời đĩa **0.70** (cao nhất từ trước tới
+  giờ — π0.5 vẫn đi tới chỗ đĩa cũ).
+- Đợt 12 (đang chạy): relocate trên Spatial s7, s8, lambda nhất quán 0 (nhãn không phải biến đổi của chunk gốc).
+- Lưu ý cho paper: đây là teacher có đặc quyền dạng kịch bản cho một pha của task — khác về bản chất với các phản thực nhãn
+  chính xác ở trên; cần nói rõ.
+
 ## Đối chứng augmentation ảnh 2D thông thường (đợt 9, Object; trả lời "có phải chỉ là augmentation?")
 
 Base (distill, không phản thực) + augmentation openpi (cắt 95% + resize, xoay ±5° ảnh agent view, đổi màu cả hai view),
