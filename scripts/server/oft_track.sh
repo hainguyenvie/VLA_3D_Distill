@@ -10,13 +10,20 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/env.sh"
 cd "$W"
 SEED="$1"; ARM="$2"
-CKPT="$W/checkpoints/moojink__openvla-7b-oft-finetuned-libero-object"
+# SUITE=libero_spatial|libero_object|libero_goal|libero_10 (default object); openvla-oft horizons 220 / 280 / 300 / 520
+SUITE="${SUITE:-libero_object}"
+case "$SUITE" in
+  libero_spatial) SHORT=spatial; STEPS=220 ;; libero_object) SHORT=object; STEPS=280 ;;
+  libero_goal) SHORT=goal; STEPS=300 ;; libero_10) SHORT=10; STEPS=520 ;; *) log "unknown suite $SUITE"; exit 1 ;;
+esac
+CKPT="$W/checkpoints/moojink__openvla-7b-oft-finetuned-libero-$SHORT"
+TAG=""; [ "$SUITE" = libero_object ] || TAG="${SHORT}_"
 case "$ARM" in
-  a1) NAME="oft_a1_clean_s$SEED"; EXTRA="" ;;
-  a2) NAME="oft_a2_viewaug_s$SEED"; EXTRA="--view_aug" ;;
+  a1) NAME="oft_${TAG}a1_clean_s$SEED"; EXTRA="" ;;
+  a2) NAME="oft_${TAG}a2_viewaug_s$SEED"; EXTRA="--view_aug" ;;
   *) log "unknown arm $ARM"; exit 1 ;;
 esac
-COMMON="--ckpt $CKPT --suite libero_object --state_source mixed --max_steps 280 --batch_size 8 --grad_accum 1 --lr ${LR:-1e-4} --lr_min ${LR_MIN:-1e-5} --grad_checkpointing --eval_trials 10 --seed $SEED --num_envs ${NUM_ENVS:-5} $EXTRA"
+COMMON="--ckpt $CKPT --suite $SUITE --state_source mixed --max_steps $STEPS --batch_size 8 --grad_accum 1 --lr ${LR:-1e-4} --lr_min ${LR_MIN:-1e-5} --grad_checkpointing --eval_trials 10 --seed $SEED --num_envs ${NUM_ENVS:-5} $EXTRA"
 if [ "${SMOKE:-0}" = 1 ]; then
   bash "$HERE/run_py.sh" "${GPU:-0}" scripts/train_oft_distill.py --out "outputs/week1/smoke_$NAME" $COMMON --iters 1 --states_per_iter 48 \
     --episodes_per_batch 3 --eval_every 0 > "logs/smoke_$NAME.log" 2>&1 || { log "SMOKE_FAILED $NAME"; exit 1; }
