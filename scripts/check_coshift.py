@@ -77,7 +77,7 @@ def main():
     # the logged chunk must move the hand as it does in the nominal world. Secondary: open-loop replay of the whole
     # episode from the co-shifted first state (no re-planning, errors accumulate), does the target still get lifted?
     files = sorted(glob.glob(os.path.join(args.steps, "steps", "t*_n*.npz")),  # one episode of every task, then the next
-                   key=lambda f: (os.path.basename(f)[4:6], os.path.basename(f)[1:3]))
+                   key=lambda f: (os.path.basename(f)[5:7], os.path.basename(f)[1:3]))
     V._PERT_RNG = np.random.default_rng(1)
     lifted, chunk_err, n = [], [], 0
 
@@ -159,7 +159,7 @@ def check_post(args):
         e = json.loads(line)
         succ[(int(e["task_id"]), int(e["trial_id"]))] = bool(e["success"])
     files = sorted(glob.glob(os.path.join(args.steps, "steps", "t*_n*.npz")),
-                   key=lambda f: (os.path.basename(f)[4:6], os.path.basename(f)[1:3]))
+                   key=lambda f: (os.path.basename(f)[5:7], os.path.basename(f)[1:3]))
     files = [f for f in files if succ.get((int(os.path.basename(f)[1:3]), int(os.path.basename(f)[5:7])))]
     V._PERT_RNG = np.random.default_rng(2)
     res, n = [], 0

@@ -26,7 +26,7 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix"], default="swap",
+    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix", "relocate"], default="swap",
                     help="swap: the target exchanges places with another object and the counterfactual instruction names "
                          "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
                          "target is displaced and the teacher labels the counterfactual world")
@@ -177,6 +177,13 @@ def main():
                 # how far the teacher itself is from equivariant: its own chunk in the transformed world vs the exact one
                 teacher_gap = float(np.abs(A["cf_teacher"] - exact).mean())
                 A["cf_teacher"] = exact
+            elif args.cf_mode == "relocate":  # container moved while carrying; label = scripted placer (env convention)
+                cf_ok[:] = cat("cf_valid").astype(bool)
+                lab = cat("cf_label").astype(np.float64)
+                norm = ((lab - student.act_mean) / (student.act_std + 1e-8)).astype(np.float32)
+                ok = np.flatnonzero(cf_ok)
+                teacher_gap = float(np.abs(A["cf_teacher"][ok] - norm[ok]).mean()) if len(ok) else 0.0
+                A["cf_teacher"] = norm
             elif args.cf_mode == "mix":  # per query: rotate (kind 0) or coshift (kind 1)
                 A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat")})
                 kind = cat("cf_kind").astype(int)
@@ -270,7 +277,7 @@ def main():
         if cf_losses:
             row["cf_loss"] = float(np.mean(cf_losses))
             row["cf_states"] = int(cf_ok[keep].sum())
-            if args.cf_mode in ("mirror", "rotate", "coshift", "mix"):
+            if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate"):
                 row["teacher_cf_gap"] = teacher_gap
             if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)
                 row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())

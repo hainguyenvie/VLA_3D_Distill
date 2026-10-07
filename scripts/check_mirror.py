@@ -261,7 +261,7 @@ def check_rotate(args):
             e = json.loads(line)
             succ[(int(e["task_id"]), int(e["trial_id"]))] = bool(e["success"])
         files = sorted(glob.glob(os.path.join(args.steps, "steps", "t*_n*.npz")),
-                       key=lambda f: (os.path.basename(f)[4:6], os.path.basename(f)[1:3]))
+                       key=lambda f: (os.path.basename(f)[5:7], os.path.basename(f)[1:3]))
         files = [f for f in files if succ.get((int(os.path.basename(f)[1:3]), int(os.path.basename(f)[5:7])))][: args.episodes]
         res = []
         for f in files:
