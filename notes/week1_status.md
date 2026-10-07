@@ -807,6 +807,14 @@ ECT dùng replay controller cho quỹ đạo đã biến đổi.
 - Lưu ý cho paper: đây là teacher có đặc quyền dạng kịch bản cho một pha của task — khác về bản chất với các phản thực nhãn
   chính xác ở trên; cần nói rõ.
 
+**Kết quả sớm (vòng 8, ô swap Spatial, 200 tập; base s7 42.0, π0.5 gốc 42.0, xoay 39.5, coshift 37.0, coshift sau kẹp
+40.0): relocate s7 **62.0**, s8 **56.0** (+14 / +20).** Cảnh chuẩn khi train: 1.0 ở vòng 8. Theo task (π0.5 → relocate s7):
+t1 0.30 → 0.55, t4 0.40 → 0.55, t5 0.60 → 0.95, t6 0 → 0.10, **t7 0 → 0.80**, t9 0 → 0.25 — đúng các task hỏng vì đặt bát
+vào chỗ đĩa quen. Đây là bằng chứng đầu tiên cho chẩn đoán "phải đổi quan hệ tay–đích mới dạy được suy ra đích".
+
+**Seed 9 (Object, đợt 11):** base swap 20.0 / position 13.5; augmentation swap 24.5 / position 15.0. Ba seed: base swap
+18.7, position 12.2; augmentation swap 24.2, position 13.0.
+
 ## Đối chứng augmentation ảnh 2D thông thường (đợt 9, Object; trả lời "có phải chỉ là augmentation?")
 
 Base (distill, không phản thực) + augmentation openpi (cắt 95% + resize, xoay ±5° ảnh agent view, đổi màu cả hai view),
