@@ -546,6 +546,9 @@ và distill on-policy không phản thực; đánh giá trên Object, năm ô LI
 A2 − A1 = **+13.1** trên LIBERO-Plus, cảnh chuẩn không đổi; A1 ≈ OFT gốc nên mức tăng không đến từ việc fine-tune.
 Vượt Spatial Forcing (71.9) và OFT train trên 20k demo nhiễu (79.5, công bố, 4 suite). Một seed.
 
+**Seed 8 (07/10):** A1 97.0 / **68.6** (Camera 43, Robot 25, Light 83, Sensor 68); A2 98.4 / **84.3** (Camera 98, Robot 30,
+Light 98, Sensor 100) → **+15.7**. Hai seed: A1 68.7, A2 **83.1**, chênh **+14.4** (13.1 / 15.7), cảnh chuẩn 97.0 / 97.7.
+
 **Nhánh π0.5 (adapter vòng 20, 200 episode mỗi ô LIBERO-PRO; Robot / Layout của LIBERO-Plus 120 task):**
 
 | | Object | PRO swap | PRO position | PRO object | PRO lan | PRO task | Plus Robot / Layout |

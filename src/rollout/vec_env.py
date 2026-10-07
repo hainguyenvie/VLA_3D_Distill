@@ -98,7 +98,8 @@ def world_fixed_bodies(robo) -> List[int]:
 # Counterfactual worlds for training rollouts (`LiberoVecEnv(counterfactual=...)`, switched on per reset): at every
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
-COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5)
+COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5,
+                      p_coshift=0.5)
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
@@ -112,6 +113,8 @@ COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshi
 # the nominal chunk is the correct action until it starts carrying the target (the training masks the rest); the
 # other objects and the container stay, so the target is somewhere else relative to everything the policy could have
 # memorised. Only pre-grasp queries are valid (`cf_valid`); needs the target's identity, nothing else.
+# mode "mix": at every query one of "rotate" and "coshift" (probability `p_coshift` for coshift, which falls back to
+# rotate after the grasp or when no placement is found); `cf_kind` says which (0 rotate, 1 coshift).
 # mode "swap": the target object and another movable object (not the container) exchange their horizontal positions;
 # the counterfactual instruction names the object now standing where the target was (`cf_target_name`), so the
 # correct action is unchanged and known exactly (it is the action of the nominal world).
@@ -313,6 +316,7 @@ class EnvRunner:
         """Addresses for the coshift counterfactual: target and other free objects, arm joints, horizontal radii."""
         m, d = robo.sim.model._model, robo.sim.data._data
         names = getattr(robo, "obj_of_interest", None) or []
+        self._cs_ok = False
         if not names or names[0] not in robo.obj_body_id:
             return
         robot = robo.robots[0]
@@ -347,7 +351,7 @@ class EnvRunner:
         self._cs_others = {n: qadr(n) for n in robo.objects_dict if n != names[0] and n in robo.obj_body_id and qadr(n) is not None}
         self._cs_r = {n: radius(robo.obj_body_id[n]) for n in [names[0]] + list(self._cs_others)}
         if self._cs_target is not None:
-            self.cf = True
+            self.cf, self._cs_ok = True, True
 
     def _counterfactual_view(self) -> Dict[str, Any]:
         """Frames of the same instant with the target object moved horizontally by a fresh random vector.
@@ -369,6 +373,14 @@ class EnvRunner:
             return self._mirror_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "coshift":
             return self._coshift_view(robo, res, conv)
+        if self.cfg["counterfactual"].get("mode") == "mix":
+            if self._cs_ok and _PERT_RNG.random() < self.cfg["counterfactual"].get("p_coshift", 0.5) and not self.closed:
+                out = self._coshift_view(robo, res, conv)
+                if out["cf_valid"]:
+                    return dict(out, cf_theta=np.float32(0.0), cf_kind=np.int8(1))
+            lo, hi = self.cfg["counterfactual"].get("theta", COUNTERFACTUAL["theta"])
+            out = self._rotate_view(robo, res, conv, float(_PERT_RNG.choice([-1, 1]) * _PERT_RNG.uniform(lo, hi)))
+            return dict(out, cf_valid=True, cf_target_name=np.array(""), cf_kind=np.int8(0))
         if self.cfg["counterfactual"].get("mode") == "rotate":
             lo, hi = self.cfg["counterfactual"].get("theta", COUNTERFACTUAL["theta"])
             return self._rotate_view(robo, res, conv, float(_PERT_RNG.choice([-1, 1]) * _PERT_RNG.uniform(lo, hi)))
@@ -659,7 +671,9 @@ class EnvRunner:
             self._start_perturbation(perturb)
         elif perturb and self.cfg.get("perturb"):
             self._start_perturbation()
-        if counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("mirror", "rotate"):
+        if counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") == "mix":
+            self._coshift_setup(robo)  # sets self.cf only when the task has a movable target; rotate works regardless
+        if counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("mirror", "rotate", "mix"):
             robot = robo.robots[0]
             self._mirror_y0 = float(robo.sim.data._data.xpos[robo.sim.model.body_name2id(robot.robot_model.root_body)][1])
             j1 = robo.sim.model.joint_name2id(robot.robot_joints[0])
