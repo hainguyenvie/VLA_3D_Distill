@@ -245,3 +245,16 @@ Hệ quả: (1) "Robot-init chưa ai lấy được" chỉ đúng trong họ OFT
 "vượt SOTA" trên LIBERO-Plus phải so với 90+, ngoài tầm của OFT 7B một camera / hai camera. (3) Chỗ chưa ai làm: cặp
 phản thực dựng **trên state on-policy** (nơi failure được quyết định, theo takeover) với nhãn teacher, và cho post-training
 của một checkpoint có sẵn; ECT làm trên demo, VLA-OPD on-policy nhưng không phản thực.
+
+## 10. Bổ sung 07/10: đối thủ trên LIBERO-PRO / phản thực ngôn ngữ (chưa đọc kỹ, [S] = chỉ từ kết quả tìm kiếm)
+
+- **Anchor-Align** (model card trên HF): 22.6% ở "LIBERO-PRO position swap"; OpenVLA-OFT 0.0%, trung bình các trục
+  56.5% [S]. Chưa rõ bộ nào / protocol nào.
+- **CounterAlign (2608.21740)**: giám sát phản thực cho VLA [S]. **CofactVLA (2608.04396)**: khử nhiễu (deconfound) VLA
+  bằng can thiệp phản thực [S]. **LIBERO-CF / CAG (2602.17659)**: benchmark phản thực ngôn ngữ trên bố cục LIBERO; VLA
+  "đi theo lối tắt thị giác, chọn vật hay gặp lúc train bất kể câu lệnh"; chữa lúc inference bằng nhánh VA không
+  điều kiện ngôn ngữ [S]. **HABILIS Brain 0 (2609.25558)**: giám sát "thay đổi hình học" (geometry-change) thay cho
+  depth, LIBERO 82.1 → 86.1 trong ablation [S].
+- Cần đọc: protocol và số trên ô swap / position của từng bài; bài nào dùng π0.5; có cài lại được trong harness của
+  ta không. ECT (2609.39971, §9) vẫn là đối thủ trực tiếp nhất: π0.5 swap 38.3 → 70.8 theo protocol của họ, trong khi
+  π0.5 gốc trong harness của ta chỉ 18.5 (280 bước) → phải căn protocol trước khi so (đang đo 520 bước).
