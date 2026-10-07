@@ -799,9 +799,20 @@ cùng ngân sách:
   coshift gốc (p_swap 0.5): swap 24.3, position 20.3 → hai biến thể đánh đổi swap ↔ position, nhất quán qua seed.
 
 **Phép thử lối tắt của xoay** (`--q1_offset`: tay bắt đầu quay quanh khớp 1, cảnh không quay; Object, 100 tập; chuẩn
-98.5–99.5): +0.25 rad → π0.5 90, base 91, **xoay 95**, coshift 96, gộp 91. Giả thuyết "xoay học lối tắt tay lệch góc ⇒
-xoay action" **không được ủng hộ** (xoay còn tốt hơn base). Robot init của LIBERO-Plus đổi nhiều khớp, không chỉ khớp 1 —
-lý do xoay giảm Robot (78, gộp 75) chưa rõ.
+98.5–99.5):
+
+| | +0.25 rad | −0.25 rad | TB |
+|---|---|---|---|
+| π0.5 gốc | 90 | 61 | 75.5 |
+| base s8 | 91 | 63 | 77.0 |
+| xoay s8 | 95 | 55 | 75.0 |
+| coshift s8 | 96 | 61 | 78.5 |
+| gộp s8 | 91 | 55 | 73.0 |
+
+Xoay / gộp kém base ở −0.25 (−8) nhưng hơn ở +0.25 (+4) → không thấy lối tắt nhất quán; trung bình mọi model trong ±3
+(100 tập mỗi số, nhiễu ~±5). Giả thuyết "xoay học lối tắt tay lệch góc ⇒ xoay action" **không được xác nhận**. Robot
+init của LIBERO-Plus đổi nhiều khớp, không chỉ khớp 1; lý do xoay giảm Robot (78, gộp 75) vẫn chưa rõ — cần phân loại
+lỗi trên chính ô Robot (eval có lưu state).
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
