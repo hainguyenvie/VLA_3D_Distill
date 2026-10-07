@@ -182,11 +182,11 @@ def check_post(args):
             continue
         k = held[0]
         st = np.array(z["sim_state"][k], dtype=np.float64)
-        m, d = robo.sim.model._model, robo.sim.data._data
-        st[1 + m.nq :] = 0.0  # same (zero) start velocity in both worlds
+        st[1 + robo.sim.model._model.nq :] = 0.0  # same (zero) start velocity in both worlds
         r.restore(st, int(z["t"][k]), 1.0)
         nom = any(r.step(a)["done"] for a in acts[k:])
         r.restore(st, int(z["t"][k]), 1.0)
+        m, d = robo.sim.model._model, robo.sim.data._data  # a reset rebuilds the simulator: fetch after it
         r._coshift_setup(robo)
         r._cs_z0 = float(z["sim_state"][0][1 + r._cs_target + 2])
         sh = r._coshift_place_post(d)
@@ -200,6 +200,10 @@ def check_post(args):
         err = r._ik_shift(m, d, sh)
         st2 = st.copy()
         st2[1 : 1 + m.nq] = d.qpos
+        if err >= 1e-3:  # the hand cannot reach the shifted pose: the training marks such queries invalid too
+            print(f"    {os.path.basename(f)}: shift {np.round(sh * 100, 1).tolist()} cm unreachable (IK err {err:.1e}), skipped")
+            r.close()
+            continue
         r.restore(st2, int(z["t"][k]), 1.0)
         cs = any(r.step(a)["done"] for a in acts[k:])
         n += 1
