@@ -566,16 +566,74 @@ Vượt Spatial Forcing (71.9) và OFT train trên 20k demo nhiễu (79.5, công
 **Nhánh token trên máy mới:** cos_b2 87.4 (500 ep) / 48.8 LIBERO-Plus; cos_b2p 84.6 / 45.2 (máy cũ, render CPU: 93.0 /
 51.4 cho cos_b2). LIBERO-Long lr cosine: eval 100 episode 62% ở vòng 40 (lr cố định: 57–62; VLA-OPD 78.9).
 
+## Failure analysis sâu của nhánh π0.5 (07/10 sáng)
+
+**Hai ô LIBERO-PRO thực ra đo gì** (`scripts/analyze_swap_layout.py`, so init state của ô với LIBERO-Object chuẩn):
+cả 10 task Object dùng chung **6 ô vị trí cố định** + giỏ cố định ở (0, 0.26); mỗi task xếp bộ vật khác vào các ô.
+- **swap**: vật đích đổi chỗ chính xác với một vật khác (18–38 cm), giỏ đứng yên (lệch 1.5 cm).
+- **position (temp)**: vật đích dời 21 cm theo x sang một **chỗ trống**, một vật khác bị đưa ra khỏi cảnh, giỏ đứng yên.
+→ π0.5 học "câu lệnh → ô quen trong bố cục". Phản thực biến đổi cả cảnh (xoay, soi gương) giữ nguyên quan hệ giữa
+các vật nên **có thể không phá được lối tắt này**; cần phản thực dời riêng vật đích so với phần còn lại.
+
+**Thời điểm cam kết** (`scripts/analyze_commit.py`, 200 tập mỗi ô):
+- swap: π0.5 cam kết đi tới vật sai rất sớm (trung vị query 2; 42% ngay query 0; 86% trong 2 query đầu). Adapter
+  swap còn sớm hơn (56% ở query 0). Base on-policy giống π0.5 (+5 / −13 tập so với π0.5).
+- Adapter swap vòng 20 so với π0.5: +20 / −13 tập, gain dồn vào task 6 (+13) và 7 (+5), mất ở task 0 và 3. Theo task,
+  ô swap rất "rời rạc": task 2, 4, 5, 8, 9 bằng 0 với mọi model.
+- position: cam kết muộn hơn (query 3), và **phần lớn thất bại không phải nhầm vật**.
+
+**Ô position: π0.5 tìm được vật nhưng không xong việc.** Trong 179 tập hỏng của π0.5: lạc khi chuyển 86, nhầm vật 50,
+near miss 28. Trong 86 tập "lạc khi chuyển", 63% **đến hết giờ vẫn đang cầm vật**, cách giỏ trung vị 10 cm, đã nhấc
+28 cm; 55% lần kẹp đầu của tập hỏng bị trượt (phải kẹp lại). Giả thuyết: kẹp ở vị trí lạ kém chính xác → kẹp lại
+nhiều lần → hết 280 bước. Đang kiểm bằng eval cùng ô với 400 bước (`pi05_pro_temp_ms400_steps`). Base on-policy
+giống hệt (lạc khi chuyển 84, 73% còn cầm vật lúc hết giờ). Adapter swap biến phần lớn thành nhầm vật (113).
+
+**Chỗ headroom nằm:** (1) swap: chọn đích sai từ những query đầu (~75% tập); (2) position: độ chính xác kẹp ở chỗ lạ
+và thời gian, sau đó mới đến chọn đích.
+
+## Phản thực mới: tổng quát hơn và nhắm đúng lỗi (07/10)
+
+Nguyên lý chung: dựng thế giới phản thực bằng một phép biến đổi 3D mà ta biết chính xác action phải biến đổi theo,
+trên chính các state student đi qua; nhãn = phép biến đổi áp lên chunk của teacher (π0.5 gốc) ở thế giới gốc.
+
+| Phản thực | Biến đổi | Nhãn | Cần gì | Cổng kiểm tra |
+|---|---|---|---|---|
+| soi gương | cả cảnh phản chiếu qua mặt phẳng đứng qua đế robot | đảo dấu dy, rx, rz | robot đối xứng, cảnh gần đối xứng | tay lệch 0.21 mm / 0.06°, phát lại 0.0 mm |
+| **xoay** | mọi vật quay θ quanh trục khớp 1, q1 += θ (camera, bàn, đế đứng yên) | chunk xoay θ (dx dy, rx ry) | chỉ cần khớp 1 trục đứng | tay lệch 0.21 mm / 0.03°, phát lại < 0.5 mm / 0.17° |
+| **coshift** | vật đích và bàn tay dời cùng một vector (tay bằng IK giữ hướng); vật khác và giỏ đứng yên; 50% là chiếm chỗ một vật khác | chunk gốc, mask sau lần kẹp đầu + 10 bước | danh tính vật đích | tay lệch 0.17 mm / 0.04°; sai lệch mỗi chunk trước khi kẹp trung vị 2.6 mm, 90% 6.6 mm; phát lại vòng hở vẫn nhấc vật 10/12 |
+
+- Xoay và soi gương phá lối tắt "vị trí tuyệt đối"; coshift phá lối tắt "ô quen trong bố cục" (vật đích ở chỗ khác so
+  với mọi thứ policy có thể đã thuộc), đúng loại lỗi của hai ô PRO. Sai lệch nhỏ của coshift đến từ bộ điều khiển
+  OSC bám chunk hơi khác ở cấu hình tay khác; nhỏ so với 8–30 cm cần dạy, và policy lập lại kế hoạch mỗi chunk.
+- Độ lệch của chính π0.5 khi được hỏi trong thế giới coshift (so với nhãn đúng): 0.32 (đơn vị chuẩn hoá) — teacher
+  không bám theo vật bị dời, khớp với chẩn đoán.
+
+**Đang chạy (07/10 02:00–):** đợt 3 (soi gương s7, soi gương chỉ 4 query đầu s7, base s8), đợt 4 (xoay s7, s8, soi
+gương s8), đợt 5 (coshift s7, s8); cùng ngân sách 20 vòng × 1024 state, cùng bộ đánh giá (Object, năm ô PRO, Plus
+Robot / Layout). Đo trần π0.5 gốc trên Spatial / Goal / Long (chuẩn + ô swap). OFT seed 8 (A1 / A2) trên Object.
+07/10 02:51: người dùng cần 2 card trống → hai run xoay (s7, s8) dừng sau vòng 3 và chạy tiếp từ `state.pt` trên
+card 4 và 6 (`scripts/server/pi05_arm.sh`); khi chạy tiếp, bộ sinh số ngẫu nhiên được seed lại theo (seed, vòng 3),
+tức vẫn tất định nhưng không trùng từng bit với một lần chạy liền mạch. Card 2 và 3 để trống cho người dùng.
+
+Đo trần (π0.5 gốc, 200 tập): Spatial chuẩn 98.5, **Spatial ô swap 42.0**; Goal chuẩn 98.5 → lỗi đi theo vị trí quen
+không chỉ có ở Object.
+
+## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
+
+Lo ngại: gain có phụ thuộc đặc thù dữ liệu không? Kế hoạch:
+1. Chốt trên Object với π0.5 theo tiêu chí đã đặt (thắng base rõ, swap / position tăng đáng kể, cảnh chuẩn không sụp,
+   ≥ 2 seed và nhiều checkpoint).
+2. Tìm thành phần tạo gain bằng ablation bỏ bớt: loại phản thực (xoay / gương / coshift), state on-policy vs state
+   của π0.5 gốc, có / không số hạng nhất quán, chỉ state đầu vs toàn tập, tỉ lệ swap trong coshift (0 = chỉ chỗ trống).
+3. Không đổi cấu hình khi sang Spatial / Goal / Long (LIBERO-PRO + LIBERO-Plus); chỉ thắng trên Object thì báo là
+   đặc thù dữ liệu. Ghi rõ yêu cầu của từng phản thực (xoay: không gì; coshift: danh tính vật đích, có sẵn trong mô tả
+   task của mọi benchmark mô phỏng).
+4. Gắn gain với intuition: probe phản thực p, thời điểm cam kết, độ lệch của teacher, trước / sau huấn luyện.
+
 ## Việc đang chạy / tiếp theo
 
-- H200: reverse-KL trên state student (B2) và state teacher (B2′) chạy tiếp tới vòng 20; B4 (state student +
-  depth) chạy mới; eval LIBERO-Plus của checkpoint student đã distill (reverse-KL, state teacher, vòng 4).
-- L40: "teacher tiếp quản" từ state của student (`scripts/takeover_eval.py`) với công cụ đã sửa; nhánh đối chứng
-  student tự tiếp quản đã qua (91% ở mốc 25% trên các episode nó từng thành công).
-- Sau đó: B3 (state teacher + depth); eval LIBERO-Plus cho checkpoint cuối của cả bốn nhánh; xác nhận bảng
-  LIBERO-Plus trên L40 (render GPU).
-- Hướng đề xuất: lấy LIBERO-Plus làm thước đo chính; so {không 3D, 3D trên state teacher, 3D trên state student}
-  theo từng loại nhiễu.
+Xem mục "Phản thực mới" ở trên. Các nhánh token (B2 / B2′ / B3 / B4) và takeover trên máy cũ đã kết thúc; máy cũ
+đã xoá.
 
 ## Lỗi của chính mình đã gặp (để không lặp lại)
 
