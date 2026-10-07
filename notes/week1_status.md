@@ -696,16 +696,17 @@ Cả ba phản thực hơn base ở cả hai seed; phương sai giữa seed lớ
 | coshift s7 | 99.0 | 24.0 | **22.5** | 92.5 | 100 | 0 | **90** / 80 | 31.0 / 23.0 |
 | coshift s8 | 99.0 | 24.5 | **18.0** | 92.0 | 99.5 | 0 | **90** / 83 | 23.5 / 20.5 |
 
-**Theo checkpoint (vòng 8 / 12 / 20; 200 tập mỗi số):**
+**Theo checkpoint (vòng 8 / 12 / 16 / 20; 200 tập mỗi số):**
 
 | | swap s7 | swap s8 | position s7 | position s8 |
 |---|---|---|---|---|
-| base | 22.0 (v4) / 16.5 / 15.5 | 15.5 / … / 20.5 | … / … / 11.0 | 14.0 / … / 12.0 |
-| xoay | 24.0 / 30.5 / 27.0 | 38.5 / 27.0 / 34.5 | 12.5 / 15.5 / 14.5 | 15.0 / 15.5 / 16.0 |
-| coshift | 31.0 / 31.0 / 24.0 | 23.5 / 27.0 / 24.5 | 23.0 / **25.5** / 22.5 | 20.5 / **24.0** / 18.0 |
+| base | 22.0 (v4) / 16.5 / … / 15.5 | 15.5 / … / … / 20.5 | … / … / … / 11.0 | 14.0 / … / … / 12.0 |
+| xoay | 24.0 / 30.5 / 26.5 / 27.0 | 38.5 / 27.0 / 34.0 / 34.5 | 12.5 / 15.5 / 15.0 / 14.5 | 15.0 / 15.5 / 15.5 / 16.0 |
+| coshift | 31.0 / 31.0 / 27.0 / 24.0 | 23.5 / 27.0 / 27.0 / 24.5 | 23.0 / 25.5 / 24.5 / 22.5 | 20.5 / 24.0 / 23.5 / 18.0 |
 
-Mỗi ô swap chỉ có 10 bố cục nên số dao động ±5–10 giữa các checkpoint; mức tăng nên đọc qua trung bình nhiều checkpoint
-và seed. Coshift ở ô position ổn định ~2× base ở mọi checkpoint; đỉnh quanh vòng 12 cho cả hai phản thực.
+Trung bình 4 checkpoint × 2 seed: **xoay swap 30.3, position 15.0; coshift swap 26.9, position 22.7**; base swap ~18,
+position ~12. Mỗi ô swap chỉ có 10 bố cục nên một số đơn lẻ dao động ±5–10; coshift ở position ổn định ~2× base ở mọi
+checkpoint; coshift swap giảm dần sau vòng 12.
 
 Trung bình 2 seed so với base (18.0 swap, 11.5 position, 83 Robot):
 - **xoay**: swap **30.8** (+12.8), position 15.3 (+3.8); cảnh chuẩn 99.3.
