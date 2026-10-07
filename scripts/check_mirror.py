@@ -14,7 +14,7 @@ import os
 
 import numpy as np
 
-from src.rollout.vec_env import COUNTERFACTUAL, EnvRunner
+from src.rollout.vec_env import COUNTERFACTUAL, EnvRunner, mirror_quat
 
 
 def quat_mirror_xyzw(q):
@@ -82,10 +82,20 @@ def main():
     nq = m.nq
     st = np.array(r.env.get_sim_state(), dtype=np.float64)  # [time, qpos, qvel]
     qpos, qvel = st[1 : 1 + nq].copy(), st[1 + nq :].copy()
+    import mujoco
+
+    worst_up = 0.0
     for a in r._mirror_obj_addrs:
         qpos[a + 1] = 2 * y0 - qpos[a + 1]
-        qpos[a + 4] *= -1
-        qpos[a + 6] *= -1
+        q0 = qpos[a + 3 : a + 7].copy()
+        qpos[a + 3 : a + 7] = mirror_quat(q0)
+        R0, R1 = np.zeros(9), np.zeros(9)
+        mujoco.mju_quat2Mat(R0, q0)
+        mujoco.mju_quat2Mat(R1, qpos[a + 3 : a + 7])
+        R0, R1 = R0.reshape(3, 3), R1.reshape(3, 3)
+        k = int(np.argmax(np.abs(R0[2])))  # body axis that is vertical in the world
+        want = np.diag([1, -1, 1]) @ R0[:, k]  # its reflected world direction
+        worst_up = max(worst_up, np.degrees(np.arccos(np.clip(abs(float(want @ R1[:, k])), -1, 1))))
         va = int(m.jnt_dofadr[[j for j in range(m.njnt) if m.jnt_qposadr[j] == a][0]])
         qvel[va + 1] *= -1  # vy
         qvel[va + 3] *= -1  # wx
@@ -105,11 +115,12 @@ def main():
     errs = [float(np.linalg.norm(b["eef_pos"] - (a["eef_pos"] * np.array([1, -1, 1]) + np.array([0, 2 * y0, 0]))))
             for a, b in zip(nominal[1:], mirrored)]
     print(f"[3] reflected replay: eef track error per chunk (mm) {np.round(np.array(errs) * 1000, 2).tolist()}")
+    print(f"[4] objects: worst angle between the reflected vertical axis and the mirror object's one {worst_up:.2f} deg")
     r.close()
 
     rows = [np.concatenate([o["rgb"], o["rgb_cf"], o["wrist_rgb"], o["wrist_rgb_cf"]], axis=1) for o in obs[:4]]
     Image.fromarray(np.concatenate(rows, axis=0)).save(os.path.join(args.out, "mirror_sheet.jpg"), quality=85)
-    ok = d_state < 1e-9 and d_rgb == 0 and d_wrist == 0 and dp < 0.005 and dq < 2.0 and max(errs) < 0.02
+    ok = d_state < 1e-9 and d_rgb == 0 and d_wrist == 0 and dp < 0.005 and dq < 2.0 and max(errs) < 0.02 and worst_up < 1.0
     print("CHECK_MIRROR_OK" if ok else "CHECK_MIRROR_FAILED")
 
 

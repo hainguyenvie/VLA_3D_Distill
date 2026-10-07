@@ -28,6 +28,30 @@ VIEW_AUG = dict(p_clean=0.25, azimuth=75.0, elevation=15.0, distance=(1.0, 2.0),
 
 _PERT_RNG = None
 
+
+def mirror_quat(q_wxyz: np.ndarray) -> np.ndarray:
+    """Orientation of a rigid object in the scene reflected through the world xz-plane (M = diag(1, -1, 1)).
+
+    A reflection is not a rotation, so the object is rotated into the pose of its mirror image using one of its own
+    symmetry planes S: R' = M R S, with S the reflection of the body axis that is neither the object's vertical axis
+    the one most aligned with the world y axis (cans, bottles and boxes are symmetric under it). Keeps the
+    object upright and mirrors its yaw."""
+    import mujoco
+
+    R = np.zeros(9)
+    mujoco.mju_quat2Mat(R, np.asarray(q_wxyz, dtype=np.float64))
+    R = R.reshape(3, 3)
+    up_b = R.T @ np.array([0.0, 0.0, 1.0])
+    k_up = int(np.argmax(np.abs(up_b)))
+    y_b = np.abs(R.T @ np.array([0.0, 1.0, 0.0]))
+    y_b[k_up] = -1
+    S = np.eye(3)
+    S[int(np.argmax(y_b)), int(np.argmax(y_b))] = -1
+    Rm = np.diag([1.0, -1.0, 1.0]) @ R @ S
+    q = np.zeros(4)
+    mujoco.mju_mat2Quat(q, Rm.reshape(-1))
+    return q
+
 # Counterfactual worlds for training rollouts (`LiberoVecEnv(counterfactual=...)`, switched on per reset): at every
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
@@ -298,8 +322,7 @@ class EnvRunner:
         try:
             for a in self._mirror_obj_addrs:  # free joints: x y z, then quaternion w x y z
                 d.qpos[a + 1] = 2 * y0 - d.qpos[a + 1]
-                d.qpos[a + 4] *= -1
-                d.qpos[a + 6] *= -1
+                d.qpos[a + 3 : a + 7] = mirror_quat(d.qpos[a + 3 : a + 7])
             q = self._mirror_arm_addrs
             for i in (0, 2, 4):
                 d.qpos[q[i]] *= -1
