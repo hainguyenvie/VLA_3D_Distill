@@ -774,8 +774,24 @@ mà các phản thực này nhắm tới — chứ không phải một cải thi
 cùng một vector 8–40 cm, các vật khác đứng yên; nhãn = chunk gốc, không mask. Cổng (`check_coshift.py --phase post`):
 từ state đầu tiên vật được cầm của các tập thành công, dời rồi phát lại phần còn lại của tập. Tính trên các ca IK với tới
 (ca không với tới bị loại, như lúc huấn luyện): Object **8/8** thành công (gốc 12/12), Spatial **9/11** (gốc 12/12).
-(Lần chạy đầu báo FAILED vì script giữ handle của simulator cũ — LIBERO dựng lại simulator ở mỗi reset.) Đợt 10 (đang
-chạy): coshift sau kẹp trên Spatial s7; coshift hai pha trên Object s7.
+(Lần chạy đầu báo FAILED vì script giữ handle của simulator cũ — LIBERO dựng lại simulator ở mỗi reset.)
+
+**Đợt 10 — kết quả:** coshift sau kẹp trên Spatial s7: chuẩn 98.0, **ô swap 40.0** (base 42.0) — không tăng (chỉ ~9% state
+có cặp hợp lệ: đang cầm bát + IK với tới + có chỗ cho đĩa). Coshift hai pha trên Object s7: chuẩn 99.5, swap 20.0 (coshift
+trước kẹp 24.0).
+
+**Lỗi Spatial swap là nhớ vị trí đặt** (`analyze_failures` trên rollout π0.5, `scripts/analyze_place_location.py`): π0.5 nhặt đúng bát
+(kẹp gần bát đích ở 9/10 task), hỏng chủ yếu "lạc khi chuyển" (91 / 200); trong các tập đó bát được đặt xuống **cách chỗ
+quen của đĩa 3 cm** (trung vị), cách đĩa thật (đã dời 26 cm) 25 cm.
+
+**Vì sao coshift sau kẹp không giúp — giới hạn có tính nguyên lý:** dời tay + vật cầm + đĩa cùng một vector giữ nguyên
+vector tay → đĩa, nên policy "đi một đoạn đã thuộc từ chỗ nhặt tới chỗ đặt" vẫn khớp nhãn; phản thực không phạt lối tắt đó.
+Tổng quát: mọi phản thực có nhãn chính xác ta dựng được (xoay cả cảnh; dời tay cùng vật) đều **giữ nguyên quan hệ tay–đích**
+→ chúng dạy bất biến với bố cục / tư thế và cải thiện thao tác ở chỗ lạ (ô position của Object), nhưng **không dạy suy ra
+đích ở vị trí mới so với tay** — đúng loại lỗi của Spatial swap (và phần "nhầm vật" của Object swap). Muốn dạy điều đó cần
+nhãn cho những thế giới mà quan hệ tay–đích đổi: teacher π0.5 không làm được (nó mắc chính lỗi này); ứng viên: teacher có
+đặc quyền (biết vị trí đĩa) cho pha mang / đặt — bộ điều khiển kịch bản hoặc lập kế hoạch đi tới vị trí đĩa mới, như cách
+ECT dùng replay controller cho quỹ đạo đã biến đổi.
 
 ## Đối chứng augmentation ảnh 2D thông thường (đợt 9, Object; trả lời "có phải chỉ là augmentation?")
 
