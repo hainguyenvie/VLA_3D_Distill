@@ -768,8 +768,14 @@ cầm + nơi đặt (đĩa / giỏ). Ở pha sau, quan hệ tay–nơi đặt gi
 **Cả hai phản thực không sang được Spatial** (ô swap −2.5 / −5, trong nhiễu nhưng không có dấu hiệu tăng). Lý do theo
 phân tích bố cục: lỗi Spatial nằm ở **pha đặt** (đĩa bị dời), mà xoay giữ nguyên quan hệ giữa đĩa và các vật khác, còn
 coshift chỉ tác động trước khi kẹp. Tức là gain trên Object gắn với loại lỗi "chọn vật đích theo ô quen" — đúng loại lỗi
-mà các phản thực này nhắm tới — chứ không phải một cải thiện chung. Bước tiếp: coshift pha sau kẹp (dời tay + vật đang
-cầm + nơi đặt), cổng kiểm tra đang chạy.
+mà các phản thực này nhắm tới — chứ không phải một cải thiện chung.
+
+**Coshift pha sau kẹp** (`--coshift_phase post|both`): khi vật đích đang được cầm, dời tay (IK) + vật đang cầm + nơi đặt
+cùng một vector 8–40 cm, các vật khác đứng yên; nhãn = chunk gốc, không mask. Cổng (`check_coshift.py --phase post`):
+từ state đầu tiên vật được cầm của các tập thành công, dời rồi phát lại phần còn lại của tập. Tính trên các ca IK với tới
+(ca không với tới bị loại, như lúc huấn luyện): Object **8/8** thành công (gốc 12/12), Spatial **9/11** (gốc 12/12).
+(Lần chạy đầu báo FAILED vì script giữ handle của simulator cũ — LIBERO dựng lại simulator ở mỗi reset.) Đợt 10 (đang
+chạy): coshift sau kẹp trên Spatial s7; coshift hai pha trên Object s7.
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
