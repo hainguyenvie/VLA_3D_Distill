@@ -612,6 +612,10 @@ chỉ chứa vật phụ. Ô swap đưa vật đích tới:
   tròn có bán kính của A (0.54 m) và B (0.66 m) quanh trục khớp 1; C, D, E nằm ở bán kính 0.45, 0.73, 0.75 → không phủ.
 - **Dự đoán (ghi trước khi có số):** coshift dời vật đích tự do 8–30 cm trong vùng bày vật nên sẽ cải thiện task 4, 8, 9
   nhiều hơn xoay. Nếu không → lỗi ở đó không phải do vị trí.
+- **Kết quả dự đoán (coshift s7, vòng 8, swap 31.0):** theo task 0.80 0.95 0 0.60 0 0 0.65 0 0 0.10 → gain vẫn dồn vào
+  task 0, 1, 3, 6; task 9 nhích 0.10, task 4, 8 vẫn 0. **Dự đoán sai phần lớn**: dạy vật đích ở chỗ khác so với bố cục
+  (tại vòng 8) chưa phá được lỗi ở 6 task này. Ở cả 6 task, π0.5 kẹp đúng vật mồi đứng ở ô quen 20/20 lần (tất định).
+  Đang chạy rollout có state của xoay s8 và coshift s7 trên 6 task này để xem policy đi đâu.
 - Task 5, 7 (đích tới A / B nhưng vẫn 0) chưa giải thích được bằng hình học; có thể là nhận dạng vật (tomato sauce /
   milk) — cần xem state.
 - Ô position: vật đích tới chỗ trống, ô quen để trống → π0.5 vẫn đi tới vật (nhặt được ~50%). Tức lỗi swap là **bị hút
@@ -625,7 +629,7 @@ trên chính các state student đi qua; nhãn = phép biến đổi áp lên ch
 | Phản thực | Biến đổi | Nhãn | Cần gì | Cổng kiểm tra |
 |---|---|---|---|---|
 | soi gương | cả cảnh phản chiếu qua mặt phẳng đứng qua đế robot | đảo dấu dy, rx, rz | robot đối xứng, cảnh gần đối xứng | tay lệch 0.21 mm / 0.06°, phát lại 0.0 mm |
-| **xoay** | mọi vật quay θ quanh trục khớp 1, q1 += θ (camera, bàn, đế đứng yên) | chunk xoay θ (dx dy, rx ry) | chỉ cần khớp 1 trục đứng | tay lệch 0.21 mm / 0.03°, phát lại < 0.5 mm / 0.17° |
+| **xoay** | mọi vật, bàn và đồ cố định quay θ quanh trục khớp 1, q1 += θ (camera, đế, sàn đứng yên) | chunk xoay θ (dx dy, rx ry) | chỉ cần khớp 1 trục đứng | tay lệch 0.21 mm / 0.03°, phát lại < 0.5 mm / 0.17°; phát lại vòng hở các tập thành công của π0.5 trong thế giới xoay 0.3 rad: Object 18/20, Spatial 16/19 (bản gốc 20/20, 19/20) |
 | **coshift** | vật đích và bàn tay dời cùng một vector (tay bằng IK giữ hướng); vật khác và giỏ đứng yên; 50% là chiếm chỗ một vật khác | chunk gốc, mask sau lần kẹp đầu + 10 bước | danh tính vật đích | tay lệch 0.17 mm / 0.04°; sai lệch mỗi chunk trước khi kẹp trung vị 2.6 mm, 90% 6.6 mm; phát lại vòng hở vẫn nhấc vật 10/12 |
 
 - Xoay và soi gương phá lối tắt "vị trí tuyệt đối"; coshift phá lối tắt "ô quen trong bố cục" (vật đích ở chỗ khác so

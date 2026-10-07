@@ -173,9 +173,22 @@ def check_rotate(args):
     d_state = max(float(np.abs(a["sim_state"] - b["sim_state"]).max()) for a, b in zip(ref, cf))
     d_rgb = max(int(np.abs(a["rgb"].astype(int) - b["rgb"].astype(int)).max()) for a, b in zip(ref, cf))
     d_wrist = max(int(np.abs(a["wrist_rgb"].astype(int) - b["wrist_rgb"].astype(int)).max()) for a, b in zip(ref, cf))
-    print(f"[1] nominal untouched: |state| {d_state:.1e}, rgb {d_rgb}, wrist {d_wrist}")
+    print(f"[1] nominal untouched: |state| {d_state:.1e}, rgb {d_rgb}, wrist {d_wrist} (whole episodes, two resets)")
     robo = r.env.env
     ctr = r._rot_center
+    # some scenes do not render identically after two resets (LIBERO-Spatial: frames differ by ~170 grey levels without
+    # any counterfactual), so also compare frames of one instant: render, render the rotated world, render again
+    from robosuite.utils.mjcf_utils import IMAGE_CONVENTION_MAPPING  # noqa: F401
+    import robosuite.macros as macros
+
+    conv = IMAGE_CONVENTION_MAPPING[macros.IMAGE_CONVENTION]
+    st_a = np.array(r.env.get_sim_state())
+    before = [robo.sim.render(camera_name=cam, width=128, height=128) for cam in ("agentview", "robot0_eye_in_hand")]
+    r._rotate_view(robo, 128, conv, th)
+    after = [robo.sim.render(camera_name=cam, width=128, height=128) for cam in ("agentview", "robot0_eye_in_hand")]
+    d_same = max(int(np.abs(x.astype(int) - y.astype(int)).max()) for x, y in zip(before, after))
+    d_same_state = float(np.abs(np.array(r.env.get_sim_state()) - st_a).max())
+    print(f"    same instant: frames before / after rendering the rotated world differ by {d_same}, state by {d_same_state:.1e}")
     m, dd = robo.sim.model._model, robo.sim.data._data
     j1 = robo.sim.model.joint_name2id(robo.robots[0].robot_joints[0])
     print(f"    rotation centre {np.round(ctr, 4).tolist()}, first joint axis {np.round(dd.xaxis[j1], 4).tolist()}, "
@@ -236,7 +249,8 @@ def check_rotate(args):
     print(f"[3] rotated replay: eef track error per chunk (mm) {np.round(np.array(errs) * 1000, 2).tolist()}")
     print(f"    orientation error per chunk (deg) {np.round(np.array(qerrs), 2).tolist()}")
     r.close()
-    ok = d_state < 1e-9 and d_rgb == 0 and d_wrist == 0 and dp < 0.005 and dq < 2.0 and max(errs) < 0.02 and max(qerrs) < 3.0
+    ok = (d_state < 1e-9 and d_same == 0 and d_same_state == 0 and dp < 0.005 and dq < 2.0 and max(errs) < 0.02
+          and max(qerrs) < 3.0)
 
     # [4] whole logged successful episodes, nominal vs rotated replay
     if args.steps:
