@@ -707,6 +707,14 @@ class EnvRunner:
             if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
+            if self.cfg.get("q1_offset"):  # diagnostic: the arm starts turned about its first joint, the scene does not
+                import mujoco
+
+                robot = robo.robots[0]
+                robo.sim.data._data.qpos[robot._ref_joint_pos_indexes[0]] += float(self.cfg["q1_offset"])
+                mujoco.mj_forward(robo.sim.model._model, robo.sim.data._data)
+                robot.controller.update(force=True)
+                robot.controller.reset_goal()
             # sampling-timer state of each camera at the start of a control step (identical at every step)
             self._phase = {name: (robo._observables[name]._time_since_last_sample, robo._observables[name]._sampled)
                            for name in cams}
@@ -838,12 +846,13 @@ def mem_available_gb() -> float:
 class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
                  depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None,
-                 counterfactual: Optional[Dict[str, Any]] = None):
+                 counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
                         depth=depth, wrist=wrist, perturb=perturb,  # perturb: ranges as in VIEW_AUG, used per reset
-                        counterfactual=counterfactual)  # as in COUNTERFACTUAL, used per reset
+                        counterfactual=counterfactual,  # as in COUNTERFACTUAL, used per reset
+                        q1_offset=q1_offset)  # diagnostic: first arm joint turned by this much at every reset (radians)
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs
