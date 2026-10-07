@@ -720,6 +720,29 @@ Trung bình 2 seed so với base (18.0 swap, 11.5 position, 83 Robot):
 Vòng 8 trên ô position: base s8 14.0, soi gương s7 13.5, soi gương 4 query đầu 15.5, xoay s7 12.5 — không sụp (khác
 phản thực đổi chỗ: 0.5–1.0), nhưng cũng chưa tăng.
 
+## Ablation coshift và bản gộp (đợt 6–7, 07/10 chiều; Object, kết quả cuối vòng 20)
+
+| | Object | swap | position | object | lan | task | swap / position vòng 8 |
+|---|---|---|---|---|---|---|---|
+| coshift s7 (tham chiếu) | 99.0 | 24.0 | 22.5 | 92.5 | 100 | 0 | 31.0 / 23.0 |
+| coshift trên state π0.5 gốc s7 (gần ECT) | 98.0 | 22.5 | 23.5 | 89.0 | 97.0 | 0 | 31.0 / 21.0 |
+| coshift chỉ chỗ trống s7 | 98.5 | **31.0** | 15.5 | … | 99.0 | 0 | 32.0 / … |
+| coshift bỏ số hạng nhất quán s7 | 97.0 | 22.5 | 22.0 | … | 97.5 | 0 | 21.0 / … |
+| gộp xoay + coshift s7 | 98.0 | 28.0 | 21.5 | … | 97.5 | 0 | 28.5 / … |
+| gộp xoay + coshift s8 | 98.5 | 26.5 | 22.0 | … | 97.5 | 0 | 31.0 / … |
+
+Đọc (một seed cho ablation, cẩn thận với nhiễu ±5):
+- **State on-policy không tạo ra gain**: dùng state của π0.5 gốc cho swap 22.5 / position 23.5, ngang on-policy. Đóng góp
+  không thể là "on-policy"; nó là **phản thực 3D có nhãn chính xác** (dựng lại cảnh + IK, không cần replay như ECT).
+- **Số hạng nhất quán** gần như không đóng góp ở vòng 20 (swap 22.5 vs 24.0, position 22.0 vs 22.5); ở vòng 8 có chênh
+  (21 vs 31) → có thể giúp học nhanh hơn, chưa chắc.
+- **Chỉ chỗ trống** (bỏ việc chiếm chỗ vật khác): swap tốt hơn (31.0) nhưng position mất gain (15.5) → đánh đổi; đang chạy
+  seed 8 (đợt 9).
+- **Gộp xoay + coshift** cân bằng nhất: swap 27.3 (+9 so với base), position 21.8 (+10), cả hai seed, cảnh chuẩn 98.
+
+**Spatial (đợt 8):** base s7 chuẩn 98.0, ô swap **42.0** (= π0.5 gốc) — distill không phản thực không thay đổi gì; xoay và
+coshift đang chạy.
+
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
 Lo ngại: gain có phụ thuộc đặc thù dữ liệu không? Kế hoạch:
