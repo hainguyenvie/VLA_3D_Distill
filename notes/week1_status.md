@@ -793,6 +793,15 @@ cùng ngân sách:
 - **Trên ô swap, coshift = augmentation thông thường** (24.3 vs 24.0): phần gain swap của coshift không phải của phương pháp.
   Xoay hơn augmentation ~+7.
 - **Trên ô position, augmentation = base** (12.0 / 12.0 ở cả hai seed) còn coshift 18–22.5 → gain position của coshift là thật.
+- **LIBERO-Plus Robot init:** augmentation 82 / 82 (Layout 88 / 85), base 83 / 83, coshift 90 / 90 → gain Robot của coshift
+  cũng không phải do augmentation.
+- **Coshift chỉ chỗ trống, 2 seed:** swap 31.0 / 29.0 (TB **30.0**, +6 so với augmentation), position 15.5 / 16.0 (15.8);
+  coshift gốc (p_swap 0.5): swap 24.3, position 20.3 → hai biến thể đánh đổi swap ↔ position, nhất quán qua seed.
+
+**Phép thử lối tắt của xoay** (`--q1_offset`: tay bắt đầu quay quanh khớp 1, cảnh không quay; Object, 100 tập; chuẩn
+98.5–99.5): +0.25 rad → π0.5 90, base 91, **xoay 95**, coshift 96, gộp 91. Giả thuyết "xoay học lối tắt tay lệch góc ⇒
+xoay action" **không được ủng hộ** (xoay còn tốt hơn base). Robot init của LIBERO-Plus đổi nhiều khớp, không chỉ khớp 1 —
+lý do xoay giảm Robot (78, gộp 75) chưa rõ.
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
