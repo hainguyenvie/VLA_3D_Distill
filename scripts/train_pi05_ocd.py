@@ -26,11 +26,14 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_mode", choices=["shift", "swap"], default="swap",
+    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror"], default="swap",
                     help="swap: the target exchanges places with another object and the counterfactual instruction names "
                          "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
                          "target is displaced and the teacher labels the counterfactual world")
     ap.add_argument("--cf_delta", default="0.02,0.08", help="shift mode: displacement range of the target (metres)")
+    ap.add_argument("--c7", type=float, default=0.7853981633974483, help="mirror mode: reflection centre of joint 7")
+    ap.add_argument("--cf_max_query", type=int, default=0,
+                    help="> 0: counterfactual pairs only on the first N queries of each episode (early-state intervention)")
     ap.add_argument("--lambda_cf", type=float, default=1.0)
     ap.add_argument("--iters", type=int, default=20)
     ap.add_argument("--states_per_iter", type=int, default=1024)
@@ -55,7 +58,8 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     from src.rollout.vec_env import COUNTERFACTUAL, LiberoVecEnv
 
-    cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")))
+    cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")),
+                                          c7=args.c7)
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg)
 
     import torch
@@ -108,7 +112,9 @@ def main():
 
     def obs_list(arrays, idx, cf=False):
         w = "wrist_rgb_cf" if cf else "wrist_rgb"
-        return [{"wrist_rgb": arrays[w][k], "eef_pos": arrays["eef_pos"][k], "eef_quat": arrays["eef_quat"][k],
+        pos = "cf_eef_pos" if cf and "cf_eef_pos" in arrays else "eef_pos"
+        quat = "cf_eef_quat" if cf and "cf_eef_quat" in arrays else "eef_quat"
+        return [{"wrist_rgb": arrays[w][k], "eef_pos": arrays[pos][k], "eef_quat": arrays[quat][k],
                  "gripper_qpos": arrays["gripper_qpos"][k]} for k in idx]
 
     for it in range(start_it + 1, args.iters + 1):
@@ -129,7 +135,11 @@ def main():
         if not args.no_cf:
             A.update({k: cat(k) for k in ("rgb_cf", "wrist_rgb_cf", "cf_teacher", "closed_before")})
             phrase = lambda n: str(n).rsplit("_", 1)[0].replace("_", " ")  # "alphabet_soup_1" -> "alphabet soup"  # noqa: E731
-            if args.cf_mode == "swap":
+            if args.cf_mode == "mirror":
+                A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat")})
+                cf_ok[:] = True  # the reflected scene is a valid world at every state
+                A["cf_teacher"] = student.mirror_norm(A["actions_teacher"])
+            elif args.cf_mode == "swap":
                 tgt, src = cat("cf_target_name"), cat("cf_source_name")
                 for k, d in enumerate(descs_all):  # pre-grasp states whose instruction names the target explicitly
                     if not A["closed_before"][k] and phrase(src[k]) in d and phrase(tgt[k]) != phrase(src[k]):
@@ -137,6 +147,9 @@ def main():
                 A["cf_teacher"] = A["actions_teacher"]  # the correct action of the swapped world is the nominal one
             else:
                 cf_ok[:] = ~A["closed_before"].astype(bool)
+            if args.cf_max_query > 0:  # early-state intervention: pairs only on the first queries of each episode
+                qidx = np.concatenate([np.arange(r["n_queries"]) for r in recs])
+                cf_ok &= qidx < args.cf_max_query
         n_all = len(descs_all)
         keep = np.sort(rng.choice(n_all, size=min(args.states_per_iter, n_all), replace=False))
         t_collect = time.time() - t0

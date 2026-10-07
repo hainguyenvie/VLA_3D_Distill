@@ -47,6 +47,10 @@ class Pi05Policy:
             overrides["tokenizer_processor"] = {"tokenizer_name": tok}
         self.pre, self.post = make_pre_post_processors(self.vla.config, pretrained_path=checkpoint, preprocessor_overrides=overrides)
         self.chunk = self.vla.config.chunk_size
+        from safetensors.torch import load_file
+
+        stats = load_file(os.path.join(checkpoint, "policy_preprocessor_step_2_normalizer_processor.safetensors"))
+        self.act_mean, self.act_std = stats["action.mean"].numpy(), stats["action.std"].numpy()
         self.fixed_noise = True  # deterministic sampling (see `_noise`); the LeRobot eval draws fresh noise per call
 
     # ---------------------------------------------------------------- inputs
@@ -92,6 +96,12 @@ class Pi05Policy:
         out = chunk.copy()
         out[..., -1] = 0.5 * (1.0 - np.clip(chunk[..., -1], -1.0, 1.0))  # env convention -> [0, 1], 1 = open
         return {"actions": out, "actions_env": chunk, "actions_norm": norm.float().cpu().numpy()}
+
+    def mirror_norm(self, a_norm: np.ndarray) -> np.ndarray:
+        """Reflect normalised chunks through the robot's vertical plane: un-normalise, negate dy, rx, rz, normalise."""
+        a = a_norm * (self.act_std + 1e-8) + self.act_mean
+        a = a * np.array([1, -1, 1, -1, 1, -1, 1], dtype=a.dtype)
+        return ((a - self.act_mean) / (self.act_std + 1e-8)).astype(np.float32)
 
     def velocity(self, images, task_descriptions, obs, x_t: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
         """Flow velocity v(o, x_t, t) of the action expert (B, 50, 7); differentiable (the training forward of

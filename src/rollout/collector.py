@@ -18,7 +18,8 @@ from src.policy.token_policy import TokenPolicy, preprocess_batch
 from src.rollout.vec_env import LiberoVecEnv, mem_available_gb, postprocess_actions
 
 STEP_KEYS = ("rgb", "depth", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "sim_state", "target_pos",
-             "rgb_cf", "wrist_rgb_cf", "cf_delta", "target_pos_cf", "cf_target_name", "cf_source_name", "closed_before")
+             "rgb_cf", "wrist_rgb_cf", "cf_delta", "target_pos_cf", "cf_target_name", "cf_source_name", "closed_before",
+             "cf_eef_pos", "cf_eef_quat")
 
 
 def token_stats(logits: torch.Tensor, ref_logits: Optional[torch.Tensor] = None) -> Dict[str, float]:
@@ -142,7 +143,8 @@ class Collector:
             label_actions = {k: v["actions_norm"] for k, v in labels.items() if "actions_norm" in v}
             label_cf = {}
             if self.labelers and all("rgb_cf" in o for o in cur):  # counterfactual world: the labelers also see it
-                cf_obs = [dict(o, wrist_rgb=o.get("wrist_rgb_cf", o.get("wrist_rgb"))) for o in cur]
+                cf_obs = [dict(o, wrist_rgb=o.get("wrist_rgb_cf", o.get("wrist_rgb")), eef_pos=o.get("cf_eef_pos", o["eef_pos"]),
+                               eef_quat=o.get("cf_eef_quat", o["eef_quat"])) for o in cur]
                 cf_imgs = [o["rgb_cf"] for o in cur]
                 cf_pils = None if getattr(self.policy, "raw_images", False) else preprocess_batch(cf_imgs, self.policy.center_crop)
                 for k, p in self.labelers.items():
