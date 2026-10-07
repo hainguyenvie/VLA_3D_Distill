@@ -812,8 +812,17 @@ ECT dùng replay controller cho quỹ đạo đã biến đổi.
 t1 0.30 → 0.55, t4 0.40 → 0.55, t5 0.60 → 0.95, t6 0 → 0.10, **t7 0 → 0.80**, t9 0 → 0.25 — đúng các task hỏng vì đặt bát
 vào chỗ đĩa quen. Đây là bằng chứng đầu tiên cho chẩn đoán "phải đổi quan hệ tay–đích mới dạy được suy ra đích".
 
-**Seed 9 (Object, đợt 11):** base swap 20.0 / position 13.5; augmentation swap 24.5 / position 15.0. Ba seed: base swap
-18.7, position 12.2; augmentation swap 24.2, position 13.0.
+**Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
+
+| | Object | swap | TB | position | TB |
+|---|---|---|---|---|---|
+| base | 99.0 / 99.0 / 100 | 15.5 / 20.5 / 20.0 | 18.7 | 11.0 / 12.0 / 13.5 | 12.2 |
+| base + aug 2D | 99.5 / 98.5 / 98.5 | 23.0 / 25.0 / 24.5 | 24.2 | 12.0 / 12.0 / 15.0 | 13.0 |
+| **coshift** | 99.0 / 99.0 / 98.0 | 24.0 / 24.5 / 24.5 | 24.3 | **22.5 / 18.0 / 21.5** | **20.7** |
+| xoay | 99.5 / 99.0 / 99.0 | 27.0 / 34.5 / … | … | 14.5 / 16.0 / … | … |
+
+→ Ô position: coshift +8.5 so với base, +7.7 so với augmentation; mọi seed coshift > mọi seed đối chứng. Ô swap: coshift =
+augmentation. LIBERO-Plus (60 tập, nhiễu ±8): augmentation 82 / 82 / 80 Robot.
 
 ## Đối chứng augmentation ảnh 2D thông thường (đợt 9, Object; trả lời "có phải chỉ là augmentation?")
 
