@@ -785,14 +785,14 @@ cùng ngân sách:
 | | Object | swap s7 / s8 (TB) | position s7 / s8 (TB) |
 |---|---|---|---|
 | base | 99.0 / 99.0 | 15.5 / 20.5 (18.0) | 11.0 / 12.0 (11.5) |
-| **base + aug 2D** | 99.5 / 98.5 | 23.0 / 25.0 (**24.0**) | … / 12.0 |
+| **base + aug 2D** | 99.5 / 98.5 | 23.0 / 25.0 (**24.0**) | 12.0 / 12.0 (12.0) |
 | coshift | 99.0 / 99.0 | 24.0 / 24.5 (24.3) | 22.5 / 18.0 (**20.3**) |
 | xoay | 99.5 / 99.0 | 27.0 / 34.5 (**30.8**) | 14.5 / 16.0 (15.3) |
 | gộp | 98.0 / 98.5 | 28.0 / 26.5 (27.3) | 21.5 / 22.0 (21.8) |
 
 - **Trên ô swap, coshift = augmentation thông thường** (24.3 vs 24.0): phần gain swap của coshift không phải của phương pháp.
   Xoay hơn augmentation ~+7.
-- **Trên ô position, augmentation = base** (12.0 vs 12.0 ở s8) còn coshift 18–22.5 → gain position của coshift là thật.
+- **Trên ô position, augmentation = base** (12.0 / 12.0 ở cả hai seed) còn coshift 18–22.5 → gain position của coshift là thật.
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
