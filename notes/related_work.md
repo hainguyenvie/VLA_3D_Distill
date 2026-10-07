@@ -258,3 +258,13 @@ của một checkpoint có sẵn; ECT làm trên demo, VLA-OPD on-policy nhưng 
 - Cần đọc: protocol và số trên ô swap / position của từng bài; bài nào dùng π0.5; có cài lại được trong harness của
   ta không. ECT (2609.39971, §9) vẫn là đối thủ trực tiếp nhất: π0.5 swap 38.3 → 70.8 theo protocol của họ, trong khi
   π0.5 gốc trong harness của ta chỉ 18.5 (280 bước) → phải căn protocol trước khi so (đang đo 520 bước).
+- **ECT, protocol (đọc bản HTML 07/10)** [V]: con số trong abstract 36 → 59 là **trung bình 4 suite** ở trục position-swap
+  của LIBERO-PRO; theo suite (Table 2, mô hình "Frozen-LM π0.5"): Spatial +21.7, **Object +32.5** (38.3 → 70.8), Goal +14.2,
+  Long +22.0. 50 trial mỗi task (N = 500 mỗi ô); không nêu số bước tối đa; dùng checkpoint π0.5 chính thức fine-tune trên
+  cả 4 suite. Dữ liệu phản thực: biến đổi hình học demo s′ = M_s(s), action a′ = Replay_{s′}(M_a(a)) (bộ điều khiển phát
+  lại đường đi đã biến đổi trong simulator, chỉ giữ demo thành công); Spatial / Goal dùng **soi gương**, Object và một
+  số task Long thêm **dịch chuyển**. Batch 64, số bước train khớp giữa các nhánh (Table 22).
+  → Cùng họ biến đổi với soi gương / coshift của ta; khác ở chỗ: demo offline + BC, không teacher, không state on-policy.
+  Trong harness của ta π0.5 gốc ở ô swap Object: 18.5 (280 bước, 20 trial), 23.5 (520 bước) — vẫn dưới 38.3; phần chênh
+  còn lại có thể do số trial / init state, khác checkpoint (JAX gốc vs bản LeRobot) hoặc baseline "Frozen-LM" của họ là
+  model họ tự fine-tune. So sánh công bằng = cài lại ECT trong harness của ta.
