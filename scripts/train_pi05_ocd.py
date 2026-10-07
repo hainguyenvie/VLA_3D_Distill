@@ -41,6 +41,9 @@ def parse():
     ap.add_argument("--cf_max_query", type=int, default=0,
                     help="> 0: counterfactual pairs only on the first N queries of each episode (early-state intervention)")
     ap.add_argument("--lambda_cf", type=float, default=1.0)
+    ap.add_argument("--img_aug", action="store_true",
+                    help="ordinary 2D augmentation of the student's training images (openpi LIBERO recipe: crop 95%% + resize "
+                         "and rotation +-5 deg on the agent view, colour jitter on both views); labels unchanged")
     ap.add_argument("--iters", type=int, default=20)
     ap.add_argument("--states_per_iter", type=int, default=1024)
     ap.add_argument("--episodes_per_batch", type=int, default=20)
@@ -118,11 +121,31 @@ def main():
     if start_it == 0 and args.eval_every > 0:
         log({"iter": 0, **evaluate(), **totals})
 
+    aug_rng = np.random.default_rng([args.seed, 99])
+
+    def aug(img, geometric):
+        """openpi-style training augmentation of one HWC uint8 frame (no-op unless --img_aug)."""
+        if not args.img_aug:
+            return img
+        from PIL import Image, ImageEnhance
+
+        im = Image.fromarray(img)
+        h, w = img.shape[:2]
+        if geometric:
+            ch, cw = int(0.95 * h), int(0.95 * w)
+            y0, x0 = aug_rng.integers(0, h - ch + 1), aug_rng.integers(0, w - cw + 1)
+            im = im.crop((x0, y0, x0 + cw, y0 + ch)).resize((w, h), Image.BILINEAR)
+            im = im.rotate(float(aug_rng.uniform(-5, 5)), resample=Image.BILINEAR)
+        im = ImageEnhance.Brightness(im).enhance(float(aug_rng.uniform(0.7, 1.3)))
+        im = ImageEnhance.Contrast(im).enhance(float(aug_rng.uniform(0.6, 1.4)))
+        im = ImageEnhance.Color(im).enhance(float(aug_rng.uniform(0.5, 1.5)))
+        return np.asarray(im)
+
     def obs_list(arrays, idx, cf=False):
         w = "wrist_rgb_cf" if cf else "wrist_rgb"
         pos = "cf_eef_pos" if cf and "cf_eef_pos" in arrays else "eef_pos"
         quat = "cf_eef_quat" if cf and "cf_eef_quat" in arrays else "eef_quat"
-        return [{"wrist_rgb": arrays[w][k], "eef_pos": arrays[pos][k], "eef_quat": arrays[quat][k],
+        return [{"wrist_rgb": aug(arrays[w][k], False), "eef_pos": arrays[pos][k], "eef_quat": arrays[quat][k],
                  "gripper_qpos": arrays["gripper_qpos"][k]} for k in idx]
 
     for it in range(start_it + 1, args.iters + 1):
@@ -208,7 +231,7 @@ def main():
             t = m.sample_time(B, student.device)
             te = t[:, None, None]
             descs = [descs_all[k] for k in j]
-            v = student.velocity([A["rgb"][k] for k in j], descs, obs_list(A, j), te * noise + (1 - te) * a, t)
+            v = student.velocity([aug(A["rgb"][k], True) for k in j], descs, obs_list(A, j), te * noise + (1 - te) * a, t)
             u = noise - a
             loss = ((v - u) ** 2).mean()
             jc = np.array([k for k in j if cf_ok[k]], dtype=int)
