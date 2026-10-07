@@ -744,8 +744,17 @@ phản thực đổi chỗ: 0.5–1.0), nhưng cũng chưa tăng.
   → policy học "tay lệch góc ⇒ xoay action"; ô Robot init của LIBERO-Plus chỉ đổi tư thế tay → lối tắt đó hại. Coshift
   ngược lại: tay ở cấu hình khác (IK) mà action giữ nguyên → dạy bất biến với tư thế tay → Robot init tăng.
 
-**Spatial (đợt 8):** base s7 chuẩn 98.0, ô swap **42.0** (= π0.5 gốc) — distill không phản thực không thay đổi gì; xoay và
-coshift đang chạy.
+**Spatial (đợt 8):** base s7 chuẩn 98.0, ô swap **42.0** (= π0.5 gốc) — distill không phản thực không thay đổi gì.
+coshift s7: chuẩn 97.5, ô swap **37.0 (−5)**, task 0. Ô swap của Spatial **khác Object**: bát cần nhặt đứng yên (lệch
+< 2 cm), **đĩa (nơi đặt) bị dời 17–47 cm** (`analyze_swap_layout.py --cell libero_spatial_swap --base libero_spatial`);
+theo task, π0.5 / base / coshift: 1.0 1.0 1.0 | 0.3 0.3 0.1 | 1.0 0.95 0.95 | 0 0 0 | 0.4 0.4 0.3 | 0.6 0.55 0.35 | 0 0 0 |
+0 0 0 | 0.9 1.0 1.0 | 0 0 0. Vì sao coshift không giúp: (1) nó chỉ tác động trước khi kẹp và mask phần sau kẹp, còn lỗi
+Spatial ở pha đặt; (2) câu lệnh Spatial gọi vật đích bằng quan hệ ("bát giữa đĩa và ramekin"), dời riêng bát làm câu lệnh
+sai trong thế giới phản thực → nhãn mâu thuẫn với ngôn ngữ. **Giới hạn của coshift: chỉ hợp lệ khi vật đích được gọi
+bằng tên / ngoại hình.**
+Hướng sửa có nguyên tắc: dời tay cùng **vật mà tay đang thao tác theo** — trước khi kẹp: vật đích; sau khi kẹp: vật đang
+cầm + nơi đặt (đĩa / giỏ). Ở pha sau, quan hệ tay–nơi đặt giữ nguyên nên nhãn là chunk gốc, chính xác cho pha mang /
+đặt, và không đụng tới quan hệ dùng để chọn vật đích. Xoay (biến đổi cả cảnh, giữ mọi quan hệ) đang được đánh giá.
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
