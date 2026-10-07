@@ -32,7 +32,11 @@ def main():
     ap.add_argument("--episodes", type=int, default=10)
     ap.add_argument("--chunks", type=int, default=6)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--phase", choices=["pre", "post"], default="pre",
+                    help="post: check the after-grasp variant (hand + held target + container moved)")
     args = ap.parse_args()
+    if args.phase == "post":
+        return check_post(args)
     os.makedirs(args.out, exist_ok=True)
     import mujoco
     from libero.libero import benchmark, get_libero_path
@@ -138,6 +142,76 @@ def main():
           f"max {ce.max():.1f} mm; open-loop replay lifts the target in {sum(lifted)}/{len(lifted)}")
     ok = d_state < 1e-9 and d_rgb == 0 and d_wrist == 0 and dp < 0.003 and dq < 1.0 and np.percentile(ce, 90) < 10.0 and np.mean(lifted) >= 0.7
     print("CHECK_COSHIFT_OK" if ok else "CHECK_COSHIFT_FAILED")
+
+
+def check_post(args):
+    """Gate for the after-grasp coshift: from the first logged state of each successful episode in which the target is
+    held, move hand + held target + container by a drawn shift and replay the rest of the logged actions open-loop; the
+    episode must still succeed about as often as the same replay in the nominal world."""
+    import mujoco
+    from libero.libero import benchmark, get_libero_path
+
+    suite = benchmark.get_benchmark_dict()[args.suite]()
+    succ = {}
+    import json
+
+    for line in open(os.path.join(args.steps, "episodes.jsonl")):
+        e = json.loads(line)
+        succ[(int(e["task_id"]), int(e["trial_id"]))] = bool(e["success"])
+    files = sorted(glob.glob(os.path.join(args.steps, "steps", "t*_n*.npz")),
+                   key=lambda f: (os.path.basename(f)[4:6], os.path.basename(f)[1:3]))
+    files = [f for f in files if succ.get((int(os.path.basename(f)[1:3]), int(os.path.basename(f)[5:7])))]
+    V._PERT_RNG = np.random.default_rng(2)
+    res, n = [], 0
+    for f in files:
+        if n >= args.episodes:
+            break
+        z = np.load(f, allow_pickle=True)
+        task = int(os.path.basename(f)[1:3])
+        t = suite.get_task(task)
+        bddl = os.path.join(get_libero_path("bddl_files"), t.problem_folder, t.bddl_file)
+        cfg = dict(suite=args.suite, max_steps=600, num_steps_wait=10, resolution=128, depth=False, wrist=True, perturb=None,
+                   counterfactual=dict(COUNTERFACTUAL, mode="coshift", coshift_phase="post"))
+        r = EnvRunner(bddl, cfg, contextlib.nullcontext())
+        robo = r.env.env
+        acts = postprocess_actions(z["actions"])
+        tz = z["target_pos"][:, 2]
+        held = [k for k in range(len(acts)) if tz[k] - tz[0] > 0.03 and (acts[: max(k, 1)][..., -1] > 0).any()]
+        if not held:
+            r.close()
+            continue
+        k = held[0]
+        st = np.array(z["sim_state"][k], dtype=np.float64)
+        m, d = robo.sim.model._model, robo.sim.data._data
+        st[1 + m.nq :] = 0.0  # same (zero) start velocity in both worlds
+        r.restore(st, int(z["t"][k]), 1.0)
+        nom = any(r.step(a)["done"] for a in acts[k:])
+        r.restore(st, int(z["t"][k]), 1.0)
+        r._coshift_setup(robo)
+        r._cs_z0 = float(z["sim_state"][0][1 + r._cs_target + 2])
+        sh = r._coshift_place_post(d)
+        if sh is None:
+            print(f"    {os.path.basename(f)}: {getattr(r, '_cs_why', '?')} (query {k})")
+            r.close()
+            continue
+        d.qpos[:] = st[1 : 1 + m.nq]
+        for a in (r._cs_target, r._cs_others[r._cs_container]):
+            d.qpos[a : a + 2] += sh
+        err = r._ik_shift(m, d, sh)
+        st2 = st.copy()
+        st2[1 : 1 + m.nq] = d.qpos
+        r.restore(st2, int(z["t"][k]), 1.0)
+        cs = any(r.step(a)["done"] for a in acts[k:])
+        n += 1
+        res.append((nom, cs))
+        print(f"    {os.path.basename(f)}: from query {k}, shift {np.round(sh * 100, 1).tolist()} cm, IK err {err:.1e}, "
+              f"nominal replay success {nom}, co-shifted replay success {cs}")
+        r.close()
+    res = np.array(res).reshape(-1, 2)
+    print(f"[post] successes replayed from the first held state: nominal {res[:, 0].sum()}/{len(res)}, "
+          f"co-shifted {res[:, 1].sum()}/{len(res)}")
+    ok = len(res) >= 5 and res[:, 1].sum() >= 0.8 * res[:, 0].sum()
+    print("CHECK_COSHIFT_POST_OK" if ok else "CHECK_COSHIFT_POST_FAILED")
 
 
 if __name__ == "__main__":

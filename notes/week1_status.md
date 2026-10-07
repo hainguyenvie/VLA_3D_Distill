@@ -754,7 +754,22 @@ sai trong thế giới phản thực → nhãn mâu thuẫn với ngôn ngữ. *
 bằng tên / ngoại hình.**
 Hướng sửa có nguyên tắc: dời tay cùng **vật mà tay đang thao tác theo** — trước khi kẹp: vật đích; sau khi kẹp: vật đang
 cầm + nơi đặt (đĩa / giỏ). Ở pha sau, quan hệ tay–nơi đặt giữ nguyên nên nhãn là chunk gốc, chính xác cho pha mang /
-đặt, và không đụng tới quan hệ dùng để chọn vật đích. Xoay (biến đổi cả cảnh, giữ mọi quan hệ) đang được đánh giá.
+đặt, và không đụng tới quan hệ dùng để chọn vật đích.
+
+**Kết quả Spatial đủ (s7, vòng 20):**
+
+| | Spatial chuẩn | ô swap | object | lan | task | Plus Robot / Layout |
+|---|---|---|---|---|---|---|
+| π0.5 gốc | 98.5 | 42.0 | … | … | … | … |
+| base | 98.0 | 42.0 | 98.5 | 96.0 | 0.5 | 83 / 98 |
+| xoay | **99.5** | 39.5 | 97.0 | 96.5 | 0 | 82 / 97 |
+| coshift | 97.5 | 37.0 | 98.0 | 96.5 | 0 | 80 / 95 |
+
+**Cả hai phản thực không sang được Spatial** (ô swap −2.5 / −5, trong nhiễu nhưng không có dấu hiệu tăng). Lý do theo
+phân tích bố cục: lỗi Spatial nằm ở **pha đặt** (đĩa bị dời), mà xoay giữ nguyên quan hệ giữa đĩa và các vật khác, còn
+coshift chỉ tác động trước khi kẹp. Tức là gain trên Object gắn với loại lỗi "chọn vật đích theo ô quen" — đúng loại lỗi
+mà các phản thực này nhắm tới — chứ không phải một cải thiện chung. Bước tiếp: coshift pha sau kẹp (dời tay + vật đang
+cầm + nơi đặt), cổng kiểm tra đang chạy.
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 

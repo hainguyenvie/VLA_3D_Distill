@@ -36,6 +36,9 @@ def parse():
     ap.add_argument("--cf_coshift", default="0.08,0.3", help="coshift mode: range of the target's (and hand's) shift (metres)")
     ap.add_argument("--p_swap", type=float, default=0.5, help="coshift mode: probability that the target takes another object's spot")
     ap.add_argument("--p_coshift", type=float, default=0.5, help="mix mode: share of queries rendered as coshift (else rotate)")
+    ap.add_argument("--coshift_phase", choices=["pre", "post", "both"], default="pre",
+                    help="coshift mode: before the grasp move hand + target (pre); after it move hand + held target + "
+                         "container (post); or both")
     ap.add_argument("--coshift_margin", type=int, default=10,
                     help="coshift mode: chunk steps kept after the chunk's first gripper-close command (the rest is masked)")
     ap.add_argument("--cf_max_query", type=int, default=0,
@@ -70,7 +73,7 @@ def main():
     cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")),
                                           c7=args.c7, theta=tuple(float(x) for x in args.cf_theta.split(",")),
                                           coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap,
-                                          p_coshift=args.p_coshift)
+                                          p_coshift=args.p_coshift, coshift_phase=args.coshift_phase)
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg)
 
     import torch
@@ -192,10 +195,11 @@ def main():
                 A["cf_teacher"] = exact
             elif args.cf_mode == "coshift":
                 A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat")})
-                cf_ok[:] = cat("cf_valid").astype(bool) & ~A["closed_before"].astype(bool)
+                cf_ok[:] = cat("cf_valid").astype(bool)  # the env marks only the phases asked for (--coshift_phase)
                 g = A["actions_teacher"][..., 6] * (student.act_std[6] + 1e-8) + student.act_mean[6]  # env convention, +1 close
                 first = np.where((g > 0).any(1), (g > 0).argmax(1), g.shape[1])
                 A["cf_mask"] = (np.arange(g.shape[1])[None] <= first[:, None] + args.coshift_margin).astype(np.float32)
+                A["cf_mask"][A["closed_before"].astype(bool)] = 1.0  # after the grasp: hand + held target + container moved
                 ok = np.flatnonzero(cf_ok)  # the teacher's own chunk in the co-shifted world vs the exact one, on kept steps
                 diff = np.abs(A["cf_teacher"][ok] - A["actions_teacher"][ok]) * A["cf_mask"][ok][..., None]
                 teacher_gap = float(diff.sum() / max(A["cf_mask"][ok].sum() * 7, 1))

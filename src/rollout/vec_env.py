@@ -99,7 +99,7 @@ def world_fixed_bodies(robo) -> List[int]:
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
 COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5,
-                      p_coshift=0.5)
+                      p_coshift=0.5, coshift_phase="pre", coshift_post=(0.08, 0.4))
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
@@ -113,6 +113,10 @@ COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshi
 # the nominal chunk is the correct action until it starts carrying the target (the training masks the rest); the
 # other objects and the container stay, so the target is somewhere else relative to everything the policy could have
 # memorised. Only pre-grasp queries are valid (`cf_valid`); needs the target's identity, nothing else.
+# With `coshift_phase` "post" or "both", queries after the grasp (target held) move the hand, the held target and the
+# container (the place target) together by a vector of length in `coshift_post`, the other objects stay: the hand-
+# container geometry is unchanged, so the nominal chunk is the correct action for carrying and placing. This does not
+# move the object the instruction may describe by its relations before it is picked up.
 # mode "mix": at every query one of "rotate" and "coshift" (probability `p_coshift` for coshift, which falls back to
 # rotate after the grasp or when no placement is found); `cf_kind` says which (0 rotate, 1 coshift).
 # mode "swap": the target object and another movable object (not the container) exchange their horizontal positions;
@@ -347,6 +351,7 @@ class EnvRunner:
 
         self._cs_name, self._cs_body = names[0], robo.obj_body_id[names[0]]
         self._cs_target = qadr(names[0])
+        self._cs_z0 = float(d.qpos[self._cs_target + 2]) if self._cs_target is not None else 0.0
         self._cs_container = names[1] if len(names) > 1 else None
         self._cs_others = {n: qadr(n) for n in robo.objects_dict if n != names[0] and n in robo.obj_body_id and qadr(n) is not None}
         self._cs_r = {n: radius(robo.obj_body_id[n]) for n in [names[0]] + list(self._cs_others)}
@@ -556,6 +561,35 @@ class EnvRunner:
                 return new - xy_t, swap
         return None
 
+    def _coshift_place_post(self, d):
+        """After the grasp: shift for (held target + container + hand), or None if the target is not held or there is
+        no container / no free spot for it."""
+        if self._cs_container not in self._cs_others:
+            return None
+        ta, ca = self._cs_target, self._cs_others[self._cs_container]
+        held = (d.qpos[ta + 2] - self._cs_z0 > 0.02
+                and np.linalg.norm(d.qpos[ta : ta + 3] - d.site_xpos[self._cs_site]) < 0.12)
+        if not held:
+            self._cs_why = "not held"
+            return None
+        lo, hi = self.cfg["counterfactual"].get("coshift_post", COUNTERFACTUAL["coshift_post"])
+        xy_c = d.qpos[ca : ca + 2].copy()
+        others = {n: d.qpos[a : a + 2].copy() for n, a in self._cs_others.items() if n != self._cs_container}
+        allxy = np.array([xy_c, d.qpos[ta : ta + 2]] + list(others.values()))
+        # containers sit at the edge of the object area: let them go a little beyond it, and accept a small overlap of
+        # bounding circles (they are conservative) with the objects standing on the table
+        box_lo, box_hi = allxy.min(0) - 0.15, allxy.max(0) + 0.15
+        r_c = self._cs_r[self._cs_container]
+        for _ in range(100):
+            ang, mag = _PERT_RNG.uniform(0, 2 * np.pi), _PERT_RNG.uniform(lo, hi)
+            new = xy_c + mag * np.array([np.cos(ang), np.sin(ang)])
+            if (new < box_lo).any() or (new > box_hi).any():
+                continue
+            if all(np.linalg.norm(new - xy) >= 0.8 * (r_c + self._cs_r[n]) for n, xy in others.items()):
+                return new - xy_c
+        self._cs_why = "no free spot"
+        return None
+
     def _coshift_view(self, robo, res, conv) -> Dict[str, Any]:
         """Frames of the world in which the target and the hand moved together (see COUNTERFACTUAL), and the
         proprio there; the simulator's arrays are restored exactly afterwards."""
@@ -568,13 +602,22 @@ class EnvRunner:
         saved = {k: getattr(d, k).copy() for k in self._KIN + self._COM}
         out = {}
         try:
-            place = None if self.closed else self._coshift_place(d)  # pre-grasp only
+            phase = self.cfg["counterfactual"].get("coshift_phase", "pre")
+            post = bool(self.closed)
+            if not post:
+                place = self._coshift_place(d) if phase in ("pre", "both") else None
+            else:
+                sh = self._coshift_place_post(d) if phase in ("post", "both") else None
+                place = None if sh is None else (sh, None)
             shift, swap = place if place is not None else (np.zeros(2), None)
             ta = self._cs_target
             if swap is not None:
                 a = self._cs_others[swap]
                 d.qpos[a : a + 2] = d.qpos[ta : ta + 2]
             d.qpos[ta : ta + 2] += shift
+            if post and place is not None:  # the container moves with the hand and the held target
+                ca = self._cs_others[self._cs_container]
+                d.qpos[ca : ca + 2] += shift
             err = self._ik_shift(m, d, shift)
             mujoco.mj_kinematics(m, d)
             mujoco.mj_camlight(m, d)
@@ -586,6 +629,7 @@ class EnvRunner:
         out["cf_delta"] = shift.astype(np.float32)
         out["cf_valid"] = bool(place is not None and err < 1e-3)
         out["cf_target_name"] = np.array(swap or "")  # the object that took the target's spot, if any
+        out["cf_post"] = bool(post)
         return out
 
     @staticmethod
