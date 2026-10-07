@@ -615,7 +615,21 @@ chỉ chứa vật phụ. Ô swap đưa vật đích tới:
 - **Kết quả dự đoán (coshift s7, vòng 8, swap 31.0):** theo task 0.80 0.95 0 0.60 0 0 0.65 0 0 0.10 → gain vẫn dồn vào
   task 0, 1, 3, 6; task 9 nhích 0.10, task 4, 8 vẫn 0. **Dự đoán sai phần lớn**: dạy vật đích ở chỗ khác so với bố cục
   (tại vòng 8) chưa phá được lỗi ở 6 task này. Ở cả 6 task, π0.5 kẹp đúng vật mồi đứng ở ô quen 20/20 lần (tất định).
-  Đang chạy rollout có state của xoay s8 và coshift s7 trên 6 task này để xem policy đi đâu.
+  Rollout có state trên 6 task này (vòng 8, 10 tập mỗi task):
+
+  | Task (vật đích → ô) | π0.5: kẹp gần | xoay s8: kẹp gần | coshift s7: kẹp gần, kết cục |
+  |---|---|---|---|
+  | 2 salad dressing → F | mồi 20/20 | mồi 6, vật khác 4 | mồi 5, **đích 3** |
+  | 4 ketchup → E | mồi 20/20 | mồi 5, vật khác 3 | vật khác (bbq) 9, mồi 1 |
+  | 5 tomato sauce → A | mồi 20/20 | mồi 9 | mồi 8 |
+  | 7 milk → B | mồi 20/20 | mồi 10 | mồi 7, **đích 3** |
+  | 8 chocolate pudding → D | mồi 20/20 | mồi 10 | mồi 10 |
+  | 9 orange juice → C | mồi 19/20 | mồi 9 | **đích 10/10**: làm đổ 6, rơi khi mang 3, thành công 1 |
+
+  Xoay không đổi hành vi trên các task này (vẫn đi tới mồi). Coshift **đổi được việc chọn đích** ở task 9 (10/10 tới
+  đúng vật) và một phần task 2, 7, nhưng hỏng ở khâu thực thi tại chỗ lạ (làm đổ hộp nước cam cao, rơi khi mang) —
+  cùng loại lỗi với ô position. Tức là headroom còn lại tách thành hai tầng: chọn đích (coshift chạm tới được) và
+  thao tác ở vị trí chưa từng thấy (chưa phương pháp nào chạm tới; teacher π0.5 cũng kém ở đó).
 - Task 5, 7 (đích tới A / B nhưng vẫn 0) chưa giải thích được bằng hình học; có thể là nhận dạng vật (tomato sauce /
   milk) — cần xem state.
 - Ô position: vật đích tới chỗ trống, ô quen để trống → π0.5 vẫn đi tới vật (nhặt được ~50%). Tức lỗi swap là **bị hút
@@ -651,6 +665,30 @@ chuẩn 94.0, **Long ô swap 9.0** → lỗi đi theo vị trí quen không ch�
 Ô position với 400 bước thay vì 280 (π0.5 gốc): **21.5** (từ 10.5). Khoảng 11 điểm là do hết giờ, nhưng vẫn còn 74 tập
 lạc khi chuyển, 46% trong số đó đến bước 400 vẫn cầm vật, lơ lửng cách giỏ ~11 cm: không chỉ là thiếu thời gian, mà
 policy không hoàn tất được việc đặt vật khi vật được nhặt từ chỗ lạ. Còn lại: nhầm vật 52, near miss 23.
+
+**Đọc sớm ở vòng 8, ô PRO swap (200 tập, π0.5 gốc 18.5):**
+
+| | s7 | s8 | trung bình |
+|---|---|---|---|
+| base (không phản thực) | 15.5 (vòng 4–20: 22.0 / 15.5 / 16.5 / 14.5) | 15.5 | 15.5 |
+| soi gương | 19.5 | 24.0 | 21.8 |
+| soi gương, 4 query đầu | 23.5 | — | — |
+| xoay | 24.0 | **38.5** | **31.3** |
+| coshift | **31.0** | 23.5 | 27.3 |
+
+Cả ba phản thực hơn base ở cả hai seed; phương sai giữa seed lớn (xoay 24 / 38.5). Gain dồn vào task 0, 1, 3, 6.
+
+**Kết quả cuối (vòng 20) đã có:**
+
+| | Object | swap | position | object | lan | task | Plus Robot / Layout |
+|---|---|---|---|---|---|---|---|
+| π0.5 gốc | 98.5 | 18.5 | 10.5 | 94 | 100 | 0 | 83 / 82 |
+| base s7 | 99.0 | 15.5 | 11.0 | 93 | 99.5 | 0 | 83 / 85 |
+| base s8 | 99.0 | 20.5 | 12.0 | 93 | 99.0 | 0 | 83 / 83 |
+| soi gương, 4 query đầu, s7 | 97.5 | 25.5 | … | … | … | … | … |
+
+Vòng 8 trên ô position: base s8 14.0, soi gương s7 13.5, soi gương 4 query đầu 15.5, xoay s7 12.5 — không sụp (khác
+phản thực đổi chỗ: 0.5–1.0), nhưng cũng chưa tăng.
 
 ## Câu hỏi tính tổng quát (người dùng, 07/10) và kế hoạch
 
