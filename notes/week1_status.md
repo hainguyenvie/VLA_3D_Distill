@@ -678,14 +678,25 @@ policy không hoàn tất được việc đặt vật khi vật được nhặt
 
 Cả ba phản thực hơn base ở cả hai seed; phương sai giữa seed lớn (xoay 24 / 38.5). Gain dồn vào task 0, 1, 3, 6.
 
-**Kết quả cuối (vòng 20) đã có:**
+**Kết quả cuối (vòng 20, 07/10 07:20; … = đang chạy):**
 
-| | Object | swap | position | object | lan | task | Plus Robot / Layout |
-|---|---|---|---|---|---|---|---|
-| π0.5 gốc | 98.5 | 18.5 | 10.5 | 94 | 100 | 0 | 83 / 82 |
-| base s7 | 99.0 | 15.5 | 11.0 | 93 | 99.5 | 0 | 83 / 85 |
-| base s8 | 99.0 | 20.5 | 12.0 | 93 | 99.0 | 0 | 83 / 83 |
-| soi gương, 4 query đầu, s7 | 97.5 | 25.5 | … | … | … | … | … |
+| | Object | swap | position | object | lan | task | Plus Robot / Layout | swap / position ở vòng 8 |
+|---|---|---|---|---|---|---|---|---|
+| π0.5 gốc | 98.5 | 18.5 | 10.5 | 94 | 100 | 0 | 83 / 82 | |
+| base s7 | 99.0 | 15.5 | 11.0 | 93 | 99.5 | 0 | 83 / 85 | |
+| base s8 | 99.0 | 20.5 | 12.0 | 93 | 99.0 | 0 | 83 / 83 | 15.5 / 14.0 |
+| soi gương s7 | 98.0 | 20.0 | 12.5 | … | … | … | … | 19.5 / 13.5 |
+| soi gương s8 | 98.0 | 21.5 | … | … | … | … | … | 24.0 / 13.5 |
+| soi gương 4 query đầu s7 | 97.5 | 25.5 | 11.5 | 92.5 | 99.0 | 0 | 75 / 85 | 23.5 / 15.5 |
+| xoay s7 | 99.5 | … | … | … | … | … | … | 24.0 / 12.5 |
+| xoay s8 | 99.0 | **34.5** | … | … | … | … | … | 38.5 / 15.0 |
+| coshift s7 | 99.0 | 24.0 | **22.5** | … | … | 0 | … | 31.0 / 23.0 |
+| coshift s8 | 99.0 | 24.5 | **18.0** | … | … | … | … | 23.5 / 20.5 |
+
+- **coshift** là bản đầu tiên tăng cả swap (24.3 vs base 18.0) lẫn position (20.3 vs 11.5) ở cả hai seed, cảnh chuẩn
+  giữ 99. Gain swap của s7 bị bào mòn từ vòng 8 (31.0) tới vòng 20 (24.0).
+- **xoay** cho swap cao nhất ở s8 (34.5) nhưng không tăng position (vòng 8: 12.5 / 15.0).
+- **soi gương** gần base.
 
 Vòng 8 trên ô position: base s8 14.0, soi gương s7 13.5, soi gương 4 query đầu 15.5, xoay s7 12.5 — không sụp (khác
 phản thực đổi chỗ: 0.5–1.0), nhưng cũng chưa tăng.
