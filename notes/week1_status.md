@@ -811,6 +811,21 @@ Lo ngại: gain có phụ thuộc đặc thù dữ liệu không? Kế hoạch:
 Xem mục "Phản thực mới" ở trên. Các nhánh token (B2 / B2′ / B3 / B4) và takeover trên máy cũ đã kết thúc; máy cũ
 đã xoá.
 
+## Dọn ổ (07/10 16:30, theo yêu cầu người dùng)
+
+Ổ chứa workspace trên máy 8×H200 (dùng chung) đầy 100% (32 GB trống) → xoá ~200 GB (`scripts/server/cleanup_workspace.sh`,
+chạy thử trước, bỏ qua run còn đang train và eval còn đang ghi): còn 232 GB trống. Đã xoá:
+- trọng số + optimizer của các hướng bỏ / đã thay: π0.5 swap, swap nhẹ tay, swap off-policy, shift, soi gương (3 run);
+  OFT A1/A2 trên Spatial / Goal / Long (đã dừng giữa chừng); nhánh token (cos_b2, cos_b2p, long_cos_b2); smoke test;
+- với run giữ lại: `state.pt`, `adapter_last` (trùng vòng cuối), adapter trung gian (π0.5 giữ vòng 8, 12 và vòng cuối;
+  OFT giữ vòng cuối);
+- `steps/` (state từng query) của các phân tích đã xong, trừ 4 thư mục mốc của π0.5 gốc (object, pro_swap, pro_temp,
+  spatial_pro_swap) mà các cổng kiểm tra dùng;
+- trọng số và `.npz` trong `outputs/old_h200`, `outputs/old_l40` (và trong bản relay trên laptop, 9 GB → 15 MB);
+- checkpoint gốc của các hướng không đi tiếp (tải lại được từ HF bằng `scripts/server/fetch_checkpoints.sh`):
+  Haozhan72 OFT-SFT object traj1 / trajall, libero10 traj1, libero10 traj1-rl; Spatial Forcing object.
+Giữ nguyên: mọi log, `summary.json`, `episodes.jsonl`, `failures.*`, `train_log.jsonl`; π0.5 gốc; 4 checkpoint OFT của moojink.
+
 ## Lỗi của chính mình đã gặp (để không lặp lại)
 
 - Thêm tham số `obs` vào giao diện `act` cho policy OFT mà không cập nhật `RebinnedPolicy`: nhánh state-teacher (B3)
