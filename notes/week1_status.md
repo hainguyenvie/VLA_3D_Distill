@@ -839,6 +839,8 @@ sai. Sửa: tính độ cao miệng nơi đặt từ hình học (`rim_height`);
 khi vật cách miệng 6 cm; đĩa phẳng giữ như cũ. Cổng lại: Object **20/20** (giỏ dời **18/20**), Spatial 19/20 / 18/20 như cũ.
 Đợt 16: Object relocate4 s7 có / không giới hạn 15%. Long: đang sinh rollout có state của π0.5 để chạy cổng trước khi train.
 Bài học: cổng kiểm tra phải chạy trên **mọi** bộ trước khi train, không chỉ bộ đầu tiên.
+Cổng trên Long: chấm theo env (cần cả hai vật) cho 0/15 — tiêu chí sai cho task nhiều vật; chấm theo từng vật (vật mang
+nằm trong nơi đặt, tay đã rời): Long **15/15**, giỏ dời **13/15**; Object 20/20, 18/20. Chạy lại `p05lg_ocd_relocate4_s7`.
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
