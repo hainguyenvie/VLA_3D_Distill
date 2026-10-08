@@ -90,15 +90,20 @@ def main():
                 st2[1 + ca : 1 + ca + 2] = new
                 r.restore(st2, int(z["t"][k]), 1.0)
                 robo = r.env.env
-                d = robo.sim.data._data
-            placer = ScriptedPlacer()
+                m, d = robo.sim.model._model, robo.sim.data._data
+            from src.rollout.scripted import rim_height
+            from src.rollout.vec_env import EnvRunner as _E
+
+            top = rim_height(m, d, robo.obj_body_id[cont], _E._is_descendant)
+            placer = ScriptedPlacer(top=top)
             done = False
             site = robo.robots[0].eef_site_id
             plan = []
             for step in range(args.max_steps):
                 if args.chunked:
                     if not plan:
-                        plan = list(placer_chunk(d.site_xpos[site].copy(), d.qpos[ta : ta + 3].copy(), d.qpos[ca : ca + 3].copy())[:10])
+                        plan = list(placer_chunk(d.site_xpos[site].copy(), d.qpos[ta : ta + 3].copy(), d.qpos[ca : ca + 3].copy(),
+                                                 top=top)[:10])
                     a = plan.pop(0)
                 else:
                     a = placer.act(d.site_xpos[site].copy(), d.qpos[ta : ta + 3].copy(), d.qpos[ca : ca + 3].copy())

@@ -365,6 +365,10 @@ class EnvRunner:
         self._cs_container = names[-1] if len(names) > 1 else None  # the place target is named last (Object, Spatial, Long)
         self._cs_others = {n: qadr(n) for n in robo.objects_dict if n != names[0] and n in robo.obj_body_id and qadr(n) is not None}
         self._cs_r = {n: radius(robo.obj_body_id[n]) for n in [names[0]] + list(self._cs_others)}
+        from src.rollout.scripted import rim_height
+
+        self._cs_ctop = (rim_height(m, d, robo.obj_body_id[self._cs_container], self._is_descendant)
+                         if self._cs_container in self._cs_others else 0.0)
         # furniture standing on the table (not the table itself): a moved container must keep clear of it
         self._cs_fixed = [d.xpos[b][:2].copy() for b in world_fixed_bodies(robo)
                           if not (robo.sim.model.body_id2name(b) or "").endswith("table")]
@@ -663,7 +667,8 @@ class EnvRunner:
             ta, ca = getattr(self, "_cs_held", self._cs_target), self._cs_others.get(self._cs_container)
             eef = d.site_xpos[self._cs_site].copy()
             if shift is not None:
-                out["cf_label"] = placer_chunk(eef, d.qpos[ta : ta + 3].copy(), d.qpos[ca : ca + 3].copy()).astype(np.float32)
+                out["cf_label"] = placer_chunk(eef, d.qpos[ta : ta + 3].copy(), d.qpos[ca : ca + 3].copy(),
+                                               top=self._cs_ctop).astype(np.float32)
             mujoco.mj_camlight(m, d)
             self._render_cf(robo, res, conv, out)
         finally:

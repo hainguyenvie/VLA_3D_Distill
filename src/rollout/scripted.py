@@ -9,8 +9,13 @@ import numpy as np
 
 class ScriptedPlacer:
     def __init__(self, cruise: float = 0.15, release: float = 0.03, tol_xy: float = 0.02, gain: float = 0.6,
-                 vmax: float = 0.9):
+                 vmax: float = 0.9, top: float = 0.0):
+        """`top`: height of the container's rim above its body origin. A flat container (plate, < 3 cm) is approached
+        at `cruise` above its origin and the object lowered to `release`; one with walls (basket, bowl) is approached
+        at `cruise` above its rim and the object dropped from 6 cm above the rim."""
         self.cruise, self.release, self.tol_xy, self.gain, self.vmax = cruise, release, tol_xy, gain, vmax
+        self.walls = top >= 0.03
+        self.top = top
         self.opened = 0
 
     def act(self, eef: np.ndarray, obj: np.ndarray, cont: np.ndarray) -> np.ndarray:
@@ -23,14 +28,16 @@ class ScriptedPlacer:
             a[2], a[6] = self.vmax, -1.0
             self.opened += 1
             return a
+        base = cont[2] + (self.top if self.walls else 0.0)  # rim of a container with walls, origin of a flat one
+        drop = 0.06 if self.walls else self.release
         if not above:  # carry at cruise height above the container
-            z_goal = eef[2] + (cont[2] + self.cruise - obj[2])
-        else:  # lower the object onto the container
-            z_goal = eef[2] + (cont[2] + self.release - obj[2])
+            z_goal = eef[2] + (base + self.cruise - obj[2])
+        else:  # lower the object onto / into the container
+            z_goal = eef[2] + (base + drop - obj[2])
         a[:2] = np.clip(self.gain * e_xy / 0.05, -self.vmax, self.vmax)
         a[2] = np.clip(self.gain * (z_goal - eef[2]) / 0.05, -self.vmax, self.vmax)
         a[6] = 1.0
-        if above and obj[2] - cont[2] < self.release + 0.015:
+        if above and obj[2] - base < drop + 0.015:
             a[6], self.opened = -1.0, 1
         return a
 
@@ -40,10 +47,10 @@ class ScriptedPlacer:
 TRACK_GAIN = np.array([0.19, 0.25, 0.13])
 
 
-def placer_chunk(eef: np.ndarray, obj: np.ndarray, cont: np.ndarray, horizon: int = 50) -> np.ndarray:
+def placer_chunk(eef: np.ndarray, obj: np.ndarray, cont: np.ndarray, horizon: int = 50, top: float = 0.0) -> np.ndarray:
     """The placer's next `horizon` actions from this state, rolled out on the fitted kinematic model (the held object
-    moves with the hand until the gripper opens). Env convention, (horizon, 7)."""
-    placer = ScriptedPlacer()
+    moves with the hand until the gripper opens). `top`: container rim above its origin. Env convention, (horizon, 7)."""
+    placer = ScriptedPlacer(top=top)
     eef, obj = np.array(eef, dtype=np.float64), np.array(obj, dtype=np.float64)
     out = np.zeros((horizon, 7))
     for k in range(horizon):
@@ -54,3 +61,17 @@ def placer_chunk(eef: np.ndarray, obj: np.ndarray, cont: np.ndarray, horizon: in
         if not placer.opened:
             obj = obj + step
     return out
+
+
+def rim_height(m, d, root: int, is_descendant) -> float:
+    """Height of the highest collision-geom point of body `root`'s subtree above the body's origin (its rim)."""
+    zmax = None
+    for g in range(m.ngeom):
+        b = int(m.geom_bodyid[g])
+        if not (b == root or is_descendant(m, b, root)) or not (m.geom_contype[g] or m.geom_conaffinity[g]):
+            continue
+        c, h = m.geom_aabb[g, :3], m.geom_aabb[g, 3:]
+        corners = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]) * h + c
+        z = (corners @ d.geom_xmat[g].reshape(3, 3).T + d.geom_xpos[g])[:, 2].max()
+        zmax = z if zmax is None else max(zmax, z)
+    return 0.0 if zmax is None else float(zmax - d.xpos[root][2])
