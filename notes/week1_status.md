@@ -822,7 +822,14 @@ Plus R/L 88 / 98; s8 chuẩn 98.0, **swap 63.0**, object 97.0, lan 96.5, task 0.
 nhiều vật: (1) vật vừa thả vào giỏ vẫn cao và gần tay → bị coi là "đang cầm" → dạy mang lại vật đã đặt; (2) sau lúc thả, nhãn
 của bộ điều khiển là "đi thẳng lên", mâu thuẫn với việc đi lấy vật thứ hai. Sửa: chỉ coi là đang cầm khi gripper đang được
 lệnh đóng và hai ngón không khép rỗng, vật trong 8 cm quanh tay; mask chunk sau lúc thả + 5 bước. Run cũ dừng ở vòng 16;
-chạy lại `p05lg_ocd_relocate2_s7`. Base Long s7: chuẩn 95.0.
+chạy lại `p05lg_ocd_relocate2_s7`. Base Long s7: chuẩn 95.0, swap 8.5, task 8.0.
+
+**Relocate trên Object và bản sửa trên Long cũng sụp (đợt 14, 08/10 01:45):** Object relocate s7 eval chuẩn 0.72 ở vòng 4
+(rollout 0.47–0.73), Object coreloc s7 0.55, Long relocate2 rollout 0.68 ở vòng 3; Spatial relocate s9 vẫn 0.99. Khác biệt:
+**tỉ lệ state mang nhãn kịch bản** — Object 60% (pha mang tới giỏ dài), Long 27%, Spatial ~12%. Nhãn kịch bản khác phong cách
+π0.5 (đi thẳng ở độ cao cố định); khi chiếm đa số, nhất là với các lần dời nhỏ (ảnh gần như cảnh gốc), policy nhận nhãn mâu
+thuẫn → hỏng. Sửa (đợt 15): giữ cặp phản thực trên tối đa 15% state (`--cf_frac 0.15`) và dời nơi đặt ít nhất 15 cm
+(`--cf_coshift_post 0.15,0.4`); chạy lại Object relocate3, Object coreloc3, Long relocate3 (s7). Ba run sụp đã dừng.
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
