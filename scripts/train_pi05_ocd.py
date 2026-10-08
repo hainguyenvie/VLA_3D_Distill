@@ -26,7 +26,7 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr"], default="swap",
+    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr", "full"], default="swap",
                     help="swap: the target exchanges places with another object and the counterfactual instruction names "
                          "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
                          "target is displaced and the teacher labels the counterfactual world")
@@ -208,6 +208,29 @@ def main():
                 teacher_gap = float((np.abs(A["cf_teacher"][ok] - exact[ok]) * mask[ok][..., None]).sum()
                                     / max(mask[ok].sum() * 7, 1))
                 A["cf_teacher"] = exact
+            elif args.cf_mode == "full":  # kind 0 retarget, 1 coshift (before the grasp), 2 relocate (while carrying)
+                kind = cat("cf_kind").astype(int)
+                cf_ok[:] = cat("cf_valid").astype(bool)
+                eef_p, eef_q = cat("cf_eef_pos"), cat("cf_eef_quat")
+                eef_p[kind != 1], eef_q[kind != 1] = A["eef_pos"][kind != 1], A["eef_quat"][kind != 1]  # hand unmoved
+                A["cf_eef_pos"], A["cf_eef_quat"] = eef_p, eef_q
+                lab = cat("cf_label").astype(np.float64)
+                norm = ((lab - student.act_mean) / (student.act_std + 1e-8)).astype(np.float32)
+                exact = np.where((kind == 1)[:, None, None], A["actions_teacher"], norm).astype(np.float32)
+                n = cat("cf_len").astype(int)
+                rel = lab[..., 6] < 0
+                rel_first = np.where(rel.any(1), rel.argmax(1), lab.shape[1])
+                g = A["actions_teacher"][..., 6] * (student.act_std[6] + 1e-8) + student.act_mean[6]
+                close_first = np.where((g > 0).any(1), (g > 0).argmax(1), g.shape[1])
+                steps = np.arange(lab.shape[1])[None]
+                mask = np.select([(kind == 0)[:, None], (kind == 1)[:, None]],
+                                 [steps < n[:, None], steps <= close_first[:, None] + args.coshift_margin],
+                                 steps <= rel_first[:, None] + 5).astype(np.float32)
+                A["cf_mask"] = mask
+                ok = np.flatnonzero(cf_ok)
+                diff = np.abs(A["cf_teacher"][ok] - exact[ok]) * mask[ok][..., None]
+                teacher_gap = float(diff.sum() / max(mask[ok].sum() * 7, 1))
+                A["cf_teacher"] = exact
             elif args.cf_mode == "rr":  # before the grasp: retarget (scripted approach); while carrying: relocate (placer)
                 cf_ok[:] = cat("cf_valid").astype(bool)
                 post = A["closed_before"].astype(bool)
@@ -349,7 +372,7 @@ def main():
         if cf_losses:
             row["cf_loss"] = float(np.mean(cf_losses))
             row["cf_states"] = int(cf_ok[keep].sum())
-            if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr"):
+            if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr", "full"):
                 row["teacher_cf_gap"] = teacher_gap
             if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)
                 row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())

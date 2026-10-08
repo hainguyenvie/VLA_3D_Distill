@@ -475,6 +475,18 @@ class EnvRunner:
             return self._relocate_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "retarget":
             return self._retarget_view(robo, res, conv)
+        if self.cfg["counterfactual"].get("mode") == "full":  # before the grasp retarget or coshift, while carrying relocate
+            if self.closed:
+                return dict(self._relocate_view(robo, res, conv), cf_len=np.int16(0), cf_target_name=np.array(""),
+                            cf_kind=np.int8(2), cf_eef_pos=np.zeros(3, dtype=np.float32), cf_eef_quat=np.zeros(4, dtype=np.float32),
+                            cf_post=True, target_pos_cf=_target_pos(robo))
+            if _PERT_RNG.random() < self.cfg["counterfactual"].get("p_coshift", 0.5):
+                out = self._coshift_view(robo, res, conv)
+                return dict(out, cf_label=np.zeros((50, 7), dtype=np.float32), cf_len=np.int16(0), cf_kind=np.int8(1),
+                            cf_post=False)
+            return dict(self._retarget_view(robo, res, conv), cf_kind=np.int8(0), cf_post=False,
+                        cf_eef_pos=np.zeros(3, dtype=np.float32), cf_eef_quat=np.zeros(4, dtype=np.float32),
+                        target_pos_cf=_target_pos(robo))
         if self.cfg["counterfactual"].get("mode") == "rr":  # retarget before the grasp, relocate while carrying
             if not self.closed:
                 return self._retarget_view(robo, res, conv)
@@ -980,7 +992,7 @@ class EnvRunner:
                     continue
                 self._mirror_obj_addrs.append(int(a[0] if isinstance(a, (tuple, list, np.ndarray)) else a))
             self.cf = True
-        elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("coshift", "relocate", "coreloc", "retarget", "rr"):
+        elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("coshift", "relocate", "coreloc", "retarget", "rr", "full"):
             self._coshift_setup(robo)
             self.cf = True  # tasks without a movable target (open a drawer, turn on the stove) still render: invalid queries
         elif counterfactual and self.cfg.get("counterfactual"):
