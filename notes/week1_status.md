@@ -993,6 +993,27 @@ chuẩn 96.0, lan 96.5 — cân bằng nhất: rr 59.0 / 27.5, coreloc 27.5 / 42
 ở trên + đổi màu p 0.5, cap 15%, s7. Object / Spatial (card 0), Goal (card 2) chạy từ 21:15 UTC 08/10; Long (card 3) từ 21:20.
 Cổng Long: qua 0 18/19, 1 20/20, 7 19/20 (giỏ); loại 3 (ngăn kéo) 6/18, 9 (lò vi sóng) 3/17, 6 2/19; 2, 8 (ấm moka lên bếp)
 0/16, 0/13 cả khi không dời; 4 bị khoá bởi `unique`.
+
+**Kết quả xong trong đêm 08/10:**
+- `full` s7 (Object, không màu, không 3 kiểm tra): chuẩn 96.0, swap 53.0, position **39.0**, object 80.0, lan 96.5, Plus 88 / 80.
+- rr 3 seed: swap 63.5 / 54.5 / **51.0** (TB 56.3), position 29.5 / 25.5 / 16.0 (TB 23.7); s9 chuẩn 95.0.
+- **Goal relocate theo mục tiêu BDDL** (task 1, 2, 3, 4, 6, 8, 9; 11% state có cặp): chuẩn 97.0, swap **28.5** (base 29.0), task
+  10.0 → relocate không giúp Goal, kể cả khi đã gồm nóc tủ / ngăn kéo.
+- **Long relocate5** (task giỏ 0, 1, 7): chuẩn 91.0 (base 95.0), swap **11.0** (base 8.5) → không giúp.
+
+**ECT trong harness (đợt 20, 08/10 22:20 UTC).** Đọc kỹ ECT (related_work §11): biến đổi cả cảnh (gương / dịch), **robot và tư thế
+đầu giữ nguyên**, nhãn = bộ điều khiển bám đường đi EEF đã biến đổi, chỉ giữ replay thành công — tức cũng đổi quan hệ tay–đích
+với nhãn có đặc quyền. Cài lại (`EnvRunner.ect_replay`, `--cf_mode ect`): mỗi vòng 16 tập thành công của vòng đó được chạy lại
+(lấy đường đi EEF), biến đổi cảnh (vật tự do + đồ nội thất trên bàn; bàn, robot đứng yên), bám đường đi đã biến đổi bằng action
+gốc đã biến đổi (dấu tịnh tiến theo trục bị phản chiếu, xoay theo luật giả vectơ −Mω, gripper chép) + ½ sai số vị trí qua mô
+hình động học; ghép query t của tập gốc với query t của replay (cùng câu lệnh, cùng noise / thời điểm flow như loss ECT); nhãn =
+lệnh của replay từ t, mask sau khi hết. Cùng ngân sách với ta (cap 15%, không số hạng nhất quán). Biến đổi theo Bảng 20 của họ:
+Spatial / Goal gương y; Object gương y, gương x + dịch, gương xy + dịch; Long dịch (cỡ dịch họ không nêu — ta chọn 8–10 cm).
+- Lỗi tự phát hiện khi xem ảnh: `mirror_quat` (viết cho vật quay mặt về robot) làm tủ phản chiếu quay mặt ra ngoài → ngăn
+  kéo hỏng. Sửa: đồ nội thất quay mặt về khu đặt vật (lật trục ngang vuông góc hướng đó).
+- Cổng `scripts/check_ect.py` (3 tập / task, π0.5 gốc): đối chứng identity Spatial 0.97, Goal 0.97, Long 0.90, Object 1.00
+  (bản đầu chỉ bám vị trí: Goal 0.77, ngăn kéo hỏng — đổi sang feedforward + hiệu chỉnh); biến đổi: Object 1.00 (cả 3),
+  Spatial gương 0.87, Goal gương 0.63 (đẩy đĩa / bật bếp / giá rượu hỏng), Long dịch 0.70.
 3. **Cổng thực thi với ngưỡng chốt trước** (`check_relocate_gate.py`): placer chạy vòng kín trong thế giới đã dời, task qua
    nếu thành công ≥ 60% (n ≥ 5); chỉ áp cho cặp relocate (`--relocate_tasks`), cặp trước kẹp giữ ở mọi task. Đang sinh 20
    tập / task của π0.5 gốc trên Goal, Long, Spatial để chạy lại cổng với mẫu đủ lớn (bản trước 2–6 tập / task).
