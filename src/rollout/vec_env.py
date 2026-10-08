@@ -335,6 +335,7 @@ class EnvRunner:
         self._cs_arm_v = np.array([m.jnt_dofadr[j] for j in jid])
         self._cs_lo, self._cs_hi = m.jnt_range[jid, 0], m.jnt_range[jid, 1]
         self._cs_site = robot.eef_site_id
+        self._cs_fingers = np.array(robot._ref_gripper_joint_pos_indexes)
 
         def qadr(n):
             try:
@@ -595,8 +596,14 @@ class EnvRunner:
         if self._cs_container not in self._cs_others:
             return None
         ca = self._cs_others[self._cs_container]
+        # held = the gripper is commanded closed, its fingers are not shut on nothing, and a lifted object of the task sits
+        # between them (an object just released into the container is lifted and near the hand, but not held)
+        fingers = float(np.abs(d.qpos[self._cs_fingers]).sum())
+        if getattr(self, "grip_cmd", 1.0) <= 0 or fingers < 0.004:
+            self._cs_why = "not held"
+            return None
         held = [a for a, z0 in self._cs_carry.values()
-                if d.qpos[a + 2] - z0 > 0.02 and np.linalg.norm(d.qpos[a : a + 3] - d.site_xpos[self._cs_site]) < 0.12]
+                if d.qpos[a + 2] - z0 > 0.02 and np.linalg.norm(d.qpos[a : a + 3] - d.site_xpos[self._cs_site]) < 0.08]
         if not held:
             self._cs_why = "not held"
             return None
@@ -748,6 +755,7 @@ class EnvRunner:
         """Execute actions until the episode ends; only the last one renders."""
         obs, rendered = None, False
         for k, a in enumerate(actions):
+            self.grip_cmd = float(a[-1])  # the gripper command being executed (the render hook reads it)
             if k == len(actions) - 1:
                 with self.lock:
                     self._cameras(True)

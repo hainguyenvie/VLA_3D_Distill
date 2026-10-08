@@ -184,10 +184,12 @@ def main():
                 lab = cat("cf_label").astype(np.float64)
                 exact = A["actions_teacher"].copy()
                 exact[post] = ((lab[post] - student.act_mean) / (student.act_std + 1e-8)).astype(np.float32)
+                rel = lab[..., 6] < 0
+                rel_first = np.where(rel.any(1), rel.argmax(1), lab.shape[1])
                 g = A["actions_teacher"][..., 6] * (student.act_std[6] + 1e-8) + student.act_mean[6]
                 first = np.where((g > 0).any(1), (g > 0).argmax(1), g.shape[1])
                 mask = (np.arange(g.shape[1])[None] <= first[:, None] + args.coshift_margin).astype(np.float32)
-                mask[post] = 1.0
+                mask[post] = (np.arange(lab.shape[1])[None] <= rel_first[post][:, None] + 5).astype(np.float32)
                 A["cf_mask"] = mask
                 ok = np.flatnonzero(cf_ok)
                 teacher_gap = float((np.abs(A["cf_teacher"][ok] - exact[ok]) * mask[ok][..., None]).sum()
@@ -197,6 +199,11 @@ def main():
                 cf_ok[:] = cat("cf_valid").astype(bool)
                 lab = cat("cf_label").astype(np.float64)
                 norm = ((lab - student.act_mean) / (student.act_std + 1e-8)).astype(np.float32)
+                # the placer's chunk is only meaningful until shortly after it releases the object (multi-object tasks
+                # go on to the next object, the placer would just go up): mask the rest
+                rel = lab[..., 6] < 0
+                first = np.where(rel.any(1), rel.argmax(1), lab.shape[1])
+                A["cf_mask"] = (np.arange(lab.shape[1])[None] <= first[:, None] + 5).astype(np.float32)
                 ok = np.flatnonzero(cf_ok)
                 teacher_gap = float(np.abs(A["cf_teacher"][ok] - norm[ok]).mean()) if len(ok) else 0.0
                 A["cf_teacher"] = norm
