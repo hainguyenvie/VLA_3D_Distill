@@ -891,6 +891,17 @@ eval chuẩn khi train 0.72 (v4) → 0.82 (v8) → **0.98 (v12)**. Goal s7 vòng
 bếp" 0.70 → 0.2 — tới trên tâm bát không phải tư thế kẹp tốt cho bát) → lỗi Goal không nằm ở pha tiếp cận như bộ điều khiển
 hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarget s8 đang chạy.
 
+**08/10 trưa:**
+- **Coshift + relocate (coreloc4, bộ điều khiển đã sửa) Object s7: position 42.5** (relocate 32 / 34, coshift 20.7, base 12.2),
+  swap 24.0, chuẩn 97.0 → hai phản thực cộng dồn theo pha (coshift: nhặt ở chỗ lạ; relocate: mang tới giỏ từ chỗ lạ).
+- Relocate4cap Object s8: position **31.5** (s7 34.0) → relocate trên ô position lặp lại qua 2 seed; swap 25.0, chuẩn 98.5.
+- Goal augmentation s7: chuẩn 97.0, swap 29.0 (= base).
+- **Teacher chuẩn hoá thất bại** (`scripts/canon_teacher_eval.py`): hỏi π0.5 trong thế giới đã đưa vật đích về chỗ quen và dời
+  tay ngược −δ (IK), thực thi trong thế giới thật → ô swap Object **22.0** (π0.5 18.5, oracle viết tay 59.0). π0.5 nhớ cả quỹ đạo
+  từ tư thế tay quen, không chỉ vị trí vật (khớp chẩn đoán của ECT) → π0.5 không làm teacher được ở bất kỳ thế giới lệch nào;
+  teacher tổng quát phải là thứ khác (lập kế hoạch chuyển động, policy RL có đặc quyền).
+- Mới: chế độ `rr` (retarget trước kẹp + relocate khi mang) Object s7; coreloc4 s8.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
