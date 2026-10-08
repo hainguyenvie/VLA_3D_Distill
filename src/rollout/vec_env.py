@@ -326,6 +326,31 @@ class EnvRunner:
                 getattr(m, k)[:] = v
         mujoco.mj_camlight(m, d)  # world poses of cameras and lights only; the physics state is not touched
 
+    def _tint_objects(self, robo, p: float) -> None:
+        """Multiply the material (or geom) colour of each movable object, with probability `p` per object, by a random
+        colour (per channel in [0.25, 1]), so that objects of the same kind are seen in several colours (LIBERO-PRO's
+        object cell recolours the target). The model is rebuilt at every reset, so nothing needs undoing."""
+        global _PERT_RNG
+        if _PERT_RNG is None:
+            _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
+        m = robo.sim.model._model
+        for name, root in robo.obj_body_id.items():
+            if _PERT_RNG.random() >= p:
+                continue
+            tint = _PERT_RNG.uniform(0.25, 1.0, 3)
+            tint /= tint.max()  # keep the brightest channel: a hue shift more than a darkening
+            mats = set()
+            for g in range(m.ngeom):
+                b = int(m.geom_bodyid[g])
+                if not (b == root or self._is_descendant(m, b, root)):
+                    continue
+                if m.geom_matid[g] >= 0:
+                    mats.add(int(m.geom_matid[g]))
+                else:
+                    m.geom_rgba[g, :3] *= tint
+            for mid in mats:
+                m.mat_rgba[mid, :3] *= tint
+
     def _displace_distractor(self, robo, dist: float) -> None:
         """Move one random movable object that is neither the target nor the container by about `dist` metres to a free
         spot of the object area (in the physics), so that it is the only object off its usual spot."""
@@ -918,6 +943,8 @@ class EnvRunner:
             if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
+            if self.cfg.get("obj_tint"):  # training: random colours on the movable objects (appearance variation)
+                self._tint_objects(robo, float(self.cfg["obj_tint"]))
             if self.cfg.get("displace_distractor"):  # diagnostic: one non-target object starts somewhere unusual
                 self._displace_distractor(robo, float(self.cfg["displace_distractor"]))
             if self.cfg.get("q1_offset"):  # diagnostic: the arm starts turned about its first joint, the scene does not
@@ -1060,14 +1087,16 @@ def mem_available_gb() -> float:
 class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
                  depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None,
-                 counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0, displace_distractor: float = 0.0):
+                 counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0, displace_distractor: float = 0.0,
+                 obj_tint: float = 0.0):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
                         depth=depth, wrist=wrist, perturb=perturb,  # perturb: ranges as in VIEW_AUG, used per reset
                         counterfactual=counterfactual,  # as in COUNTERFACTUAL, used per reset
                         q1_offset=q1_offset,  # diagnostic: first arm joint turned by this much at every reset (radians)
-                        displace_distractor=displace_distractor)  # diagnostic: one non-target object moved this far
+                        displace_distractor=displace_distractor,  # diagnostic: one non-target object moved this far
+                        obj_tint=obj_tint)  # training: probability that a movable object is recoloured in an episode
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs

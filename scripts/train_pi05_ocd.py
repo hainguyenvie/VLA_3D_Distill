@@ -43,6 +43,9 @@ def parse():
     ap.add_argument("--cf_tasks", default="",
                     help="comma-separated task ids whose counterfactual pairs are used (default: all); e.g. the tasks where "
                          "the scripted teacher passes its simulation gate (scripts/check_scripted_place.py)")
+    ap.add_argument("--obj_tint", type=float, default=0.0,
+                    help="probability that each movable object is recoloured in a training episode (the in-training "
+                         "evaluation uses the same environments, so its scenes are recoloured too)")
     ap.add_argument("--cf_frac", type=float, default=0.0,
                     help="> 0: keep counterfactual pairs on at most this share of the iteration's states (random subset)")
     ap.add_argument("--coshift_phase", choices=["pre", "post", "both"], default="pre",
@@ -84,7 +87,7 @@ def main():
                                           coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap,
                                           p_coshift=args.p_coshift, coshift_phase=args.coshift_phase,
                                           coshift_post=tuple(float(x) for x in args.cf_coshift_post.split(",")))
-    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg)
+    vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg, obj_tint=args.obj_tint)
 
     import torch
 
