@@ -733,6 +733,11 @@ class EnvRunner:
         import mujoco
 
         m, d = robo.sim.model._model, robo.sim.data._data
+        if not getattr(self, "_cs_ok", False):  # no movable target in this task: nominal frames, invalid
+            out = {}
+            self._render_cf(robo, res, conv, out)
+            return dict(out, target_pos_cf=_target_pos(robo), cf_delta=np.zeros(2, dtype=np.float32), cf_valid=False,
+                        cf_target_name=np.array(""), cf_post=bool(self.closed))
         saved = {k: getattr(d, k).copy() for k in self._KIN + self._COM}
         out = {}
         try:
@@ -877,6 +882,7 @@ class EnvRunner:
             self.cf = True
         elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("coshift", "relocate", "coreloc", "retarget"):
             self._coshift_setup(robo)
+            self.cf = True  # tasks without a movable target (open a drawer, turn on the stove) still render: invalid queries
         elif counterfactual and self.cfg.get("counterfactual"):
             names = getattr(robo, "obj_of_interest", None) or []
             if names and names[0] in robo.obj_body_id:
