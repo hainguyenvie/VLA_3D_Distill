@@ -83,6 +83,10 @@ def main():
         if e["task_id"] not in layouts:
             layouts[e["task_id"]] = task_layout(suite, e["task_id"])
         addr, target, container = layouts[e["task_id"]]
+        if target not in addr:  # the target is a fixture / region (open a drawer, turn on the stove): not analysed
+            continue
+        if container not in addr:
+            container = None
         z = np.load(path)
         st = np.concatenate([z["sim_state"], z["final_sim_state"][None]])  # (T+1, 1 + nq + nv); column 0 is time
         pos = {k: st[:, 1 + a : 1 + a + 3] for k, a in addr.items()}
