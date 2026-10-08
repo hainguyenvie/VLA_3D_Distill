@@ -872,6 +872,19 @@ tới trên đúng vật đích (2–4 query; tới nơi ở 100% tập), rồi 
 suất p_swap), tay giữ nguyên; nhãn = `approach_chunk` (tới 10 cm trên vật, gripper mở, giữ hướng) trên mô hình động học,
 mask sau khi tới nơi + 3 bước; giới hạn 15% state. Đợt 18: retarget Object s7 (card 2), Goal s7 (card 3).
 
+**Ablation relocate trên Spatial (đợt 17, s7, ô swap):**
+
+| | thế giới phản thực | teacher có đặc quyền | swap | chuẩn |
+|---|---|---|---|---|
+| base (TB s7 / s8) | — | — | 40.0 | 97.5 |
+| dời đĩa, nhãn = π0.5 (`--relocate_label teacher`) | có | — | **40.0** | 98.0 |
+| nhãn kịch bản ở thế giới gốc (`--cf_coshift_post 0,0`) | — | có | **35.5** | 98.5 |
+| relocate đầy đủ (TB 3 seed) | có | có | **64.7** | 98.3 |
+
+→ **Không thành phần nào tự nó có tác dụng; chỉ khi kết hợp mới +25.** Thế giới phản thực tạo ra tình huống quan hệ tay–đích
+đổi; teacher có đặc quyền cho nhãn đúng ở đó (π0.5 không làm được vì mắc chính lỗi này). Trả lời trực tiếp phản biện "chỉ
+là dùng expert kịch bản": expert kịch bản một mình còn giảm 4.5.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
