@@ -34,6 +34,8 @@ def parse():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--depth", action="store_true", help="also log metric depth of the agent view")
     ap.add_argument("--no_steps", action="store_true", help="do not write steps/*.npz")
+    ap.add_argument("--displace_distractor", type=float, default=0.0,
+                    help="diagnostic: move one non-target object about this far (m) to a free spot at every reset")
     ap.add_argument("--q1_offset", type=float, default=0.0,
                     help="diagnostic: start every episode with the arm turned about its first joint (radians), scene unchanged")
     ap.add_argument("--device", default="cuda:0")
@@ -51,7 +53,8 @@ def main():
     from src.rollout.vec_env import LiberoVecEnv
 
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, args.num_steps_wait, depth=args.depth,
-                       wrist=args.ckpt.startswith(("oft:", "pi05:")), q1_offset=args.q1_offset)
+                       wrist=args.ckpt.startswith(("oft:", "pi05:")), q1_offset=args.q1_offset,
+                       displace_distractor=args.displace_distractor)
 
     import torch
 

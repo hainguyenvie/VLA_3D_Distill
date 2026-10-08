@@ -326,6 +326,39 @@ class EnvRunner:
                 getattr(m, k)[:] = v
         mujoco.mj_camlight(m, d)  # world poses of cameras and lights only; the physics state is not touched
 
+    def _displace_distractor(self, robo, dist: float) -> None:
+        """Move one random movable object that is neither the target nor the container by about `dist` metres to a free
+        spot of the object area (in the physics), so that it is the only object off its usual spot."""
+        import mujoco
+
+        global _PERT_RNG
+        if _PERT_RNG is None:
+            _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
+        self._coshift_setup(robo)
+        self.cf = None
+        if not self._cs_ok:
+            return
+        m, d = robo.sim.model._model, robo.sim.data._data
+        cands = [n for n in self._cs_others if n != self._cs_container]
+        if not cands:
+            return
+        name = cands[int(_PERT_RNG.integers(len(cands)))]
+        a = self._cs_others[name]
+        xy = d.qpos[a : a + 2].copy()
+        others = {n: d.qpos[b : b + 2].copy() for n, b in list(self._cs_others.items()) + [(self._cs_name, self._cs_target)] if n != name}
+        allxy = np.array([xy] + list(others.values()))
+        lo_b, hi_b = allxy.min(0) - 0.05, allxy.max(0) + 0.05
+        for _ in range(100):
+            ang, mag = _PERT_RNG.uniform(0, 2 * np.pi), _PERT_RNG.uniform(0.8 * dist, 1.2 * dist)
+            new = xy + mag * np.array([np.cos(ang), np.sin(ang)])
+            if (new < lo_b).any() or (new > hi_b).any():
+                continue
+            if all(np.linalg.norm(new - o) >= self._cs_r[name] + self._cs_r.get(n, 0.04) + 0.01 for n, o in others.items()):
+                d.qpos[a : a + 2] = new
+                mujoco.mj_forward(m, d)
+                self.displaced = name
+                return
+
     def _coshift_setup(self, robo) -> None:
         """Addresses for the coshift counterfactual: target and other free objects, arm joints, horizontal radii."""
         m, d = robo.sim.model._model, robo.sim.data._data
@@ -880,6 +913,8 @@ class EnvRunner:
             if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
+            if self.cfg.get("displace_distractor"):  # diagnostic: one non-target object starts somewhere unusual
+                self._displace_distractor(robo, float(self.cfg["displace_distractor"]))
             if self.cfg.get("q1_offset"):  # diagnostic: the arm starts turned about its first joint, the scene does not
                 import mujoco
 
@@ -1020,13 +1055,14 @@ def mem_available_gb() -> float:
 class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
                  depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None,
-                 counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0):
+                 counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0, displace_distractor: float = 0.0):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
                         depth=depth, wrist=wrist, perturb=perturb,  # perturb: ranges as in VIEW_AUG, used per reset
                         counterfactual=counterfactual,  # as in COUNTERFACTUAL, used per reset
-                        q1_offset=q1_offset)  # diagnostic: first arm joint turned by this much at every reset (radians)
+                        q1_offset=q1_offset,  # diagnostic: first arm joint turned by this much at every reset (radians)
+                        displace_distractor=displace_distractor)  # diagnostic: one non-target object moved this far
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs
