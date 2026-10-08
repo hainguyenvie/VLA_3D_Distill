@@ -48,7 +48,9 @@ def main():
             r._coshift_setup(robo)
             d = robo.sim.data._data
             hovered, q = False, 0
-            while not hovered and q < args.max_approach_queries and obs["active"]:  # scripted approach to the true target
+            if not getattr(r, "_cs_ok", False):  # no movable target (open a drawer, turn on the stove): pi0.5 alone
+                hovered = None
+            while hovered is False and q < args.max_approach_queries and obs["active"]:  # scripted approach to the true target
                 chunk, k = approach_chunk(d.site_xpos[r._cs_site].copy(), d.xpos[r._cs_body].copy())
                 hovered = k <= 10
                 obs = r.step(chunk[:10])
