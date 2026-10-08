@@ -1,6 +1,6 @@
 # Báo cáo tiến độ — thế giới phản thực 3D và teacher có đặc quyền cho VLA
 
-Cập nhật 09/10/2026, 01:00 UTC. Mọi số là của chúng tôi (π0.5 bản LeRobot, cùng harness, 200 tập mỗi ô LIBERO-PRO, cùng
+Cập nhật 09/10/2026, 04:45 (giờ máy chủ 08/10 21:45 UTC). Mọi số là của chúng tôi (π0.5 bản LeRobot, cùng harness, 200 tập mỗi ô LIBERO-PRO, cùng
 ngân sách 20 vòng × 1024 state) trừ khi ghi "công bố". Nhật ký chi tiết: [week1_status.md](week1_status.md); số liệu từng run:
 [../results/week1_summary.csv](../results/week1_summary.csv); đối thủ: [related_work.md](related_work.md) (§9–10).
 
@@ -41,8 +41,9 @@ phỏng** trước khi dùng (thực thi nhãn theo chunk trong thế giới đ�
 | Bộ / ô | Base | Aug 2D (openpi) | **Phương pháp** | Seed |
 |---|---|---|---|---|
 | Spatial — swap | 40.0 | — | **64.7** (relocate) | 3 |
-| Object — swap | 18.7 | 24.2 | **53.0** (retarget); **63.5** (retarget + relocate) | 3; 1 (s8 chạy) |
+| Object — swap | 18.7 | 24.2 | **53.0** (retarget); **59.0** (retarget + relocate, 63.5 / 54.5) | 3; 2 |
 | Object — position | 12.2 | 13.0 | **42.3** (coshift + relocate); 33 (relocate) | 2; 2 |
+| Object — swap / position, một chế độ | 18.7 / 12.2 | 24.2 / 13.0 | **53.0 / 39.0** (`full`: retarget hoặc coshift trước kẹp, relocate khi mang) | 1 |
 | Cảnh chuẩn Object / Spatial | 98–100 | 98–99 | 97–99.5 | |
 
 Cận trên: tiếp cận oracle rồi π0.5 tự làm = 59.0 trên Object swap; retarget đạt 90% mức đó, retarget + relocate vượt.
@@ -73,6 +74,10 @@ Tự distill dưới nhiễu thị giác render lại từ cùng state (A2): **8
 
 ## 7. Đang chạy / tiếp theo
 
-- Đang chạy: retarget + relocate s8; chế độ `full` (retarget / coshift + relocate); retarget + màu ngẫu nhiên; Goal relocate theo
-  mục tiêu BDDL; Long relocate (task giỏ).
-- Tiếp: một cấu hình duy nhất chạy trên cả 4 bộ; cài lại ECT để so công bằng; thêm seed; viết bản nháp.
+- **Bỏ lựa chọn theo bộ / theo task chọn tay** bằng ba kiểm tra tự động cho teacher có đặc quyền: (1) không dời vật có bản sao
+  cùng loại trong cảnh (câu lệnh chỉ chỉ ra nó bằng vị trí — tự tắt retarget trên Spatial); (2) chỉ giữ cặp khi chính teacher,
+  hỏi ở thế giới thật, đi cùng hướng π0.5 (loại các task bắt đầu bằng bước khác, vật đích nhận nhầm: Long 2 / 6 → 0% cặp
+  giữ, Object 77–100%); (3) cổng thực thi relocate với ngưỡng chốt trước (≥ 60%) trên 20 tập / task.
+- **Đang chạy (đợt 19):** đúng một cấu hình (`full` + 3 kiểm tra + đổi màu p 0.5) trên cả 4 bộ, s7. Còn: retarget + relocate
+  s9, rr + màu, retarget + màu p 0.9, Goal relocate theo mục tiêu BDDL (chuẩn 97.0), Long relocate (chuẩn 91.0, base 95).
+- Tiếp: seed thứ hai cho đợt 19; cài lại ECT để so công bằng; viết bản nháp.
