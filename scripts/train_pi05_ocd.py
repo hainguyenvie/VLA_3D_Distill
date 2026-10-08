@@ -38,6 +38,8 @@ def parse():
     ap.add_argument("--p_coshift", type=float, default=0.5, help="mix mode: share of queries rendered as coshift (else rotate)")
     ap.add_argument("--cf_coshift_post", default="0.08,0.4",
                     help="post-grasp coshift / relocate: range of the container's shift (metres)")
+    ap.add_argument("--relocate_label", choices=["placer", "teacher"], default="placer",
+                    help="relocate mode: label the relocated world with the scripted placer, or (ablation) with pi0.5 itself")
     ap.add_argument("--cf_frac", type=float, default=0.0,
                     help="> 0: keep counterfactual pairs on at most this share of the iteration's states (random subset)")
     ap.add_argument("--coshift_phase", choices=["pre", "post", "both"], default="pre",
@@ -211,7 +213,10 @@ def main():
                 A["cf_mask"] = (np.arange(lab.shape[1])[None] <= first[:, None] + 5).astype(np.float32)
                 ok = np.flatnonzero(cf_ok)
                 teacher_gap = float(np.abs(A["cf_teacher"][ok] - norm[ok]).mean()) if len(ok) else 0.0
-                A["cf_teacher"] = norm
+                if args.relocate_label == "placer":
+                    A["cf_teacher"] = norm
+                else:  # ablation: pi0.5's own chunk in the relocated world (already in A["cf_teacher"]), whole chunk
+                    A["cf_mask"][:] = 1.0
             elif args.cf_mode == "mix":  # per query: rotate (kind 0) or coshift (kind 1)
                 A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat")})
                 kind = cat("cf_kind").astype(int)

@@ -613,6 +613,8 @@ class EnvRunner:
             return None
         ta = self._cs_held = held[0]
         lo, hi = self.cfg["counterfactual"].get("coshift_post", COUNTERFACTUAL["coshift_post"])
+        if hi <= 0:  # ablation: no move at all (the scripted label in the nominal world)
+            return np.zeros(2)
         xy_c = d.qpos[ca : ca + 2].copy()
         riders = self._riding_container(d, exclude=ta)
         others = {n: d.qpos[a : a + 2].copy() for n, a in self._cs_others.items()
