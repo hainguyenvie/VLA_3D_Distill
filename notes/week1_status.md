@@ -1001,6 +1001,11 @@ Cổng Long: qua 0 18/19, 1 20/20, 7 19/20 (giỏ); loại 3 (ngăn kéo) 6/18, 
   10.0 → relocate không giúp Goal, kể cả khi đã gồm nóc tủ / ngăn kéo.
 - **Long relocate5** (task giỏ 0, 1, 7): chuẩn 91.0 (base 95.0), swap **11.0** (base 8.5) → không giúp.
 
+- **Đổi màu không nhất quán**: rr + màu s7 object **74.0** (rr không màu 80.5 / 82.0 / 81.5), swap 58.5, position 27.5, chuẩn
+  98.0, lan 96.0; retarget + màu p 0.9 s7: chuẩn 98.5, swap 49.0, position 20.5, lan 96.0. Cùng lúc retarget + màu p 0.5 cho
+  object 85.5 (retarget 72.5–76). → hiệu ứng của đổi màu lên ô object chưa ổn định (1 seed mỗi cấu hình); rút lại nhận định
+  "đổi màu gỡ phần lớn tradeoff" cho tới khi có thêm seed. Đợt 19 vẫn dùng màu p 0.5.
+
 **ECT trong harness (đợt 20, 08/10 22:20 UTC).** Đọc kỹ ECT (related_work §11): biến đổi cả cảnh (gương / dịch), **robot và tư thế
 đầu giữ nguyên**, nhãn = bộ điều khiển bám đường đi EEF đã biến đổi, chỉ giữ replay thành công — tức cũng đổi quan hệ tay–đích
 với nhãn có đặc quyền. Cài lại (`EnvRunner.ect_replay`, `--cf_mode ect`): mỗi vòng 16 tập thành công của vòng đó được chạy lại

@@ -58,7 +58,9 @@ từ "nhặt vật lệch chỗ".
 ## 5. Tradeoff và giới hạn
 
 - **Vị trí ↔ ngoại hình.** Ô "object" của LIBERO-PRO đổi màu vật đích; base làm tốt (93) *vì* tìm vật theo vị trí. Retarget dạy
-  tìm theo ngoại hình nên tụt (72.5 / 76.0; retarget + relocate 80.5). Đang thử ngẫu nhiên hoá màu vật khi train.
+  tìm theo ngoại hình nên tụt (retarget 72.5 / 76.0 / 75.0; retarget + relocate 80.5 / 82.0 / 81.5). Đổi màu vật khi train
+  (p 0.5) cho kết quả ngược nhau giữa hai cấu hình (1 seed mỗi bên): retarget 85.5 (tốt hơn), retarget + relocate 74.0 (kém
+  hơn) → **chưa claim được** đổi màu gỡ tradeoff; cần thêm seed.
 - **Goal / Long chưa tăng.** Goal swap: retarget 32.5, relocate (bản cũ, lọc task) 28.5, base 29.0; lỗi Goal chủ yếu là đặt lên
   nóc tủ — teacher mới (theo mục tiêu BDDL) vừa qua cổng một phần ở đó, đang chạy. Long: bản đầu làm tụt cảnh chuẩn; đang chạy
   lại với teacher đã sửa, chỉ ở task giỏ.
