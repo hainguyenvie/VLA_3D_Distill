@@ -864,6 +864,14 @@ tìm ra; dừng ở vòng 5 (chạy tiếp được từ `state.pt`). Người d
   và Goal augmentation (s7, card 0). Hướng tiếp: phản thực "retarget" cho pha tiếp cận — dời riêng vật đích (tay giữ nguyên),
   nhãn từ bộ điều khiển kịch bản biết vị trí vật, đưa tay tới trên vật — đối xứng với relocate ở pha đặt.
 
+**Cận trên "tiếp cận oracle" (08/10 07:40, `scripts/oracle_approach.py`):** trên ô swap Object, bộ điều khiển kịch bản đưa tay
+tới trên đúng vật đích (2–4 query; tới nơi ở 100% tập), rồi π0.5 gốc làm phần còn lại: **59.0** (π0.5 tự làm 18.5; 520 bước
+23.5). Theo task: 0.3 0.8 0.6 1.0 0.0 0.9 1.0 0.5 0.8 0.0 — task 2, 5, 7, 8 (trước 0) lên 0.5–0.9; task 4 (ketchup → ô E),
+9 (orange juice → ô C) vẫn 0. → Phần lớn lỗi ô swap nằm ở pha tiếp cận; khi đã đứng trên đúng vật π0.5 kẹp và đặt được.
+**Phản thực retarget** (`--cf_mode retarget`): trước khi kẹp, dời riêng vật đích (chỗ trống, hoặc chiếm chỗ vật khác với xác
+suất p_swap), tay giữ nguyên; nhãn = `approach_chunk` (tới 10 cm trên vật, gripper mở, giữ hướng) trên mô hình động học,
+mask sau khi tới nơi + 3 bước; giới hạn 15% state. Đợt 18: retarget Object s7 (card 2), Goal s7 (card 3).
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
