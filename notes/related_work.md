@@ -268,3 +268,45 @@ của một checkpoint có sẵn; ECT làm trên demo, VLA-OPD on-policy nhưng 
   Trong harness của ta π0.5 gốc ở ô swap Object: 18.5 (280 bước, 20 trial), 23.5 (520 bước) — vẫn dưới 38.3; phần chênh
   còn lại có thể do số trial / init state, khác checkpoint (JAX gốc vs bản LeRobot) hoặc baseline "Frozen-LM" của họ là
   model họ tự fine-tune. So sánh công bằng = cài lại ECT trong harness của ta.
+
+## 11. ECT đọc kỹ (09/10, toàn văn v1 + phụ lục A–K): trùng ý tưởng cốt lõi, so được trực tiếp với base của ta
+
+"When Instructions Retrieve Trajectories: Diagnosing and Mitigating Generalization Failures in VLA Models" (Chen et al.,
+NTHU / NTU, 2609.39971, 30/09/2026). ECT = Equivariant Counterfactual Training = dữ liệu ECT + loss ghép cặp.
+- **Chẩn đoán trùng với ta**: câu lệnh "truy xuất quỹ đạo đã thuộc" thay vì nhìn cảnh — đúng phát hiện "π0.5 nhớ quỹ đạo" của
+  ta. Không còn là đóng góp riêng.
+- **Biến đổi**: s′ = M_s(s), a′ = Replay_{s′}(M_a(a)). Gương (x / y / xy) phản chiếu cả cảnh kể cả đồ cố định, **robot không
+  đổi, tư thế đầu giữ nguyên** → quan hệ tay–đích đổi thật (khác "soi gương" của ta, lật cả tay nên giữ quan hệ). Dịch chuyển
+  (Object, một số task Long): dời "các phần tử được chọn" (hình 5: giỏ + mọi vật dời cùng nhau, robot đứng yên). Nhãn: bộ điều
+  khiển bám đường đi EEF đã biến đổi (không nói IK / OSC), lấy dịch chuyển đạt được làm action tịnh tiến, gripper chép nguyên;
+  chỉ giữ replay thành công. ≤ 3 bản / demo. → cùng họ với retarget / relocate của ta (thế giới đổi quan hệ tay–đích + nhãn
+  từ bộ điều khiển có đặc quyền), khác ở chỗ biến đổi cả cảnh từ trạng thái đầu của demo, không can thiệp giữa chừng theo pha.
+- **Huấn luyện**: Frozen-LM (ViT + action expert, 845M tham số) hoặc Full FT; **4 bộ cùng lúc**, 30k bước, batch 64 (32 cặp);
+  trộn demo gốc. Không nêu lr, số bước tối đa khi eval.
+- **Eval**: LIBERO-PRO Swap / Task / Semantic / Obj, 50 trial × 10 task; không có LIBERO-Plus.
+
+Swap (%), Bảng 2 (Task trong ngoặc ở dòng có ích):
+
+| | Spatial | Object | Goal | Long |
+|---|---|---|---|---|
+| π0.5 chính thức (Full FT) | 46.6 | 18.2 | 34.2 | 9.4 |
+| **π0.5 base của ta** (cùng checkpoint họ, bản LeRobot) | 40.0 | 18.7 | 29.0 | 8.5 |
+| ECT Full FT (từ checkpoint chính thức) | 72.8 | 40.8 | 35.8 | 26.6 |
+| Frozen-LM Standard (fine-tune của họ) | 52.7 | 38.3 | 41.3 | 12.7 |
+| ECT Frozen-LM (3 seed) | 74.4 | 70.8 | 55.5 | 34.7 |
+| **Ta** (LoRA, từng bộ, distill) | 64.7 (relocate) | 53.0–59.0 (retarget / rr) | ~30 | đang chạy |
+
+- Base của ta khớp dòng "π0.5 chính thức" của họ (Object 18.7 vs 18.2, Long 8.5 vs 9.4) → so trực tiếp với **ECT Full FT**:
+  Object ta hơn (+12–18), Spatial ta kém 8, Goal kém ~6. Dòng Frozen-LM xuất phát từ base khác (Object 38.3).
+- **Ablation từng biến đổi của họ (Bảng 19, LoRA π0.5 từng bộ — gần chế độ của ta)**: mọi biến đổi gương / gương + dịch
+  cho Object Swap 0–12 (base 0); "separability makes the counterfactual supervision learnable but does not by itself raise
+  Object Swap". Gain Object lớn của họ chỉ xuất hiện khi train 4 bộ. Ta: retarget +34 ở chế độ từng bộ.
+- Data vs loss (Bảng 3): phần dữ liệu cho gần hết gain (+19 / +33 / +11 / +17), loss ghép cặp ≈ 0 (khớp với ta: số hạng nhất
+  quán không đóng góp).
+- Giới hạn họ tự nêu: Swap / Task vẫn dưới ID; cần biến đổi "action-valid, phụ thuộc cảnh"; chưa thử contact-rich.
+
+**Hệ quả cho paper**: chẩn đoán và ý "đổi quan hệ tay–đích + nhãn có đặc quyền" không còn mới. Phần còn khác: (1) can thiệp
+theo pha tại state bất kỳ của rollout (dời nơi đặt **khi đang mang**), một vật mỗi lần, không cần demo; (2) gain lớn ở chế độ
+từng bộ, nơi biến đổi của ECT không làm tăng Object Swap; (3) ba kiểm tra tính hợp lệ của teacher (unique / agree / cổng);
+(4) tradeoff vị trí ↔ ngoại hình và cách gỡ. Cần: cài ECT trong harness (gương cả cảnh, robot giữ, nhãn = bám đường đi đã
+biến đổi trên rollout thành công của π0.5) để so cùng ngân sách.
