@@ -831,6 +831,15 @@ chạy lại `p05lg_ocd_relocate2_s7`. Base Long s7: chuẩn 95.0, swap 8.5, tas
 thuẫn → hỏng. Sửa (đợt 15): giữ cặp phản thực trên tối đa 15% state (`--cf_frac 0.15`) và dời nơi đặt ít nhất 15 cm
 (`--cf_coshift_post 0.15,0.4`); chạy lại Object relocate3, Object coreloc3, Long relocate3 (s7). Ba run sụp đã dừng.
 
+**Nguyên nhân thật: bộ điều khiển đặt vật hỏng với giỏ** (08/10 02:30). Đợt 15 vẫn sụp dù đã giới hạn 15% (Object relocate3
+rollout 0.47 ở vòng 3, Long 0.78). Cổng kiểm tra bộ điều khiển chỉ mới chạy trên Spatial (đĩa phẳng) — lỗi của mình: trên
+Object, ngay cả khi giỏ đứng yên nó chỉ thành công **7/20**: mang vật ở +15 cm trên gốc toạ độ của giỏ (dưới miệng giỏ) nên
+vật đâm vào thành và đẩy giỏ đi (có ca giỏ bị đẩy từ y 0.18 tới 0.83). Các run relocate trên Object / Long đã học từ nhãn
+sai. Sửa: tính độ cao miệng nơi đặt từ hình học (`rim_height`); nơi đặt có thành (≥ 3 cm) thì mang ở miệng + 15 cm và thả
+khi vật cách miệng 6 cm; đĩa phẳng giữ như cũ. Cổng lại: Object **20/20** (giỏ dời **18/20**), Spatial 19/20 / 18/20 như cũ.
+Đợt 16: Object relocate4 s7 có / không giới hạn 15%. Long: đang sinh rollout có state của π0.5 để chạy cổng trước khi train.
+Bài học: cổng kiểm tra phải chạy trên **mọi** bộ trước khi train, không chỉ bộ đầu tiên.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
