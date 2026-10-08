@@ -111,8 +111,12 @@ def main():
                 if robo._check_success():
                     done = True
                     break
-                if placer.opened > 25 or (args.chunked and a[6] < 0 and step > 40 and not plan):
-                    pass
+            # per object (multi-object tasks need the other object too for the env's success): the carried object lies
+            # in / on the container and the hand has let go of it
+            obj, c = d.qpos[ta : ta + 3], d.qpos[ca : ca + 3]
+            placed = (np.linalg.norm(obj[:2] - c[:2]) < 0.05 and obj[2] - c[2] < top + 0.03
+                      and np.linalg.norm(obj - d.site_xpos[site]) > 0.05)
+            done = bool(done or placed)
             out.append(bool(done))
             if moved and not done:  # where did it end?
                 obj, c = d.qpos[ta : ta + 3], d.qpos[ca : ca + 3]
