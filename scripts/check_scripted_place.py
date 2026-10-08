@@ -9,6 +9,7 @@ import glob
 import json
 import os
 
+import mujoco
 import numpy as np
 
 from src.rollout.scripted import ScriptedPlacer, placer_chunk
@@ -46,7 +47,7 @@ def main():
         if t not in lay:
             lay[t] = task_layout(suite, t)
         addr, target, cont = lay[t]
-        if cont not in addr:
+        if target not in addr:
             continue
         z = np.load(f, allow_pickle=True)
         acts = postprocess_actions(z["actions"])
@@ -66,7 +67,44 @@ def main():
             r.restore(st, int(z["t"][k]), 1.0)
             robo = r.env.env
             m, d = robo.sim.model._model, robo.sim.data._data
-            ca, ta = addr[cont], addr[target]
+            ta = addr[target]
+            fix = None  # place target that is a region of a fixture: (site id, root body)
+            if cont not in addr:
+                try:
+                    sid = robo.sim.model.site_name2id(cont)
+                except Exception:
+                    break
+                root = int(m.site_bodyid[sid])
+                while m.body_parentid[root] != 0:
+                    root = int(m.body_parentid[root])
+                fix = (sid, root)
+            ca = addr.get(cont)
+            if fix is not None:  # carry onto the region: move the fixture in the model (it stays moved for this replay)
+                if moved:
+                    rngm = rng.uniform(0, 2 * np.pi), rng.uniform(lo, hi)
+                    sh = rngm[1] * np.array([np.cos(rngm[0]), np.sin(rngm[0])])
+                    m.body_pos[fix[1]][:2] += sh
+                    mujoco.mj_forward(m, d)
+                site = robo.robots[0].eef_site_id
+                placer = ScriptedPlacer(top=0.0)
+                done, plan = False, []
+                for step in range(args.max_steps):
+                    goal = d.site_xpos[fix[0]].copy()
+                    if args.chunked:
+                        if not plan:
+                            plan = list(placer_chunk(d.site_xpos[site].copy(), d.qpos[ta : ta + 3].copy(), goal)[:10])
+                        a = plan.pop(0)
+                    else:
+                        a = placer.act(d.site_xpos[site].copy(), d.qpos[ta : ta + 3].copy(), goal)
+                    robo.step(a)
+                    if robo._check_success():
+                        done = True
+                        break
+                obj, g, half = d.qpos[ta : ta + 3], d.site_xpos[fix[0]], m.site_size[fix[0]][:2]
+                placed = bool((np.abs(obj[:2] - g[:2]) < half + 0.02).all() and obj[2] - g[2] < 0.08
+                              and np.linalg.norm(obj - d.site_xpos[site]) > 0.05)
+                out.append(bool(done or placed))
+                continue
             if moved:
                 from src.rollout.vec_env import world_fixed_bodies
 
@@ -123,6 +161,8 @@ def main():
                 print(f"      moved fail: obj-container xy {np.linalg.norm(obj[:2] - c[:2]) * 100:.1f} cm, dz {(obj[2] - c[2]) * 100:.1f} cm, "
                       f"container now {np.round(c[:2], 3).tolist()} (asked {np.round(new, 3).tolist()}), opened {placer.opened}")
         r.close()
+        if len(out) < 2:  # no usable place target
+            continue
         if None in out:
             print(f"    t{t:02d}_n{n:02d}: no free spot for the container")
             continue

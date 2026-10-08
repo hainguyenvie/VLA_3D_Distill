@@ -373,6 +373,20 @@ class EnvRunner:
 
         self._cs_ctop = (rim_height(m, d, robo.obj_body_id[self._cs_container], self._is_descendant)
                          if self._cs_container in self._cs_others else 0.0)
+        # a place target that is a region of a fixture (top of the cabinet, stove burner, rack): its site, and the fixture's
+        # root body, which a relocation moves as a whole
+        self._cs_cfix = None
+        if self._cs_container and self._cs_container not in self._cs_others:
+            try:
+                sid = robo.sim.model.site_name2id(self._cs_container)
+            except Exception:
+                sid = None
+            if sid is not None:
+                root = int(m.site_bodyid[sid])
+                while m.body_parentid[root] != 0:
+                    root = int(m.body_parentid[root])
+                if root != robo.sim.model.body_name2id(robot.robot_model.root_body):
+                    self._cs_cfix = (sid, root, radius(root))
         # furniture standing on the table (not the table itself): a moved container must keep clear of it
         self._cs_fixed = [d.xpos[b][:2].copy() for b in world_fixed_bodies(robo)
                           if not (robo.sim.model.body_id2name(b) or "").endswith("table")]
@@ -607,9 +621,10 @@ class EnvRunner:
     def _coshift_place_post(self, d):
         """After the grasp: shift for (held target + container + hand), or None if the target is not held or there is
         no container / no free spot for it."""
-        if self._cs_container not in self._cs_others:
+        cfix = getattr(self, "_cs_cfix", None)
+        if self._cs_container not in self._cs_others and cfix is None:
             return None
-        ca = self._cs_others[self._cs_container]
+        ca = self._cs_others.get(self._cs_container)
         # held = the gripper is commanded closed, its fingers are not shut on nothing, and a lifted object of the task sits
         # between them (an object just released into the container is lifted and near the hand, but not held)
         fingers = float(np.abs(d.qpos[self._cs_fingers]).sum())
@@ -625,28 +640,31 @@ class EnvRunner:
         lo, hi = self.cfg["counterfactual"].get("coshift_post", COUNTERFACTUAL["coshift_post"])
         if hi <= 0:  # ablation: no move at all (the scripted label in the nominal world)
             return np.zeros(2)
-        xy_c = d.qpos[ca : ca + 2].copy()
-        riders = self._riding_container(d, exclude=ta)
+        xy_c = d.xpos[cfix[1]][:2].copy() if cfix is not None else d.qpos[ca : ca + 2].copy()
+        riders = self._riding_container(d, exclude=ta) if cfix is None else []
         others = {n: d.qpos[a : a + 2].copy() for n, a in self._cs_others.items()
                   if n != self._cs_container and a != ta and a not in riders}
         allxy = np.array([xy_c, d.qpos[ta : ta + 2]] + list(others.values()))
         # containers sit at the edge of the object area: let them go a little beyond it, and accept a small overlap of
         # bounding circles (they are conservative) with the objects standing on the table
         box_lo, box_hi = allxy.min(0) - 0.15, allxy.max(0) + 0.15
-        r_c = self._cs_r[self._cs_container]
+        r_c = cfix[2] if cfix is not None else self._cs_r[self._cs_container]
+        fixed = [fx for fx in self._cs_fixed if cfix is None or np.linalg.norm(fx - xy_c) > 1e-3]  # not the moved one
         for _ in range(100):
             ang, mag = _PERT_RNG.uniform(0, 2 * np.pi), _PERT_RNG.uniform(lo, hi)
             new = xy_c + mag * np.array([np.cos(ang), np.sin(ang)])
             if (new < box_lo).any() or (new > box_hi).any():
                 continue
             if (all(np.linalg.norm(new - xy) >= 0.8 * (r_c + self._cs_r[n]) for n, xy in others.items())
-                    and all(np.linalg.norm(new - fx) > 0.2 for fx in self._cs_fixed)):
+                    and all(np.linalg.norm(new - fx) > max(0.2, 0.8 * r_c) for fx in fixed)):
                 return new - xy_c
         self._cs_why = "no free spot"
         return None
 
     def _riding_container(self, d, exclude=None) -> List[int]:
         """qpos addresses of free objects already lying in / on the container (they move with it)."""
+        if self._cs_container not in self._cs_others:
+            return []
         ca = self._cs_others[self._cs_container]
         r_c, out = self._cs_r[self._cs_container], []
         for n, a in self._cs_others.items():
@@ -705,22 +723,33 @@ class EnvRunner:
 
         m, d = robo.sim.model._model, robo.sim.data._data
         saved = {k: getattr(d, k).copy() for k in self._KIN}
+        cfix = getattr(self, "_cs_cfix", None)
+        saved_root = m.body_pos[cfix[1]].copy() if cfix is not None else None
         out, shift = {}, None
         try:
             if self.closed and self._cs_ok:
                 shift = self._coshift_place_post(d)
             if shift is not None:
-                for a in self._riding_container(d) + [self._cs_others[self._cs_container]]:
-                    d.qpos[a : a + 2] += shift
+                if cfix is not None:  # move the fixture as a whole (render only; the model pose is restored below)
+                    m.body_pos[cfix[1]][:2] += shift
+                else:
+                    for a in self._riding_container(d) + [self._cs_others[self._cs_container]]:
+                        d.qpos[a : a + 2] += shift
                 mujoco.mj_kinematics(m, d)
-            ta, ca = getattr(self, "_cs_held", self._cs_target), self._cs_others.get(self._cs_container)
+            ta = getattr(self, "_cs_held", self._cs_target)
             eef = d.site_xpos[self._cs_site].copy()
             if shift is not None:
-                out["cf_label"] = placer_chunk(eef, d.qpos[ta : ta + 3].copy(), d.qpos[ca : ca + 3].copy(),
-                                               top=self._cs_ctop).astype(np.float32)
+                if cfix is not None:  # place onto the region (a flat site on the fixture)
+                    goal, top = d.site_xpos[cfix[0]].copy(), 0.0
+                else:
+                    ca = self._cs_others[self._cs_container]
+                    goal, top = d.qpos[ca : ca + 3].copy(), self._cs_ctop
+                out["cf_label"] = placer_chunk(eef, d.qpos[ta : ta + 3].copy(), goal, top=top).astype(np.float32)
             mujoco.mj_camlight(m, d)
             self._render_cf(robo, res, conv, out)
         finally:
+            if cfix is not None:
+                m.body_pos[cfix[1]] = saved_root
             for k, v in saved.items():
                 getattr(d, k)[:] = v
         out.setdefault("cf_label", np.zeros((50, 7), dtype=np.float32))
