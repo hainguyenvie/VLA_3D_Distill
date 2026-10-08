@@ -26,7 +26,7 @@ def parse():
     ap.add_argument("--out", required=True)
     ap.add_argument("--state_source", choices=["student", "teacher", "mixed"], default="student")
     ap.add_argument("--no_cf", action="store_true", help="no counterfactual world (baseline)")
-    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr", "full"], default="swap",
+    ap.add_argument("--cf_mode", choices=["shift", "swap", "mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr", "full", "ect"], default="swap",
                     help="swap: the target exchanges places with another object and the counterfactual instruction names "
                          "the object now at the target's place, so the label is the nominal chunk (exact); shift: the "
                          "target is displaced and the teacher labels the counterfactual world")
@@ -51,6 +51,11 @@ def parse():
                     help="> 0, retarget / relocate / rr / full: keep a scripted-teacher pair only if the same teacher, asked in "
                          "the factual world, heads where the expert does (cosine of the summed xyz of the first 25 steps of its "
                          "chunk and of pi0.5's chunk >= this)")
+    ap.add_argument("--ect_transforms", default="ymirror",
+                    help="ect mode (baseline, arXiv 2609.39971): scene transforms drawn per replayed episode, names of "
+                         "src.rollout.vec_env.ECT_TRANSFORMS")
+    ap.add_argument("--ect_episodes", type=int, default=16,
+                    help="ect mode: successful episodes of each iteration replayed in a transformed scene")
     ap.add_argument("--cf_unique", action="store_true",
                     help="never move an object that has a twin of the same kind in the scene (the instruction can then only "
                          "refer to it by where it is)")
@@ -93,7 +98,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     from src.rollout.vec_env import COUNTERFACTUAL, LiberoVecEnv
 
-    cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")),
+    cf_cfg = None if args.no_cf or args.cf_mode == "ect" else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")),
                                           c7=args.c7, theta=tuple(float(x) for x in args.cf_theta.split(",")),
                                           coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap,
                                           p_coshift=args.p_coshift, coshift_phase=args.coshift_phase,
@@ -173,8 +178,62 @@ def main():
         w = "wrist_rgb_cf" if cf else "wrist_rgb"
         pos = "cf_eef_pos" if cf and "cf_eef_pos" in arrays else "eef_pos"
         quat = "cf_eef_quat" if cf and "cf_eef_quat" in arrays else "eef_quat"
+        grip = "cf_gripper_qpos" if cf and "cf_gripper_qpos" in arrays else "gripper_qpos"
         return [{"wrist_rgb": aug(arrays[w][k], False), "eef_pos": arrays[pos][k], "eef_quat": arrays[quat][k],
-                 "gripper_qpos": arrays["gripper_qpos"][k]} for k in idx]
+                 "gripper_qpos": arrays[grip][k]} for k in idx]
+
+    def ect_pairs(recs):
+        """ECT baseline: counterparts (`EnvRunner.ect_replay`) of up to --ect_episodes successful episodes of this
+        iteration, as pairs aligned with each episode's own queries (original state at step t <-> transformed replay at
+        step t, same instruction; label = the replay's commands from t on, masked after its end). Other episodes and
+        failed replays give no pair. Returns (successful replays, replays tried)."""
+        from src.rollout.vec_env import ECT_TRANSFORMS, postprocess_actions
+
+        for r in recs:
+            ar, nq = r["arrays"], r["n_queries"]
+            ar["rgb_cf"], ar["wrist_rgb_cf"] = np.zeros_like(ar["rgb"]), np.zeros_like(ar["wrist_rgb"])
+            for k in ("eef_pos", "eef_quat", "gripper_qpos"):
+                ar["cf_" + k] = ar[k].copy()
+            ar["cf_teacher"] = np.zeros_like(ar["actions_teacher"])
+            ar["cf_mask"] = np.zeros(ar["actions_teacher"].shape[:2], dtype=np.float32)
+            ar["cf_valid"] = np.zeros(nq, dtype=bool)
+        names = args.ect_transforms.split(",")
+        jobs = [int(i) for i in rng.permutation([i for i, r in enumerate(recs) if r["success"]])[: args.ect_episodes]]
+        busy, n_ok, n_try = {}, 0, len(jobs)
+        while jobs or busy:
+            for w in range(vec.num_envs):
+                if w not in busy and jobs:
+                    i = jobs.pop()
+                    r = recs[i]
+                    vec.ect(w, r["task_id"], r["trial_id"], postprocess_actions(r["arrays"]["actions"]).reshape(-1, 7),
+                            r["arrays"]["t"], ECT_TRANSFORMS[names[int(rng.integers(len(names)))]])
+                    busy[w] = i
+            for w in list(busy):
+                if not vec.ready(w):
+                    continue
+                out, ar = vec.recv(w), recs[busy.pop(w)]["arrays"]
+                if not out["success"]:
+                    continue
+                n_ok += 1
+                where = {int(t): k for k, t in enumerate(out["query_ts"])}
+                lab = out["actions"].astype(np.float64)
+                H = ar["actions_teacher"].shape[1]
+                for q, t in enumerate(ar["t"]):
+                    if int(t) not in where:
+                        continue
+                    k = where[int(t)]
+                    chunk = lab[int(t) : int(t) + H]
+                    if not len(chunk):
+                        continue
+                    ar["rgb_cf"][q], ar["wrist_rgb_cf"][q] = out["rgb"][k], out["wrist_rgb"][k]
+                    for key in ("eef_pos", "eef_quat", "gripper_qpos"):
+                        ar["cf_" + key][q] = out[key][k]
+                    full = np.concatenate([chunk, np.repeat(chunk[-1:], H - len(chunk), 0)])
+                    ar["cf_teacher"][q] = ((full - student.act_mean) / (student.act_std + 1e-8)).astype(np.float32)
+                    ar["cf_mask"][q, : len(chunk)] = 1.0
+                    ar["cf_valid"][q] = True
+            time.sleep(0.05)
+        return n_ok, n_try
 
     for it in range(start_it + 1, args.iters + 1):
         t0 = time.time()
@@ -185,6 +244,7 @@ def main():
             for r in new:
                 r["driver"] = who
             recs, nb = recs + new, nb + 1
+        ect_stats = ect_pairs(recs) if args.cf_mode == "ect" else None
         # flatten (episode, query) -> arrays
         cat = lambda k: np.concatenate([r["arrays"][k] for r in recs])  # noqa: E731
         A = {k: cat(k) for k in ("rgb", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "actions_teacher")}
@@ -258,6 +318,12 @@ def main():
                 diff = np.abs(A["cf_teacher"][ok] - norm[ok]) * mask[ok][..., None]
                 teacher_gap = float(diff.sum() / max(mask[ok].sum() * 7, 1))
                 A["cf_teacher"] = norm
+            elif args.cf_mode == "ect":  # baseline: transformed scene, label = the tracking replay of the transformed path
+                cf_ok[:] = cat("cf_valid").astype(bool)
+                A.update({k: cat(k) for k in ("cf_eef_pos", "cf_eef_quat", "cf_gripper_qpos", "cf_mask")})
+                ok = np.flatnonzero(cf_ok)
+                diff = np.abs(A["cf_teacher"][ok] - A["actions_teacher"][ok]) * A["cf_mask"][ok][..., None]
+                teacher_gap = float(diff.sum() / max(A["cf_mask"][ok].sum() * 7, 1))
             elif args.cf_mode == "retarget":  # target moved before the grasp; label = scripted approach (env convention)
                 cf_ok[:] = cat("cf_valid").astype(bool)
                 lab = cat("cf_label").astype(np.float64)
@@ -415,7 +481,9 @@ def main():
             row["cf_states"] = int(cf_ok[keep].sum())
             if agree_rate is not None:
                 row["cf_agree_rate"] = agree_rate
-            if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr", "full"):
+            if ect_stats is not None:
+                row["ect_replays_ok"], row["ect_replays"] = ect_stats
+            if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr", "full", "ect"):
                 row["teacher_cf_gap"] = teacher_gap
             if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)
                 row["teacher_cf_shift"] = float(np.abs(A["cf_teacher"][keep] - A["actions_teacher"][keep]).mean())

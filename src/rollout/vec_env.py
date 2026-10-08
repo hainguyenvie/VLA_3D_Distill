@@ -52,6 +52,34 @@ def mirror_quat(q_wxyz: np.ndarray) -> np.ndarray:
     mujoco.mju_mat2Quat(q, Rm.reshape(-1))
     return q
 
+def reflect_quat(q_wxyz: np.ndarray, axis: int, front=None) -> np.ndarray:
+    """`mirror_quat` for a reflection of world axis `axis` (0: x, through the yz-plane; 1: y, through the xz-plane):
+    R' = M R S, S the reflection of one horizontal body axis, under which the object is taken to be symmetric. By default
+    the body axis most aligned with the reflected world axis (objects facing the robot: mirrors their yaw); with `front`
+    (a horizontal world direction the object faces, e.g. furniture facing the work area), the horizontal body axis most
+    perpendicular to it, so that the mirrored object faces the mirrored direction."""
+    import mujoco
+
+    R = np.zeros(9)
+    mujoco.mju_quat2Mat(R, np.asarray(q_wxyz, dtype=np.float64))
+    R = R.reshape(3, 3)
+    up_b = R.T @ np.array([0.0, 0.0, 1.0])
+    k_up = int(np.argmax(np.abs(up_b)))
+    if front is None:
+        a_b = np.abs(R.T @ np.eye(3)[axis])
+    else:
+        f = np.array([front[0], front[1], 0.0]) / (np.linalg.norm(front[:2]) + 1e-9)
+        a_b = 1.0 - np.abs(R.T @ f)
+    a_b[k_up] = -1
+    S = np.eye(3)
+    S[int(np.argmax(a_b)), int(np.argmax(a_b))] = -1
+    M = np.eye(3)
+    M[axis, axis] = -1
+    q = np.zeros(4)
+    mujoco.mju_mat2Quat(q, (M @ R @ S).reshape(-1))
+    return q
+
+
 def rotate_world(m, d, center, theta: float, free_addrs, arm_q1: int, fixed_bodies, qvel_too: bool = False) -> None:
     """Rotate a LIBERO world by `theta` about the vertical axis through `center` (x, y): free objects (qpos, and their
     world-frame linear velocity if `qvel_too`), the fixed bodies hanging off the world (furniture, tables: their model
@@ -94,6 +122,17 @@ def world_fixed_bodies(robo) -> List[int]:
             out.append(b)
     return out
 
+
+# Scene transforms of the ECT baseline (`EnvRunner.ect_replay`; Table 20 of arXiv 2609.39971: Spatial and Goal mirrors,
+# Object the y-mirror and the x / xy mirrors with a shift, Long shifts). The paper does not give the shift sizes; these
+# are ours. "identity" is the control of the replay controller.
+ECT_TRANSFORMS = {
+    "identity": {},
+    "ymirror": {"my": 1},
+    "xmirror_shift": {"mx": 1, "shift": (-0.08, 0.0)},
+    "xymirror_shift": {"mx": 1, "my": 1, "shift": (-0.06, 0.06)},
+    "shift": {"shift": (-0.08, 0.06)},
+}
 
 # Counterfactual worlds for training rollouts (`LiberoVecEnv(counterfactual=...)`, switched on per reset): at every
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
@@ -1123,6 +1162,121 @@ class EnvRunner:
         self.t, self.done, self.closed = 0, False, False
         return dict(out, t=0, done=False, active=True, closed_before=False)
 
+    def _ect_transform(self, robo, spec: Dict[str, Any]):
+        """Apply an ECT scene transform to the freshly reset scene (free objects and the furniture standing on the table;
+        the robot and the tables stay): reflect x about the objects' centre (`mx`), reflect y about the robot base
+        (`my`), then translate by `shift`. Returns (map of world points, sign vector of the rotation commands)."""
+        import mujoco
+
+        m, d = robo.sim.model._model, robo.sim.data._data
+        robot = robo.robots[0]
+        y0 = float(d.xpos[robo.sim.model.body_name2id(robot.robot_model.root_body)][1])
+        free = [int(m.jnt_qposadr[j]) for j in range(m.njnt) if m.jnt_type[j] == 0]
+        xc = float(np.mean([d.qpos[a] for a in free])) if free else 0.0
+        mx, my = bool(spec.get("mx")), bool(spec.get("my"))
+        sh = np.array(list(spec.get("shift", (0.0, 0.0))) + [0.0])
+
+        def point(p):
+            p = np.array(p, dtype=np.float64).copy()
+            if mx:
+                p[0] = 2 * xc - p[0]
+            if my:
+                p[1] = 2 * y0 - p[1]
+            return p + sh
+
+        def orient(q, front=None):
+            if mx and my:  # two reflections = a half turn about the vertical axis
+                out = np.zeros(4)
+                mujoco.mju_mulQuat(out, np.array([0.0, 0.0, 0.0, 1.0]), np.asarray(q, dtype=np.float64))
+                return out
+            if mx or my:
+                return reflect_quat(q, 0 if mx else 1, front)
+            return np.asarray(q, dtype=np.float64)
+
+        centre = np.mean([d.qpos[a : a + 2] for a in free], axis=0) if free else np.zeros(2)
+        for a in free:
+            d.qpos[a : a + 3] = point(d.qpos[a : a + 3])
+            d.qpos[a + 3 : a + 7] = orient(d.qpos[a + 3 : a + 7])
+        for b in world_fixed_bodies(robo):
+            if (robo.sim.model.body_id2name(b) or "").endswith("table"):
+                continue
+            front = centre - m.body_pos[b][:2]  # furniture faces the work area (drawers, doors, burners)
+            m.body_pos[b] = point(m.body_pos[b])
+            m.body_quat[b] = orient(m.body_quat[b], front)
+        mujoco.mj_forward(m, d)
+        # rotation commands are world-frame axis-angle deltas, a pseudo-vector: a reflection M maps them to -M w
+        rot = np.array([1.0, 1.0, 1.0])
+        if mx and my:
+            rot = np.array([-1.0, -1.0, 1.0])
+        elif mx:
+            rot = np.array([1.0, -1.0, -1.0])
+        elif my:
+            rot = np.array([-1.0, 1.0, -1.0])
+        return point, rot
+
+    def ect_replay(self, init_state, env_actions: np.ndarray, query_ts, spec: Dict[str, Any], hold: int = 40) -> Dict[str, Any]:
+        """Counterpart of a successful episode as in ECT (Equivariant Counterfactual Training, arXiv 2609.39971):
+        s' = M_s(s), a' = Replay_{s'}(M_a(a)). The episode's end-effector path is recovered by re-executing its actions
+        from its initial state; the scene is then transformed (`_ect_transform`, robot and start pose unchanged) and a
+        closed-loop tracking controller follows the transformed path (translation: the transformed command plus a
+        correction of the position error through the kinematic model of `src/rollout/scripted.py`; rotation commands
+        transformed analytically; gripper commands copied), holding the
+        last waypoint for up to `hold` steps. Returns the frames and proprio at the episode's query steps `query_ts`, the
+        executed commands (env convention) and whether the task succeeded in the transformed scene."""
+        from src.rollout.scripted import TRACK_GAIN
+
+        env_actions = np.asarray(env_actions, dtype=np.float64)
+        self.reset(init_state)
+        robo = self.env.env
+        site = robo.robots[0].eef_site_id
+        d = robo.sim.data._data
+        path, n = [d.site_xpos[site].copy()], 0
+        for a in env_actions:  # the original path, without rendering
+            robo.step(a)
+            path.append(d.site_xpos[site].copy())
+            n += 1
+            if robo._check_success():
+                break
+        if not robo._check_success():
+            return dict(success=False, orig_success=False)
+        first = self.reset(init_state)
+        robo = self.env.env
+        d = robo.sim.data._data
+        point, rot = self._ect_transform(robo, spec)
+        robo.robots[0].controller.update(force=True)
+        robo.robots[0].controller.reset_goal()
+        with self.lock:  # the first frame shows the transformed scene
+            self._cameras(True)
+            first = self._obs(robo._get_observations(force_update=True))
+            self._cameras(False)
+        targets = [point(p) for p in path]
+        # translation commands map like vectors: the reflected axes change sign (a shift leaves them alone)
+        mov = np.array([-1.0 if spec.get("mx") else 1.0, -1.0 if spec.get("my") else 1.0, 1.0])
+        qset = {int(t) for t in query_ts}
+        frames = {0: first} if 0 in qset else {}
+        acts, success = [], False
+        for t in range(n + hold):
+            # the transformed command as feedforward, plus half of the position error to the transformed path at this
+            # step (kinematic model); in the unchanged scene the error stays zero and the episode is reproduced exactly
+            a = np.zeros(7)
+            src = env_actions[min(t, n - 1)]
+            ff = src[:3] * mov if t < n else 0.0
+            a[:3] = np.clip(ff + 0.5 * (targets[min(t, n)] - d.site_xpos[site]) / (TRACK_GAIN * 0.05), -1.0, 1.0)
+            a[3:6] = src[3:6] * rot if t < n else 0.0
+            a[6] = src[6]
+            if t + 1 in qset:  # rendered exactly as a query frame of the policy's own episodes
+                frames[t + 1] = self._run([a], stop_at_end=False)
+            else:
+                robo.step(a)
+            acts.append(a)
+            if robo._check_success():
+                success = True
+                break
+        keys = ("rgb", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos")
+        qs = sorted(t for t in frames)
+        return dict(success=success, orig_success=True, n_orig=n, n_replay=len(acts), actions=np.array(acts, dtype=np.float32),
+                    query_ts=np.array(qs), **{k: np.stack([frames[t][k] for t in qs]) for k in keys if k in frames[qs[0]]})
+
     def restore(self, sim_state, t0: int, gripper_cmd: float) -> Dict[str, Any]:
         """Continue from a logged mid-episode simulator state at step `t0` (no wait steps).
 
@@ -1176,6 +1330,13 @@ def _worker(conn, cfg: Dict[str, Any], lock) -> None:
                         runner.close()
                     runner, cur_task = EnvRunner(bddl, cfg, lock), task_id  # imports only the env stack, never torch
                 conn.send(("ok", runner.reset(state, perturb, cf) if cmd == "reset" else runner.restore(state, t0, gripper_cmd)))
+            elif cmd == "ect":
+                task_id, bddl, state, env_actions, query_ts, spec = arg
+                if task_id != cur_task:
+                    if runner is not None:
+                        runner.close()
+                    runner, cur_task = EnvRunner(bddl, cfg, lock), task_id
+                conn.send(("ok", runner.ect_replay(state, env_actions, query_ts, spec)))
             elif cmd == "step":
                 conn.send(("ok", runner.step(arg)))
             elif cmd == "close":
@@ -1238,6 +1399,12 @@ class LiberoVecEnv:
 
     def step(self, i: int, actions: np.ndarray) -> None:
         self.conns[i].send(("step", actions))
+
+    def ect(self, i: int, task_id: int, trial_id: int, env_actions: np.ndarray, query_ts, spec: Dict[str, Any]) -> None:
+        """Ask env i for the ECT counterpart (`EnvRunner.ect_replay`) of an episode of task `task_id` from benchmark initial
+        state `trial_id` that executed `env_actions` (env convention)."""
+        self.conns[i].send(("ect", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], env_actions,
+                                    list(query_ts), spec)))
 
     def ready(self, i: int) -> bool:
         """True if env i has answered its pending request (so `recv` will not block)."""
