@@ -931,6 +931,13 @@ hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarg
 - **Retarget Object s8: swap 52.5** (s7 51.0) → TB 2 seed **51.8** (+33 so với base 18.7), chuẩn 98.5.
 - Ngẫu nhiên hoá màu vật (`--obj_tint p`, mỗi vật với xác suất p được nhân màu vật liệu với màu ngẫu nhiên, mô hình dựng lại
   mỗi reset nên không cộng dồn): đang chạy retarget + màu (s7) và base + màu (s7) trên Object.
+- Retarget s8: position 22.0, object **76.0** (s7 72.5) → tradeoff swap ↔ object lặp lại; lan 100, Plus 83 / 82.
+- **Coreloc4 s8: position 42.0** (s7 42.5) → TB **42.3** (+30 so với base 12.2); swap 27.5, chuẩn 96.5, lan 98.0.
+- **Retarget trên state π0.5 gốc (s7, gần ECT về nguồn state): swap 50.5, position 20.5** vs on-policy 51.0 / 52.5, 18.0 / 22.0 →
+  nguồn state không tạo khác biệt (như ablation coshift trước); khác biệt so với ECT phải nằm ở teacher theo pha / phân tích /
+  không cần demo hay bộ phát lại, không phải on-policy.
+- **rr (retarget trước kẹp + relocate khi mang) Object s7: swap 63.5** (retarget 51.8, cận trên tiếp cận 59.0), chuẩn 97.5 → hai
+  teacher theo pha cộng dồn, vượt cận trên của riêng pha tiếp cận. rr s8 đang chạy.
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
