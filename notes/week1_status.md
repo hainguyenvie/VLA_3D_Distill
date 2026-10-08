@@ -954,6 +954,10 @@ hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarg
   sóng) 1/3; 2, 8 (ấm moka lên bếp), 6 (cốc lên đĩa) 0. Goal 1 (bếp) 4/6, 4 (nóc tủ) 4/6, 6 (bát) 3/4, 8 (đĩa) 4/5, 3 (ngăn
   kéo) 5/6. Object 14/20 (không dời 20/20). Chạy Goal relocate2 (`--cf_tasks 1,2,3,4,6,8,9`) và Long relocate5
   (`--cf_tasks 0,1,7`), s7.
+- **Đổi màu khi train gỡ phần lớn tradeoff:** retarget + màu (p 0.5) s7: chuẩn 96.5, **swap 55.0**, position 19.0, **object 85.5**
+  (retarget đơn lẻ 72.5 / 76.0 / 75.0; base 93), lan 97.0. Base + màu s7: chuẩn 99.0, swap 18.0, position 11.0, object 92.5, Plus
+  83 / 83 (= base: đổi màu một mình không làm gì). Tiếp: rr + màu s7, retarget + màu p 0.9 s7.
+- Retarget s9 đủ: object 75.0, lan 99.0, Plus 85 / 82. Goal relocate (bản cũ) object 86.5, lan 98.0, task 10.0, Plus 78 / 68.
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
