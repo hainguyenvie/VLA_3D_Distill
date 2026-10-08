@@ -36,6 +36,10 @@ def parse():
     ap.add_argument("--cf_coshift", default="0.08,0.3", help="coshift mode: range of the target's (and hand's) shift (metres)")
     ap.add_argument("--p_swap", type=float, default=0.5, help="coshift mode: probability that the target takes another object's spot")
     ap.add_argument("--p_coshift", type=float, default=0.5, help="mix mode: share of queries rendered as coshift (else rotate)")
+    ap.add_argument("--cf_coshift_post", default="0.08,0.4",
+                    help="post-grasp coshift / relocate: range of the container's shift (metres)")
+    ap.add_argument("--cf_frac", type=float, default=0.0,
+                    help="> 0: keep counterfactual pairs on at most this share of the iteration's states (random subset)")
     ap.add_argument("--coshift_phase", choices=["pre", "post", "both"], default="pre",
                     help="coshift mode: before the grasp move hand + target (pre); after it move hand + held target + "
                          "container (post); or both")
@@ -73,7 +77,8 @@ def main():
     cf_cfg = None if args.no_cf else dict(COUNTERFACTUAL, mode=args.cf_mode, delta=tuple(float(x) for x in args.cf_delta.split(",")),
                                           c7=args.c7, theta=tuple(float(x) for x in args.cf_theta.split(",")),
                                           coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap,
-                                          p_coshift=args.p_coshift, coshift_phase=args.coshift_phase)
+                                          p_coshift=args.p_coshift, coshift_phase=args.coshift_phase,
+                                          coshift_post=tuple(float(x) for x in args.cf_coshift_post.split(",")))
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg)
 
     import torch
@@ -246,6 +251,10 @@ def main():
                 qidx = np.concatenate([np.arange(r["n_queries"]) for r in recs])
                 cf_ok &= qidx < args.cf_max_query
         n_all = len(descs_all)
+        if args.cf_frac > 0 and cf_ok.sum() > args.cf_frac * n_all:  # cap the share of states that carry a pair
+            on = np.flatnonzero(cf_ok)
+            cf_ok[:] = False
+            cf_ok[rng.choice(on, size=int(args.cf_frac * n_all), replace=False)] = True
         keep = np.sort(rng.choice(n_all, size=min(args.states_per_iter, n_all), replace=False))
         t_collect = time.time() - t0
 
