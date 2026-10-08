@@ -75,3 +75,24 @@ def rim_height(m, d, root: int, is_descendant) -> float:
         z = (corners @ d.geom_xmat[g].reshape(3, 3).T + d.geom_xpos[g])[:, 2].max()
         zmax = z if zmax is None else max(zmax, z)
     return 0.0 if zmax is None else float(zmax - d.xpos[root][2])
+
+
+def approach_chunk(eef: np.ndarray, target: np.ndarray, horizon: int = 50, hover: float = 0.10, gain: float = 0.6,
+                   vmax: float = 0.9, tol: float = 0.015):
+    """Privileged approach: bring the hand to `hover` metres above the target, gripper open, orientation held; rolled
+    out on the fitted kinematic model. Returns (chunk (horizon, 7) env convention, number of steps until the hover pose
+    is reached plus a margin of 3, which is where the label stops being meaningful: the grasp itself is left to the
+    policy's own skill)."""
+    eef = np.array(eef, dtype=np.float64)
+    goal = np.array([target[0], target[1], target[2] + hover])
+    out, reached = np.zeros((horizon, 7)), horizon
+    for k in range(horizon):
+        e = goal - eef
+        a = np.zeros(7)
+        a[:3] = np.clip(gain * e / 0.05, -vmax, vmax)
+        a[6] = -1.0
+        out[k] = a
+        eef = eef + TRACK_GAIN * a[:3] * 0.05
+        if reached == horizon and np.linalg.norm(e[:2]) < tol and abs(e[2]) < tol:
+            reached = k
+    return out, min(reached + 3, horizon)

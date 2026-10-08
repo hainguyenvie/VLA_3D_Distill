@@ -121,6 +121,10 @@ COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshi
 # object stay), so the hand-to-goal relation changes; the label is the chunk of a privileged scripted placer that knows
 # where the container is (src/rollout/scripted.py), returned as `cf_label` (env convention). The only counterfactual
 # here whose correct action differs from a transformed nominal one.
+# mode "retarget": before the grasp, the target alone is moved (to a free spot, or onto another object's spot with
+# probability `p_swap`, that object taking the target's), the hand stays: the hand-to-target relation changes; the label
+# is a privileged scripted approach to above the target (`cf_label`, valid for the first `cf_len` steps; the grasp is left
+# to the policy). For suites that name the target (Object, Goal), not Spatial (which describes it by its relations).
 # mode "coreloc": "coshift" before the grasp (hand + target moved, nominal label) and "relocate" while carrying (container
 # moved, scripted-placer label `cf_label`).
 # mode "mix": at every query one of "rotate" and "coshift" (probability `p_coshift` for coshift, which falls back to
@@ -397,6 +401,8 @@ class EnvRunner:
             return self._coshift_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "relocate":
             return self._relocate_view(robo, res, conv)
+        if self.cfg["counterfactual"].get("mode") == "retarget":
+            return self._retarget_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "coreloc":  # coshift before the grasp, relocate while carrying
             robot = robo.robots[0]
             if not self.closed:
@@ -646,6 +652,43 @@ class EnvRunner:
                 out.append(a)
         return out
 
+    def _retarget_view(self, robo, res, conv) -> Dict[str, Any]:
+        """Frames with the target moved (hand unchanged) before the grasp, and the scripted approach chunk there."""
+        global _PERT_RNG
+        if _PERT_RNG is None:
+            _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
+        import mujoco
+
+        from src.rollout.scripted import approach_chunk
+
+        m, d = robo.sim.model._model, robo.sim.data._data
+        saved = {k: getattr(d, k).copy() for k in self._KIN}
+        out, place = {}, None
+        try:
+            if not self.closed and self._cs_ok:
+                place = self._coshift_place(d)
+            if place is not None:
+                shift, swap = place
+                ta = self._cs_target
+                if swap is not None:
+                    a = self._cs_others[swap]
+                    d.qpos[a : a + 2] = d.qpos[ta : ta + 2]
+                d.qpos[ta : ta + 2] += shift
+                mujoco.mj_kinematics(m, d)
+                lab, n = approach_chunk(d.site_xpos[self._cs_site].copy(), d.xpos[self._cs_body].copy())
+                out["cf_label"], out["cf_len"] = lab.astype(np.float32), np.int16(n)
+            mujoco.mj_camlight(m, d)
+            self._render_cf(robo, res, conv, out)
+        finally:
+            for k, v in saved.items():
+                getattr(d, k)[:] = v
+        out.setdefault("cf_label", np.zeros((50, 7), dtype=np.float32))
+        out.setdefault("cf_len", np.int16(0))
+        out["cf_delta"] = (place[0] if place is not None else np.zeros(2)).astype(np.float32)
+        out["cf_valid"] = place is not None
+        out["cf_target_name"] = np.array((place[1] or "") if place is not None else "")
+        return out
+
     def _relocate_view(self, robo, res, conv) -> Dict[str, Any]:
         """Frames with the container moved to a free spot (hand and held target unchanged), and the scripted placer's
         chunk in that world; outside the carrying phase the nominal world is rendered and the query is invalid."""
@@ -832,7 +875,7 @@ class EnvRunner:
                     continue
                 self._mirror_obj_addrs.append(int(a[0] if isinstance(a, (tuple, list, np.ndarray)) else a))
             self.cf = True
-        elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("coshift", "relocate", "coreloc"):
+        elif counterfactual and self.cfg.get("counterfactual") and self.cfg["counterfactual"].get("mode") in ("coshift", "relocate", "coreloc", "retarget"):
             self._coshift_setup(robo)
         elif counterfactual and self.cfg.get("counterfactual"):
             names = getattr(robo, "obj_of_interest", None) or []
