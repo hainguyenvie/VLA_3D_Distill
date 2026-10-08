@@ -812,6 +812,18 @@ ECT dùng replay controller cho quỹ đạo đã biến đổi.
 t1 0.30 → 0.55, t4 0.40 → 0.55, t5 0.60 → 0.95, t6 0 → 0.10, **t7 0 → 0.80**, t9 0 → 0.25 — đúng các task hỏng vì đặt bát
 vào chỗ đĩa quen. Đây là bằng chứng đầu tiên cho chẩn đoán "phải đổi quan hệ tay–đích mới dạy được suy ra đích".
 
+**Relocate trên Spatial — kết quả cuối (vòng 20, 2 seed):** s7 chuẩn 98.5, **swap 64.5**, object 98.0, lan 97.0, task 0.5,
+Plus R/L 88 / 98; s8 chuẩn 98.0, **swap 63.0**, object 97.0, lan 96.5, task 0.5, Plus 93 / 100 (base s7: 98.0, 42.0, 98.5,
+96.0, 0.5, 83 / 98). Ô swap **+22**, các ô khác và cảnh chuẩn giữ nguyên. Theo checkpoint (vòng 8 / 12 / 20): s7 62.0 /
+61.5 / 64.5, s8 56.0 / 57.5 / 63.0.
+
+**Relocate trên LIBERO-Long, bản đầu (s7) — có hại:** eval chuẩn khi train 0.98 → 0.72 / 0.80 / 0.74 (vòng 4 / 12 / 16; base
+0.91–0.98), hỏng ở các task hai vật vào giỏ (t0 0.1, t7 0.6, t4 0.5, t8 0.6). Hai lỗi của chính mình khi mở rộng sang task
+nhiều vật: (1) vật vừa thả vào giỏ vẫn cao và gần tay → bị coi là "đang cầm" → dạy mang lại vật đã đặt; (2) sau lúc thả, nhãn
+của bộ điều khiển là "đi thẳng lên", mâu thuẫn với việc đi lấy vật thứ hai. Sửa: chỉ coi là đang cầm khi gripper đang được
+lệnh đóng và hai ngón không khép rỗng, vật trong 8 cm quanh tay; mask chunk sau lúc thả + 5 bước. Run cũ dừng ở vòng 16;
+chạy lại `p05lg_ocd_relocate2_s7`. Base Long s7: chuẩn 95.0.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
