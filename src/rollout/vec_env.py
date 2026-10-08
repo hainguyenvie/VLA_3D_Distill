@@ -99,7 +99,7 @@ def world_fixed_bodies(robo) -> List[int]:
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
 COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5,
-                      p_coshift=0.5, coshift_phase="pre", coshift_post=(0.08, 0.4))
+                      p_coshift=0.5, coshift_phase="pre", coshift_post=(0.08, 0.4), unique=False)
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
@@ -125,6 +125,8 @@ COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshi
 # probability `p_swap`, that object taking the target's), the hand stays: the hand-to-target relation changes; the label
 # is a privileged scripted approach to above the target (`cf_label`, valid for the first `cf_len` steps; the grasp is left
 # to the policy). For suites that name the target (Object, Goal), not Spatial (which describes it by its relations).
+# `unique`: no counterfactual moves an object (target, container, fixture) that has a twin of the same kind in the scene,
+# since the instruction can then only refer to it by where it is (this turns retarget off on Spatial by itself).
 # mode "coreloc": "coshift" before the grasp (hand + target moved, nominal label) and "relocate" while carrying (container
 # moved, scripted-placer label `cf_label`).
 # mode "mix": at every query one of "rotate" and "coshift" (probability `p_coshift` for coshift, which falls back to
@@ -280,6 +282,8 @@ class EnvRunner:
                 self._stash = self._perturbed_view()
             if self.cf:
                 self._stash_cf = self._counterfactual_view()
+                # the privileged teacher's chunk in the factual world (zeros when the view has no scripted label)
+                self._stash_cf.setdefault("cf_label_nom", np.zeros((50, 7), dtype=np.float32))
             return img
 
         both.__modality__ = sensor.__modality__
@@ -491,6 +495,12 @@ class EnvRunner:
         # furniture standing on the table (not the table itself): a moved container must keep clear of it
         self._cs_fixed = [d.xpos[b][:2].copy() for b in world_fixed_bodies(robo)
                           if not (robo.sim.model.body_id2name(b) or "").endswith("table")]
+        # objects the instruction can only pick out by where they are, because the scene holds another of the same kind
+        # (the two black bowls of LIBERO-Spatial, the left / right plates of LIBERO-Long): with `unique`, a counterfactual
+        # never moves them (it would contradict the instruction)
+        named = list(robo.objects_dict.items()) + list(getattr(robo, "fixtures_dict", {}).items())
+        kinds = [type(o).__name__ for _, o in named]
+        self._cs_ambiguous = {n for n, o in named if kinds.count(type(o).__name__) > 1}
         if self._cs_target is not None:
             self.cf, self._cs_ok = True, True
 
@@ -763,6 +773,9 @@ class EnvRunner:
             return None
         if spec[0] == "free" and spec[1] == ta:
             return None
+        if self._ambiguous(spec[3] if spec[0] == "free" else (pl[3] if pl is not None else "")):
+            self._cs_why = "place target named by position"
+            return None
         self._cs_spec = spec
         lo, hi = self.cfg["counterfactual"].get("coshift_post", COUNTERFACTUAL["coshift_post"])
         if hi <= 0:  # ablation: no move at all (the scripted label in the nominal world)
@@ -794,6 +807,12 @@ class EnvRunner:
         self._cs_why = "no free spot"
         return None
 
+    def _ambiguous(self, name: str) -> bool:
+        """With the `unique` option: the object (or the fixture a root body name belongs to) has a twin in the scene."""
+        if not self.cfg["counterfactual"].get("unique") or not name:
+            return False
+        return any(name == n or name.startswith(n + "_") for n in getattr(self, "_cs_ambiguous", ()))
+
     def _riding(self, d, ca: int, r_c: float, exclude=None) -> List[int]:
         """qpos addresses of free objects lying in / on the movable container at `ca` (they move with it)."""
         out = []
@@ -823,11 +842,13 @@ class EnvRunner:
         saved = {k: getattr(d, k).copy() for k in self._KIN}
         out, place = {}, None
         try:
-            if not self.closed and self._cs_ok:
+            if not self.closed and self._cs_ok and not self._ambiguous(self._cs_name):
                 place = self._coshift_place(d)
             if place is not None:
                 shift, swap = place
                 ta = self._cs_target
+                mujoco.mj_kinematics(m, d)  # the same teacher in the factual world, to check it against the expert
+                out["cf_label_nom"] = approach_chunk(d.site_xpos[self._cs_site].copy(), d.xpos[self._cs_body].copy())[0]
                 if swap is not None:
                     a = self._cs_others[swap]
                     d.qpos[a : a + 2] = d.qpos[ta : ta + 2]
@@ -855,8 +876,6 @@ class EnvRunner:
             _PERT_RNG = np.random.default_rng([os.getpid(), int.from_bytes(os.urandom(4), "little")])
         import mujoco
 
-        from src.rollout.scripted import placer_chunk
-
         m, d = robo.sim.model._model, robo.sim.data._data
         if not getattr(self, "_cs_ok", False):  # no movable target in this task: nominal frames, invalid
             out = {}
@@ -871,6 +890,8 @@ class EnvRunner:
                 shift = self._coshift_place_post(d)
             if shift is not None:
                 spec = self._cs_spec
+                mujoco.mj_kinematics(m, d)  # the same teacher in the factual world, to check it against the expert
+                out["cf_label_nom"] = self._placer_label(d, spec)
                 if spec[0] == "fixture":  # move the furniture as a whole (render only; the model pose is restored below)
                     moved_root, saved_root = spec[1], m.body_pos[spec[1]].copy()
                     m.body_pos[spec[1]][:2] += shift
@@ -878,17 +899,7 @@ class EnvRunner:
                     for a in self._cs_riders + [spec[1]]:
                         d.qpos[a : a + 2] += shift
                 mujoco.mj_kinematics(m, d)
-                ta = self._cs_held
-                eef = d.site_xpos[self._cs_site].copy()
-                if spec[0] == "fixture":  # place onto the region (a flat site on the furniture)
-                    goal, top = d.site_xpos[spec[2]].copy(), 0.0
-                else:  # into / onto a movable container, aiming at its region when the goal names one
-                    ca = spec[1]
-                    goal = d.qpos[ca : ca + 3].copy()
-                    if spec[2] is not None:
-                        goal[:2] = d.site_xpos[spec[2]][:2]
-                    top = self._cs_rims.get(spec[3], self._cs_ctop) if hasattr(self, "_cs_rims") else self._cs_ctop
-                out["cf_label"] = placer_chunk(eef, d.qpos[ta : ta + 3].copy(), goal, top=top).astype(np.float32)
+                out["cf_label"] = self._placer_label(d, spec)
             mujoco.mj_camlight(m, d)
             self._render_cf(robo, res, conv, out)
         finally:
@@ -900,6 +911,23 @@ class EnvRunner:
         out["cf_delta"] = (shift if shift is not None else np.zeros(2)).astype(np.float32)
         out["cf_valid"] = shift is not None
         return out
+
+    def _placer_label(self, d, spec) -> np.ndarray:
+        """The scripted placer's chunk (env convention) for the held object and the place target `spec`, in the world
+        the kinematic arrays of `d` describe."""
+        from src.rollout.scripted import placer_chunk
+
+        ta = self._cs_held
+        eef = d.site_xpos[self._cs_site].copy()
+        if spec[0] == "fixture":  # place onto the region (a flat site on the furniture)
+            goal, top = d.site_xpos[spec[2]].copy(), 0.0
+        else:  # into / onto a movable container, aiming at its region when the goal names one
+            ca = spec[1]
+            goal = d.qpos[ca : ca + 3].copy()
+            if spec[2] is not None:
+                goal[:2] = d.site_xpos[spec[2]][:2]
+            top = self._cs_rims.get(spec[3], self._cs_ctop) if hasattr(self, "_cs_rims") else self._cs_ctop
+        return placer_chunk(eef, d.qpos[ta : ta + 3].copy(), goal, top=top).astype(np.float32)
 
     def _coshift_view(self, robo, res, conv) -> Dict[str, Any]:
         """Frames of the world in which the target and the hand moved together (see COUNTERFACTUAL), and the
@@ -921,7 +949,7 @@ class EnvRunner:
             phase = self.cfg["counterfactual"].get("coshift_phase", "pre")
             post = bool(self.closed)
             if not post:
-                place = self._coshift_place(d) if phase in ("pre", "both") else None
+                place = self._coshift_place(d) if phase in ("pre", "both") and not self._ambiguous(self._cs_name) else None
             else:
                 sh = self._coshift_place_post(d) if phase in ("post", "both") else None
                 place = None if sh is None else (sh, None)

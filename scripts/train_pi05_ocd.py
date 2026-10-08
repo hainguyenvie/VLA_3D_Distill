@@ -43,6 +43,17 @@ def parse():
     ap.add_argument("--cf_tasks", default="",
                     help="comma-separated task ids whose counterfactual pairs are used (default: all); e.g. the tasks where "
                          "the scripted teacher passes its simulation gate (scripts/check_scripted_place.py)")
+    ap.add_argument("--relocate_tasks", default="",
+                    help="rr / full modes: comma-separated task ids whose relocate pairs (while carrying) are used, i.e. the "
+                         "tasks where the scripted placer passes its gate (scripts/check_relocate_gate.py); the pairs "
+                         "before the grasp are kept on every task (default: all)")
+    ap.add_argument("--cf_agree", type=float, default=0.0,
+                    help="> 0, retarget / relocate / rr / full: keep a scripted-teacher pair only if the same teacher, asked in "
+                         "the factual world, heads where the expert does (cosine of the summed xyz of the first 25 steps of its "
+                         "chunk and of pi0.5's chunk >= this)")
+    ap.add_argument("--cf_unique", action="store_true",
+                    help="never move an object that has a twin of the same kind in the scene (the instruction can then only "
+                         "refer to it by where it is)")
     ap.add_argument("--obj_tint", type=float, default=0.0,
                     help="probability that each movable object is recoloured in a training episode (the in-training "
                          "evaluation uses the same environments, so its scenes are recoloured too)")
@@ -86,7 +97,8 @@ def main():
                                           c7=args.c7, theta=tuple(float(x) for x in args.cf_theta.split(",")),
                                           coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap,
                                           p_coshift=args.p_coshift, coshift_phase=args.coshift_phase,
-                                          coshift_post=tuple(float(x) for x in args.cf_coshift_post.split(",")))
+                                          coshift_post=tuple(float(x) for x in args.cf_coshift_post.split(",")),
+                                          unique=args.cf_unique)
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg, obj_tint=args.obj_tint)
 
     import torch
@@ -310,10 +322,39 @@ def main():
                 qidx = np.concatenate([np.arange(r["n_queries"]) for r in recs])
                 cf_ok &= qidx < args.cf_max_query
         n_all = len(descs_all)
+        agree_rate = None
+        if args.cf_agree > 0 and cf_cfg is not None and args.cf_mode in ("retarget", "relocate", "rr", "full"):
+            # the privileged teacher must reproduce the expert where the expert is right (the factual world): a teacher
+            # that heads elsewhere there (the task starts with another step, the target is mis-identified) is dropped
+            nom = cat("cf_label_nom").astype(np.float64)
+            has = np.abs(nom).sum((1, 2)) > 0
+            k = 25  # first half of the chunk (scripts/analyze_agree.py: 10 steps confuse the expert's lift with a heading)
+            v_t = nom[:, :k, :3].sum(1)
+            v_e = (A["actions_teacher"].astype(np.float64) * (student.act_std + 1e-8) + student.act_mean)[:, :k, :3].sum(1)
+            n_t, n_e = np.linalg.norm(v_t, axis=1), np.linalg.norm(v_e, axis=1)
+            agree = ~has | ((v_t * v_e).sum(1) >= args.cf_agree * n_t * n_e) | ((n_t < 0.05 * k) & (n_e < 0.05 * k))
+            if (cf_ok & has).any():
+                agree_rate = float(agree[cf_ok & has].mean())
+                tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
+                post = A["closed_before"].astype(bool)
+                print("[agree] task: (pre, post) share of pairs kept", {int(t): tuple(
+                    round(float(agree[(tids == t) & cf_ok & has & (post == p)].mean()), 2)
+                    if ((tids == t) & cf_ok & has & (post == p)).any() else None for p in (False, True))
+                    for t in np.unique(tids)}, flush=True)
+                if it == 1:  # what the check saw, for choosing / auditing its criterion offline
+                    np.savez_compressed(os.path.join(args.out, "agree_pairs.npz"), nom=nom.astype(np.float32),
+                                        expert=(A["actions_teacher"] * (student.act_std + 1e-8) + student.act_mean).astype(np.float32),
+                                        cf_label=cat("cf_label").astype(np.float32), tids=tids, post=post, cf_ok=cf_ok,
+                                        eef=A["eef_pos"].astype(np.float32))
+            cf_ok &= agree
         if args.cf_tasks:  # only the tasks whose teacher passed its gate
             allowed = {int(x) for x in args.cf_tasks.split(",")}
             tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
             cf_ok &= np.isin(tids, list(allowed))
+        if args.relocate_tasks and args.cf_mode in ("rr", "full"):  # relocate pairs only where the placer passed its gate
+            allowed = {int(x) for x in args.relocate_tasks.split(",")}
+            tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
+            cf_ok &= ~A["closed_before"].astype(bool) | np.isin(tids, list(allowed))
         if args.cf_frac > 0 and cf_ok.sum() > args.cf_frac * n_all:  # cap the share of states that carry a pair
             on = np.flatnonzero(cf_ok)
             cf_ok[:] = False
@@ -372,6 +413,8 @@ def main():
         if cf_losses:
             row["cf_loss"] = float(np.mean(cf_losses))
             row["cf_states"] = int(cf_ok[keep].sum())
+            if agree_rate is not None:
+                row["cf_agree_rate"] = agree_rate
             if args.cf_mode in ("mirror", "rotate", "coshift", "mix", "relocate", "coreloc", "retarget", "rr", "full"):
                 row["teacher_cf_gap"] = teacher_gap
             if args.cf_mode == "shift":  # how much the teacher's chunk moves between the two worlds (normalised units)

@@ -958,6 +958,31 @@ hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarg
   (retarget đơn lẻ 72.5 / 76.0 / 75.0; base 93), lan 97.0. Base + màu s7: chuẩn 99.0, swap 18.0, position 11.0, object 92.5, Plus
   83 / 83 (= base: đổi màu một mình không làm gì). Tiếp: rr + màu s7, retarget + màu p 0.9 s7.
 - Retarget s9 đủ: object 75.0, lan 99.0, Plus 85 / 82. Goal relocate (bản cũ) object 86.5, lan 98.0, task 10.0, Plus 78 / 68.
+- rr s8 đủ: chuẩn 98.0, swap 54.5, position 25.5, lan 98.5, task 0.
+
+**09/10 (đêm UTC 08/10): bỏ danh sách task chọn tay — ba kiểm tra tự động cho teacher có đặc quyền.** Mục tiêu: một cấu hình
+chạy y nguyên trên cả 4 bộ. Các lựa chọn theo bộ trước đây (retarget chỉ cho Object / Goal, `--cf_tasks` theo cổng) thay bằng:
+1. **Vật có bản sao không được dời** (`--cf_unique`): nếu cảnh có vật khác cùng loại (cùng lớp đối tượng LIBERO), câu lệnh
+   chỉ có thể chỉ ra nó bằng vị trí ("bát cạnh ramekin", "đĩa bên trái") → dời nó là trái câu lệnh. `scripts/check_unique.py`:
+   Spatial: vật đích (2 bát giống hệt) bị khoá ở cả 10 task, đĩa vẫn dời được → retarget tự tắt trên Spatial, relocate giữ;
+   Object, Goal: không vật nào có bản sao; Long: task 4 (đĩa trái / phải) và 8 (hai ấm moka) bị khoá.
+2. **Teacher phải đồng ý với chuyên gia ở thế giới thật** (`--cf_agree c`): env tính thêm nhãn của chính teacher kịch bản ở
+   thế giới không dời (`cf_label_nom`); chỉ giữ cặp nếu cos(tổng xyz 10 bước đầu của teacher, của π0.5) ≥ c. Lý do: kiểm tra
+   check_unique lộ ra vật đích lấy theo `obj_of_interest[0]` sai ở vài task (Long 6: chọn cái đĩa thay vì cái cốc; Goal 3,
+   Long 2: task bắt đầu bằng mở ngăn kéo / bật bếp, không phải tiếp cận vật) — teacher nói "tới vật" trong khi chuyên gia
+   (đúng ở thế giới thật) làm việc khác. Lọc theo từng cặp, không theo task.
+   Chọn tiêu chí (`scripts/analyze_agree.py` trên cặp của 4 run thử 1 vòng, chế độ full + unique + màu): 10 bước nhầm cú nhấc
+   lên của π0.5 với hướng đi (Goal 8 khi mang chỉ giữ 0.2 dù placer qua cổng); **chốt xyz 25 bước, cos ≥ 0.5**. Tỉ lệ cặp giữ:
+
+   | | đúng (teacher hợp lệ) | sai đã biết |
+   |---|---|---|
+   | Object | trước kẹp 0.81–1.0, khi mang 0.76–0.98 | — |
+   | Spatial | khi mang 1.0 (mọi task) | — |
+   | Goal | 1 / 4 / 6 / 8: 0.86–1.0 | 5 (đẩy đĩa) 0.33; **3 (mở ngăn kéo trước) 0.76 — không lọc được** (ngăn kéo cùng hướng với bát) |
+   | Long | 0 / 1 / 3 / 7 / 9: 0.75–1.0 | **2 (bật bếp trước) 0.0; 6 (vật đích nhầm là đĩa) 0.0** |
+3. **Cổng thực thi với ngưỡng chốt trước** (`check_relocate_gate.py`): placer chạy vòng kín trong thế giới đã dời, task qua
+   nếu thành công ≥ 60% (n ≥ 5); chỉ áp cho cặp relocate (`--relocate_tasks`), cặp trước kẹp giữ ở mọi task. Đang sinh 20
+   tập / task của π0.5 gốc trên Goal, Long, Spatial để chạy lại cổng với mẫu đủ lớn (bản trước 2–6 tập / task).
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 

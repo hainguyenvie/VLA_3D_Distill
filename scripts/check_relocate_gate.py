@@ -25,6 +25,8 @@ def main():
     ap.add_argument("--steps", required=True)
     ap.add_argument("--episodes", type=int, default=50)
     ap.add_argument("--max_steps", type=int, default=200)
+    ap.add_argument("--pass_rate", type=float, default=0.6,
+                    help="a task passes when the placer succeeds in at least this share of its relocated tries (and n >= 5)")
     args = ap.parse_args()
     import mujoco
     from libero.libero import benchmark, get_libero_path
@@ -45,7 +47,7 @@ def main():
         task = suite.get_task(t)
         bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
         cfg = dict(suite=args.suite, max_steps=600, num_steps_wait=10, resolution=64, depth=False, wrist=False, perturb=None,
-                   counterfactual=dict(COUNTERFACTUAL, mode="relocate", coshift_post=(0.15, 0.4)))
+                   counterfactual=dict(COUNTERFACTUAL, mode="relocate", coshift_post=(0.15, 0.4), unique=True))
         r = EnvRunner(bddl, cfg, contextlib.nullcontext())
         acts = postprocess_actions(z["actions"])
         st0 = np.array(z["sim_state"][0], dtype=np.float64)
@@ -107,6 +109,8 @@ def main():
         a = np.array(per[t])
         print(f"task {t}: n {len(a)}, unmoved {a[:, 0].sum()}, moved {a[:, 1].sum()}")
     print(f"[relocate gate] unmoved {allr[:, 0].sum()}/{len(allr)}, moved {allr[:, 1].sum()}/{len(allr)}")
+    ok = [t for t in sorted(per) if len(per[t]) >= 5 and np.mean([x[1] for x in per[t]]) >= args.pass_rate]
+    print(f"[relocate gate] pass (moved >= {args.pass_rate:.0%}, n >= 5): --relocate_tasks {','.join(map(str, ok))}")
 
 
 if __name__ == "__main__":
