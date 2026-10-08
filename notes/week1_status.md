@@ -939,6 +939,22 @@ hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarg
 - **rr (retarget trước kẹp + relocate khi mang) Object s7: swap 63.5** (retarget 51.8, cận trên tiếp cận 59.0), chuẩn 97.5 → hai
   teacher theo pha cộng dồn, vượt cận trên của riêng pha tiếp cận. rr s8 đang chạy.
 
+**08/10 tối:**
+- **Retarget Object 3 seed: swap 51.0 / 52.5 / 55.5 (TB 53.0, +34)**, position 18.0 / 22.0 / 21.5, chuẩn 99.0 / 98.5 / 99.5;
+  object 72.5 / 76.0 (tradeoff, xem trên). Retarget trên state π0.5 gốc: object 72.0, Plus 85 / 92.
+- rr s7: position 29.5, object **80.5**, lan 94.5, task 0 (swap 63.5). Coreloc4 s8 Plus 87 / 87, object 88.5.
+- Base + màu ngẫu nhiên s7: chuẩn 99.0, swap 18.0 (= base) — riêng đổi màu không giúp swap.
+- Chế độ `full` (trước kẹp luân phiên retarget / coshift, khi mang relocate) Object s7 đang chạy.
+- Goal relocate s7 (bản lọc task cũ 1,6,8,9, ~4% state có cặp): chuẩn 98.0, swap **28.5** (= base) — các task lỗi chính (nóc tủ)
+  bị loại.
+- **Relocate theo mục tiêu BDDL** (08/10 16:30): nơi đặt của vật đang cầm lấy từ vị từ `on` / `in` của mục tiêu task (vật di
+  động, vùng trên vật di động như lòng giỏ / ngăn khay, vùng trên đồ cố định như bếp / nóc tủ / lò vi sóng; vùng trên mặt bàn bỏ
+  qua); vật đang cầm = bất kỳ vật nào trong mục tiêu được nhấc gần tay. Cổng (`scripts/check_relocate_gate.py`, dùng chính
+  cơ chế của env, chấm theo từng vật, nơi đặt dời 15–40 cm): Long task 0 / 1 / 7 (giỏ) 5/5, 4–5/5; 3 (ngăn kéo) 2/5; 9 (lò vi
+  sóng) 1/3; 2, 8 (ấm moka lên bếp), 6 (cốc lên đĩa) 0. Goal 1 (bếp) 4/6, 4 (nóc tủ) 4/6, 6 (bát) 3/4, 8 (đĩa) 4/5, 3 (ngăn
+  kéo) 5/6. Object 14/20 (không dời 20/20). Chạy Goal relocate2 (`--cf_tasks 1,2,3,4,6,8,9`) và Long relocate5
+  (`--cf_tasks 0,1,7`), s7.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
