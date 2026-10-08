@@ -928,6 +928,9 @@ hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarg
   benchmark thưởng một cách; dữ liệu train mỗi vật chỉ có một ngoại hình. Hướng sửa: ngẫu nhiên hoá màu vật khi render trong
   lúc train retarget, để policy nhận vật theo hình dạng / tên chứ không theo màu cụ thể.
 - Goal: xoay Plus 73 / 67, object 81.0, lan 92.0, task 12.5; retarget Plus 85 / 60, object 79.5 (cũng tụt — cùng nguyên nhân).
+- **Retarget Object s8: swap 52.5** (s7 51.0) → TB 2 seed **51.8** (+33 so với base 18.7), chuẩn 98.5.
+- Ngẫu nhiên hoá màu vật (`--obj_tint p`, mỗi vật với xác suất p được nhân màu vật liệu với màu ngẫu nhiên, mô hình dựng lại
+  mỗi reset nên không cộng dồn): đang chạy retarget + màu (s7) và base + màu (s7) trên Object.
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
