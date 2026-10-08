@@ -27,6 +27,12 @@ def main():
     print(f"{'task':<4} {'target':<22} {'d_target':>8} {'d_cont':>7}  now at the target's place (dist)   " + " ".join(os.path.basename(r)[:14] for r in runs))
     for t in range(cell.n_tasks):
         addr, target, container = task_layout(cell, t)
+        if target not in addr:  # the target is a fixture or a region (open a drawer, turn on the stove)
+            cols = " ".join(f"{p[str(t)]['success_rate']:>14.2f}" for p in sr)
+            print(f"{t:<4} {target:<22} {'(fixture)':>8}                                          {cols}")
+            continue
+        if container not in addr:
+            container = None
         names = list(addr)
         s0 = np.asarray(base.get_task_init_states(t))
         s1 = np.asarray(cell.get_task_init_states(t))
