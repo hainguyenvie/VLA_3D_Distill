@@ -40,6 +40,9 @@ def parse():
                     help="post-grasp coshift / relocate: range of the container's shift (metres)")
     ap.add_argument("--relocate_label", choices=["placer", "teacher"], default="placer",
                     help="relocate mode: label the relocated world with the scripted placer, or (ablation) with pi0.5 itself")
+    ap.add_argument("--cf_tasks", default="",
+                    help="comma-separated task ids whose counterfactual pairs are used (default: all); e.g. the tasks where "
+                         "the scripted teacher passes its simulation gate (scripts/check_scripted_place.py)")
     ap.add_argument("--cf_frac", type=float, default=0.0,
                     help="> 0: keep counterfactual pairs on at most this share of the iteration's states (random subset)")
     ap.add_argument("--coshift_phase", choices=["pre", "post", "both"], default="pre",
@@ -281,6 +284,10 @@ def main():
                 qidx = np.concatenate([np.arange(r["n_queries"]) for r in recs])
                 cf_ok &= qidx < args.cf_max_query
         n_all = len(descs_all)
+        if args.cf_tasks:  # only the tasks whose teacher passed its gate
+            allowed = {int(x) for x in args.cf_tasks.split(",")}
+            tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
+            cf_ok &= np.isin(tids, list(allowed))
         if args.cf_frac > 0 and cf_ok.sum() > args.cf_frac * n_all:  # cap the share of states that carry a pair
             on = np.flatnonzero(cf_ok)
             cf_ok[:] = False
