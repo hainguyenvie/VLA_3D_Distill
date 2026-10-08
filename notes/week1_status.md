@@ -885,6 +885,12 @@ mask sau khi tới nơi + 3 bước; giới hạn 15% state. Đợt 18: retarget
 đổi; teacher có đặc quyền cho nhãn đúng ở đó (π0.5 không làm được vì mắc chính lỗi này). Trả lời trực tiếp phản biện "chỉ
 là dùng expert kịch bản": expert kịch bản một mình còn giảm 4.5.
 
+**Retarget giữa chừng (08/10 10:15):** Object s7 vòng 8: **swap 46.0** (base 18.7, augmentation 24.2, xoay 29.2, cận trên 59.0);
+eval chuẩn khi train 0.72 (v4) → 0.82 (v8) → **0.98 (v12)**. Goal s7 vòng 8: swap **33.0** (base 29.0, π0.5 26.0), chuẩn 0.81 →
+0.93 → 0.97. **Cận trên tiếp cận oracle trên Goal: 23.0** (π0.5 tự làm 26.0; theo task 0 0.2 0 0 0 0 0.5 0.9 0.7 0; t1 "bát lên
+bếp" 0.70 → 0.2 — tới trên tâm bát không phải tư thế kẹp tốt cho bát) → lỗi Goal không nằm ở pha tiếp cận như bộ điều khiển
+hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarget s8 đang chạy.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
