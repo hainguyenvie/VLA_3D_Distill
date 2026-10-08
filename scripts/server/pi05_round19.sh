@@ -9,16 +9,20 @@
 #     >= 60%, n >= 5; scripts/check_relocate_gate.py on 20 base episodes per task; REL_* = its lists, -1 when none passes).
 # Objects recoloured at p 0.5 (appearance variation, against the position -> appearance trade-off). Pairs on at most 15%
 # of the states, no pairwise consistency term.
-#   pi05_round19.sh <mode> <seed> <gpu object> <gpu spatial> <gpu goal> <gpu long>
+#   REL_OBJECT=.. REL_SPATIAL=.. REL_GOAL=.. REL_LONG=.. pi05_round19.sh <mode> <seed> <gpu object> <gpu spatial> <gpu goal> <gpu long>
+# (a gpu of "-" skips that suite)
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MODE="$1"; S="$2"
 UNI="--cf_mode $MODE --cf_frac 0.15 --cf_unique --cf_agree 0.5 --obj_tint 0.5 --lambda_cf 0 --cf_coshift_post 0.15,0.4 --seed $S"
-REL_OBJECT="${REL_OBJECT:?}"; REL_SPATIAL="${REL_SPATIAL:?}"; REL_GOAL="${REL_GOAL:?}"; REL_LONG="${REL_LONG:?}"
-bash "$HERE/pi05_arm.sh" "$3" "p05_uni_${MODE}_s$S" $UNI --relocate_tasks "$REL_OBJECT" &
-SUITE=libero_spatial MAX_STEPS=220 bash "$HERE/pi05_arm.sh" "$4" "p05sp_uni_${MODE}_s$S" $UNI --relocate_tasks "$REL_SPATIAL" &
-SUITE=libero_goal MAX_STEPS=300 bash "$HERE/pi05_arm.sh" "$5" "p05gl_uni_${MODE}_s$S" $UNI --relocate_tasks "$REL_GOAL" &
-SUITE=libero_10 MAX_STEPS=520 bash "$HERE/pi05_arm.sh" "$6" "p05lg_uni_${MODE}_s$S" $UNI --relocate_tasks "$REL_LONG" &
+arm() {  # arm <gpu, "-" = skip> <suite> <max steps> <run> <relocate tasks>
+  [ "$1" = - ] && return 0
+  SUITE="$2" MAX_STEPS="$3" bash "$HERE/pi05_arm.sh" "$1" "$4" $UNI --relocate_tasks "${5:?gate list missing}" &
+}
+arm "$3" libero_object 280 "p05_uni_${MODE}_s$S" "${REL_OBJECT:-}"
+arm "$4" libero_spatial 220 "p05sp_uni_${MODE}_s$S" "${REL_SPATIAL:-}"
+arm "$5" libero_goal 300 "p05gl_uni_${MODE}_s$S" "${REL_GOAL:-}"
+arm "$6" libero_10 520 "p05lg_uni_${MODE}_s$S" "${REL_LONG:-}"
 wait
 . "$HERE/env.sh"
 log "PI05_ROUND19_DONE $MODE s$S"

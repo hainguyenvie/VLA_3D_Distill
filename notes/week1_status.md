@@ -980,6 +980,19 @@ chạy y nguyên trên cả 4 bộ. Các lựa chọn theo bộ trước đây (
    | Spatial | khi mang 1.0 (mọi task) | — |
    | Goal | 1 / 4 / 6 / 8: 0.86–1.0 | 5 (đẩy đĩa) 0.33; **3 (mở ngăn kéo trước) 0.76 — không lọc được** (ngăn kéo cùng hướng với bát) |
    | Long | 0 / 1 / 3 / 7 / 9: 0.75–1.0 | **2 (bật bếp trước) 0.0; 6 (vật đích nhầm là đĩa) 0.0** |
+
+   **Cổng relocate, 20 tập / task của π0.5 gốc** (đặt thành công trong thế giới đã dời / số lần thử; không dời gần như luôn
+   thành công):
+   - Object: 0 16/18, 1 12/20, 3 17/20, 4 18/20, 5 16/20, 6 16/20, 8 12/20, 9 13/20 → qua; **2 (salad dressing) 10/19, 7
+     (sữa) 5/20 → loại** (vật cao, chạm thành giỏ).
+   - Spatial: qua 0, 1, 2, 3, 5, 6, 8, 9 (14–20 / 17–20); **loại 4 (bát trong ngăn kéo) 9/16, 7 (bát trên bếp) 10/19**.
+   - Goal: qua 3 (ngăn kéo) 13/19, 4 (nóc tủ) 16/19, 6 (bát) 12/20, 8 (đĩa) 18/20; **loại 1 (bếp) 8/19, 9 (giá) 2/6, 2 (n = 1)**.
+
+**Đợt 19 — một cấu hình cho cả 4 bộ** (`scripts/server/pi05_round19.sh`): chế độ `full` (Object s7: swap 53.0, position 39.0,
+chuẩn 96.0, lan 96.5 — cân bằng nhất: rr 59.0 / 27.5, coreloc 27.5 / 42.3) + `--cf_unique --cf_agree 0.5` + danh sách cổng
+ở trên + đổi màu p 0.5, cap 15%, s7. Object / Spatial (card 0), Goal (card 2) chạy từ 21:15 UTC 08/10; Long (card 3) từ 21:20.
+Cổng Long: qua 0 18/19, 1 20/20, 7 19/20 (giỏ); loại 3 (ngăn kéo) 6/18, 9 (lò vi sóng) 3/17, 6 2/19; 2, 8 (ấm moka lên bếp)
+0/16, 0/13 cả khi không dời; 4 bị khoá bởi `unique`.
 3. **Cổng thực thi với ngưỡng chốt trước** (`check_relocate_gate.py`): placer chạy vòng kín trong thế giới đã dời, task qua
    nếu thành công ≥ 60% (n ≥ 5); chỉ áp cho cặp relocate (`--relocate_tasks`), cặp trước kẹp giữ ở mọi task. Đang sinh 20
    tập / task của π0.5 gốc trên Goal, Long, Spatial để chạy lại cổng với mẫu đủ lớn (bản trước 2–6 tập / task).
