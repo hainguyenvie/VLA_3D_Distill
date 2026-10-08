@@ -902,6 +902,23 @@ hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarg
   teacher tổng quát phải là thứ khác (lập kế hoạch chuyển động, policy RL có đặc quyền).
 - Mới: chế độ `rr` (retarget trước kẹp + relocate khi mang) Object s7; coreloc4 s8.
 
+**08/10 chiều:**
+- **Retarget Object s7 kết quả cuối: swap 51.0** (vòng 8: 46.0; base 18.7, aug 24.2, xoay 29.2, oracle 59.0), chuẩn 99.0,
+  position 18.0, lan 99.5, task 0. **Nhưng ô object (đổi ngoại hình vật) 72.5** (base 93.0, coshift 92.5; theo task 0.40 0.60
+  0.70 0.70 **0.00** 1.0 1.0 1.0 0.85 1.0). Nghi lối tắt "nhặt vật nằm lệch chỗ" (trong thế giới retarget vật đích luôn là vật
+  bị dời; ở ô swap lối tắt này trùng đáp án đúng). Đang kiểm bằng phép thử "vật lệch chỗ" (`--displace_distractor 0.2`: một
+  vật phụ bắt đầu lệch ~20 cm ở Object chuẩn) cho base / coshift / retarget / relocate.
+- Goal retarget s7: swap **32.5** (base / aug 29.0), chuẩn 94.5, lan 91.0, task 11.0. Goal xoay s7: chuẩn 92.0, swap 27.0.
+  Goal aug s7: chuẩn 97.0, swap 29.0, object 91.0, lan 97.0, task 11.5, Plus R/L 75 / 65.
+- **Lỗi ô swap Goal là "lạc khi chuyển"** (π0.5, `analyze_failures` sau khi bỏ qua task có vật đích là đồ cố định): t2 chai lên
+  nóc tủ 17/20, t4 bát lên nóc tủ 20/20, t8 bát lên đĩa 19/20 lạc khi chuyển; t6 phô mai vào bát 20/20 tới vật mồi; t9 chai lên
+  giá 15/20 làm đổ. → cùng loại lỗi relocate đã sửa ở Spatial / Object; giải thích vì sao retarget ít tác dụng trên Goal.
+- **Relocate cho nơi đặt là vùng trên đồ cố định** (LIBERO khai báo vùng đặt là site: `wooden_cabinet_1_top_side`,
+  `flat_stove_1_cook_region`, `wine_rack_1_top_region`): dời cả khối đồ cố định khi render (`m.body_pos` của gốc), đích của bộ
+  điều khiển = vị trí site. Cổng trên Goal: 19/30 không dời, 20/30 dời — đạt ở task 1 (bếp), 6 (bát), 8 (đĩa), 9 (giá), hỏng ở
+  2, 4 (nóc tủ), 3 (ngăn kéo) ngay cả khi không dời. Chạy Goal relocate s7 chỉ với cặp ở task qua cổng (`--cf_tasks 1,6,8,9`)
+  — như ECT chỉ giữ demo phát lại thành công.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
