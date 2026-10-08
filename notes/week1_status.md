@@ -842,6 +842,11 @@ Bài học: cổng kiểm tra phải chạy trên **mọi** bộ trước khi tr
 Cổng trên Long: chấm theo env (cần cả hai vật) cho 0/15 — tiêu chí sai cho task nhiều vật; chấm theo từng vật (vật mang
 nằm trong nơi đặt, tay đã rời): Long **15/15**, giỏ dời **13/15**; Object 20/20, 18/20. Chạy lại `p05lg_ocd_relocate4_s7`.
 
+**Giữa chừng đợt 16 (08/10 03:46, vòng 4):** Object relocate4 (bộ điều khiển đã sửa) **không sụp nữa**: eval chuẩn 0.94
+(không giới hạn, ~46% state có cặp) và 0.98 (giới hạn 15%), rollout 0.90–0.99 → lỗi đâm vào thành giỏ là nguyên nhân chính
+ở Object. Long relocate4 vẫn tụt (eval 0.85, rollout 0.65–0.78; base ~0.93) dù cặp chỉ 12–16% → Long còn vấn đề khác chưa
+tìm ra; dừng ở vòng 5 (chạy tiếp được từ `state.pt`). Người dùng yêu cầu tạm dừng sau khi các run hiện tại xong.
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
