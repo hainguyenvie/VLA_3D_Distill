@@ -847,6 +847,17 @@ nằm trong nơi đặt, tay đã rời): Long **15/15**, giỏ dời **13/15**;
 ở Object. Long relocate4 vẫn tụt (eval 0.85, rollout 0.65–0.78; base ~0.93) dù cặp chỉ 12–16% → Long còn vấn đề khác chưa
 tìm ra; dừng ở vòng 5 (chạy tiếp được từ `state.pt`). Người dùng yêu cầu tạm dừng sau khi các run hiện tại xong.
 
+**Kết quả (08/10 06:40):**
+- **Spatial relocate 3 seed:** swap 64.5 / 63.0 / **66.5** (TB **64.7**); base s7 / s8 42.0 / 38.0 (TB 40.0) → **+24.7**. Chuẩn
+  98.5 / 98.0 / 98.5 (base 98.0 / 97.0); object / lan giữ nguyên. Plus Robot 88 / 93 / 80 vs base 83 / 83 (trong nhiễu).
+- **Object relocate4 (bộ điều khiển đã sửa) s7:** **position 32.0** (không giới hạn) / **34.0** (giới hạn 15%), swap 23.0 /
+  20.0, chuẩn 99.0 / 99.0, lan 100 / 98. Base 3 seed position 12.2, coshift 20.7 → **relocate +20 trên ô position**. Khớp chẩn
+  đoán: ở ô position π0.5 nhặt được vật ở chỗ lạ rồi mang theo đoạn đã thuộc tới giỏ → trượt giỏ; relocate sửa đúng lỗi đó.
+  Swap không đổi (lỗi swap ở bước chọn vật).
+- **Goal base s7:** chuẩn 97.5, swap 29.0 (π0.5 26.0), task 10.0, object 87.5, lan 96.5, Plus R/L 73 / 68.
+- Tiếp: Object relocate4cap s8 (card 2), Object coreloc4 s7 (card 3; coshift trước kẹp + relocate khi mang); ablation
+  relocate trên Spatial (card 1); chẩn đoán ô swap Goal (card 0).
+
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
 | | Object | swap | TB | position | TB |
