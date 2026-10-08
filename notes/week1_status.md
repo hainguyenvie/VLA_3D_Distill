@@ -918,6 +918,16 @@ hiện tại hiểu; retarget không thể tăng nhiều ở đó. Object retarg
   điều khiển = vị trí site. Cổng trên Goal: 19/30 không dời, 20/30 dời — đạt ở task 1 (bếp), 6 (bát), 8 (đĩa), 9 (giá), hỏng ở
   2, 4 (nóc tủ), 3 (ngăn kéo) ngay cả khi không dời. Chạy Goal relocate s7 chỉ với cặp ở task qua cổng (`--cf_tasks 1,6,8,9`)
   — như ECT chỉ giữ demo phát lại thành công.
+- **Phép thử "vật lệch chỗ"** (Object chuẩn, một vật phụ bắt đầu lệch ~20 cm, 100 tập): base 99 (0 nhầm vật), coshift 99 (1),
+  **retarget 95 (0 nhầm vật**; hỏng: rơi khi mang 3, đổ 2), relocate 97 (2) → retarget **không** học lối tắt "nhặt vật lệch chỗ";
+  gain swap là thật.
+- **Vì sao ô object tụt:** ô "object" của LIBERO-PRO **đổi màu vật đích** (red_cream_cheese, green_bbq_sauce, blue_ketchup). Task
+  1–4, 10 tập: base 97.5 (kẹp đúng vật, lệch < 2 cm); **retarget 42.5** — t1 không dám kẹp 4, t3 nhặt nhầm 4, t4 (ketchup xanh)
+  0/10 (không kẹp 5, kẹp lệch 16–27 cm). Base làm tốt ô này vì tìm vật **theo vị trí quen** (đổi màu không ảnh hưởng); retarget
+  dạy tìm vật **theo ngoại hình** — cần cho ô swap, nhưng màu đổi thì không nhận ra. → Hai cách nhận diện vật đích, mỗi ô của
+  benchmark thưởng một cách; dữ liệu train mỗi vật chỉ có một ngoại hình. Hướng sửa: ngẫu nhiên hoá màu vật khi render trong
+  lúc train retarget, để policy nhận vật theo hình dạng / tên chứ không theo màu cụ thể.
+- Goal: xoay Plus 73 / 67, object 81.0, lan 92.0, task 12.5; retarget Plus 85 / 60, object 79.5 (cũng tụt — cùng nguyên nhân).
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
