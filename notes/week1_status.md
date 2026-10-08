@@ -857,6 +857,12 @@ tìm ra; dừng ở vòng 5 (chạy tiếp được từ `state.pt`). Người d
 - **Goal base s7:** chuẩn 97.5, swap 29.0 (π0.5 26.0), task 10.0, object 87.5, lan 96.5, Plus R/L 73 / 68.
 - Tiếp: Object relocate4cap s8 (card 2), Object coreloc4 s7 (card 3; coshift trước kẹp + relocate khi mang); ablation
   relocate trên Spatial (card 1); chẩn đoán ô swap Goal (card 0).
+- Object relocate4 Plus R/L: 73 / 88 (không giới hạn), 83 / 92 (giới hạn) — trong nhiễu; object 91.5 / 90.0.
+- **Ô swap Goal giống Object, không giống Spatial** (`analyze_swap_layout.py --cell libero_goal_swap`): vật đích đổi chỗ với
+  một vật khác 12–37 cm; nơi đặt hầu hết là đồ cố định (bếp, nóc tủ, giá) và không dời. π0.5 / base theo task: t1 0.70 / 0.80,
+  t3 1.0 / 1.0, t7 0.95 / 0.90, t8 0.05 / 0.20, còn lại 0 → lỗi chọn nhầm vật; relocate không chạm tới. Đang chạy Goal xoay
+  và Goal augmentation (s7, card 0). Hướng tiếp: phản thực "retarget" cho pha tiếp cận — dời riêng vật đích (tay giữ nguyên),
+  nhãn từ bộ điều khiển kịch bản biết vị trí vật, đưa tay tới trên vật — đối xứng với relocate ở pha đặt.
 
 **Seed 9 (Object, đợt 11) — bảng 3 seed (s7 / s8 / s9, kết quả cuối vòng 20, 200 tập mỗi ô):**
 
