@@ -755,6 +755,11 @@ class EnvRunner:
         from src.rollout.scripted import placer_chunk
 
         m, d = robo.sim.model._model, robo.sim.data._data
+        if not getattr(self, "_cs_ok", False):  # no movable target in this task: nominal frames, invalid
+            out = {}
+            self._render_cf(robo, res, conv, out)
+            return dict(out, cf_label=np.zeros((50, 7), dtype=np.float32), cf_delta=np.zeros(2, dtype=np.float32),
+                        cf_valid=False)
         saved = {k: getattr(d, k).copy() for k in self._KIN}
         cfix = getattr(self, "_cs_cfix", None)
         saved_root = m.body_pos[cfix[1]].copy() if cfix is not None else None
