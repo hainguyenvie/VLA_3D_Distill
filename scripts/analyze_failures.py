@@ -55,7 +55,7 @@ def task_layout(suite, task_id):
     interest = list(robo.obj_of_interest)
     env.close()
     target = interest[0]
-    container = interest[1] if len(interest) > 1 else None
+    container = interest[-1] if len(interest) > 1 else None  # the place target is named last (Long names two objects)
     return addr, target, container
 
 
