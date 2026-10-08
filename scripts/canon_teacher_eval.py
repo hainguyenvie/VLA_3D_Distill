@@ -51,6 +51,7 @@ def main():
             obs = r.reset(inits[n])
             robo = r.env.env
             r._coshift_setup(robo)
+            r.cf = None  # the setup only provides addresses here; the canonical frames are rendered below
             if not r._cs_ok:
                 r.close()
                 break
