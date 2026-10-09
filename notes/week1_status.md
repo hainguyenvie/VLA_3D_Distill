@@ -1235,3 +1235,11 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
 - Long: chuẩn **84.0** (thống nhất 85.5, ECT 84.0, base 95); task 0: 35 → 50 (base 95), task 8 55 (80). Che gripper chỉ
   sửa một phần. **Mọi phương pháp thêm cặp phản thực (ECT, ta) đều kéo Long chuẩn về ~84**, khác nhau ở task bị ảnh hưởng →
   nghi do thêm cặp khi distill task dài (mỗi vòng chỉ 20–40 tập Long, giám sát cảnh thật thưa). Phép thử rẻ: cap 5%.
+- **E1 trên model 2606.27663** (`mech_object_p05_geo1_s7`; kênh nhận đúng d mới khi vật / giỏ bị dời): đầu pha 0.12–0.21,
+  giữa pha đổi chỗ 0.03, đang mang 0.06–0.09 — **giống hệt base**. Ô đổi màu 93.0 (= base), position 12.5, lan 100. → Model có
+  vị trí đích ngay trong đầu vào mà vẫn không dùng: bằng chứng mạnh nhất cho "phải có dữ liệu buộc model dùng".
+- **Điểm 3D + dữ liệu phản thực** (`p05_geocf_s7`, `p05sp_geocf_s7`, lr MLP × 1): sụp ở vòng 2 (rollout 0.96 → 0, loss vòng 1
+  2.9 so với 1.5 khi không có điểm 3D). Dữ liệu phản thực tạo gradient mạnh qua kênh d → MLP lớn nhanh, phá action expert đóng
+  băng. Đã chuyển sang `broken_*`, chạy lại với `--geo_lr_scale 0.1` (`p05_geocf01_s7`, `p05sp_geocf01_s7`).
+- Goal v2: lan 90.0, đổi màu 76.5, Plus 63 / 68. Long v2: swap 12.5 (thống nhất 17.0), lan 88.0.
+- Chia đôi phạm vi train (Object): chỉ VLM vòng 15 (đánh giá giữa chừng 0.79 → 0.98), chỉ action expert vòng 18 (0.88–0.93).

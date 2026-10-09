@@ -205,7 +205,11 @@ không chữa swap; ba đối thủ liên quan nhất (2606.27663, ECT, QuoVLA) 
   mới. Bài gốc train 69 task với bố cục đa dạng. Bản 20 task của chính họ (với GR00T) cũng cho Spatial chỉ 2 → 15.
 - **Hệ quả:** *có thông tin là chưa đủ, phải có dữ liệu buộc model dùng nó* — đúng vai trò của dữ liệu phản thực. Thí
   nghiệm tự nhiên tiếp theo: điểm 3D **cộng** dữ liệu phản thực của ta.
-- E1 trên model này đang chạy, để xác nhận ở mức động tác.
+- **E1 trên model này:** giống hệt base (đầu pha 0.12–0.21, đang mang 0.06–0.09), dù kênh nhận đúng vị trí mới khi vật / giỏ
+  bị dời. Ô đổi màu 93.0, bằng base. → Model **có** vị trí đích ngay trong đầu vào mà **vẫn không dùng**; đây là bằng chứng
+  mạnh nhất cho insight.
+- **Điểm 3D cộng dữ liệu phản thực:** lần đầu sụp ở vòng 2, vì dữ liệu phản thực tạo gradient mạnh qua kênh d nên MLP lớn
+  nhanh và phá action expert đang bị đóng băng. Đang chạy lại với learning rate của MLP × 0.1.
 
 **Phần cài đặt:**
 
