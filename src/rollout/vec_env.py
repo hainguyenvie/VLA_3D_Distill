@@ -138,7 +138,8 @@ ECT_TRANSFORMS = {
 # rendered query the frames are also rendered with the target object displaced horizontally by a fresh random
 # vector of this length range (metres); the simulator state itself is not changed.
 COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5,
-                      p_coshift=0.5, coshift_phase="pre", coshift_post=(0.08, 0.4), unique=False)
+                      p_coshift=0.5, coshift_phase="pre", coshift_post=(0.08, 0.4), unique=False,
+                      hindsight=False)
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
@@ -610,7 +611,7 @@ class EnvRunner:
         if self.cfg["counterfactual"].get("mode") == "retarget":
             return self._retarget_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "full":  # before the grasp retarget or coshift, while carrying relocate
-            if self.closed:
+            if not self._pre_grasp(d):
                 return dict(self._relocate_view(robo, res, conv), cf_len=np.int16(0), cf_target_name=np.array(""),
                             cf_kind=np.int8(2), cf_eef_pos=np.zeros(3, dtype=np.float32), cf_eef_quat=np.zeros(4, dtype=np.float32),
                             cf_post=True, target_pos_cf=_target_pos(robo))
@@ -888,6 +889,17 @@ class EnvRunner:
         self._cs_why = "no free spot"
         return None
 
+    def _pre_grasp(self, d) -> bool:
+        """Is this a state before the target's grasp? Default: no gripper-close command yet in the episode. With the
+        `hindsight` option: the gripper is open and the target has not been lifted (so the approach that follows a first
+        step on something else, e.g. opening a drawer, counts too; the training keeps only the segments in which the
+        policy actually went for the target, see train_pi05_ocd.py --hindsight)."""
+        if not self.cfg["counterfactual"].get("hindsight"):
+            return not self.closed
+        if getattr(self, "grip_cmd", -1.0) > 0 or not getattr(self, "_cs_ok", False):
+            return False
+        return float(d.qpos[self._cs_target + 2]) - self._cs_z0 < 0.02
+
     def _ambiguous(self, name: str) -> bool:
         """With the `unique` option: the object (or the fixture a root body name belongs to) has a twin in the scene."""
         if not self.cfg["counterfactual"].get("unique") or not name:
@@ -923,7 +935,7 @@ class EnvRunner:
         saved = {k: getattr(d, k).copy() for k in self._KIN}
         out, place = {}, None
         try:
-            if not self.closed and self._cs_ok and not self._ambiguous(self._cs_name):
+            if self._pre_grasp(d) and self._cs_ok and not self._ambiguous(self._cs_name):
                 place = self._coshift_place(d)
             if place is not None:
                 shift, swap = place

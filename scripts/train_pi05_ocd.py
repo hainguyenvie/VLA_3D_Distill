@@ -63,6 +63,10 @@ def parse():
                     help="baseline 2606.27663: inject the privileged 3D sub-goal displacement into the action expert's AdaLN "
                          "(Pi05Policy.enable_geo); evaluate with eval_libero.py --geo")
     ap.add_argument("--geo_lr_scale", type=float, default=10.0, help="--geo: learning-rate multiplier of the new MLP")
+    ap.add_argument("--hindsight", action="store_true",
+                    help="full mode: pre-grasp pairs (retarget / coshift) only in the segment in which the episode itself went "
+                         "for the target (after the last gripper release before the target's grasp, up to that grasp), and the "
+                         "env renders them whenever the gripper is open and the target not lifted")
     ap.add_argument("--cf_unique", action="store_true",
                     help="never move an object that has a twin of the same kind in the scene (the instruction can then only "
                          "refer to it by where it is)")
@@ -112,7 +116,7 @@ def main():
                                           coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap,
                                           p_coshift=args.p_coshift, coshift_phase=args.coshift_phase,
                                           coshift_post=tuple(float(x) for x in args.cf_coshift_post.split(",")),
-                                          unique=args.cf_unique)
+                                          unique=args.cf_unique, hindsight=args.hindsight)
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg, obj_tint=args.obj_tint)
 
     import torch
@@ -200,6 +204,30 @@ def main():
         geo = "cf_geo_d" if cf and "cf_geo_d" in arrays else "geo_d"
         return [{"wrist_rgb": aug(arrays[w][k], False), "eef_pos": arrays[pos][k], "eef_quat": arrays[quat][k],
                  "gripper_qpos": arrays[grip][k], **({"geo_d": arrays[geo][k]} if geo in arrays else {})} for k in idx]
+
+    def approach_segment(r):
+        """Queries of an episode in which it went for its target: from the first query after the last gripper-close
+        command that precedes the target's grasp, through the query in which that grasp starts. The target's grasp is the
+        close command run just before the target first rises 2 cm. Empty if the target never rose."""
+        ar, nq = r["arrays"], r["n_queries"]
+        out = np.zeros(nq, dtype=bool)
+        tz = np.asarray(ar.get("target_pos", np.full((nq, 3), np.nan)))[:, 2]
+        if not np.isfinite(tz).all():
+            return out
+        lifted = tz - tz[0] > 0.02
+        if not lifted.any():
+            return out
+        q_lift = int(np.argmax(lifted))
+        close = (ar["actions"][:, :, -1] < 0.5).any(1)  # [0, 1] convention: below 0.5 = a close command in that chunk
+        runs = [q for q in range(q_lift) if close[q]]
+        if not runs:
+            return out
+        q_gs = runs[-1]
+        while q_gs > 0 and close[q_gs - 1]:
+            q_gs -= 1
+        prev = [q for q in range(q_gs) if close[q]]
+        out[(prev[-1] + 1 if prev else 0) : q_gs + 1] = True
+        return out
 
     def ect_pairs(recs):
         """ECT baseline: counterparts (`EnvRunner.ect_replay`) of up to --ect_episodes successful episodes of this
@@ -441,7 +469,15 @@ def main():
         if args.relocate_tasks and args.cf_mode in ("rr", "full"):  # relocate pairs only where the placer passed its gate
             allowed = {int(x) for x in args.relocate_tasks.split(",")}
             tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
-            cf_ok &= ~A["closed_before"].astype(bool) | np.isin(tids, list(allowed))
+            is_post = (cat("cf_kind") == 2) if args.cf_mode == "full" else A["closed_before"].astype(bool)
+            cf_ok &= ~is_post | np.isin(tids, list(allowed))
+        if args.hindsight and args.cf_mode == "full":  # pre-grasp pairs only where the episode itself went for the target
+            appr = np.concatenate([approach_segment(r) for r in recs])
+            pre = cat("cf_kind") != 2
+            tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
+            print("[hindsight] task: pre-grasp pairs kept / before", {int(t): f"{int((cf_ok & pre & appr & (tids == t)).sum())}/"
+                  f"{int((cf_ok & pre & (tids == t)).sum())}" for t in np.unique(tids)}, flush=True)
+            cf_ok &= ~pre | appr
         if args.cf_frac > 0 and cf_ok.sum() > args.cf_frac * n_all:  # cap the share of states that carry a pair
             on = np.flatnonzero(cf_ok)
             cf_ok[:] = False
