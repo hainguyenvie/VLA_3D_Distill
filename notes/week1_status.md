@@ -1147,3 +1147,24 @@ Giữ nguyên: mọi log, `summary.json`, `episodes.jsonl`, `failures.*`, `train
   trong câu lệnh), E2 / E3 (`scripts/probe_internals.py`, probe tuyến tính theo tầng + attention của token hành động theo
   đoạn). Bản thử E2 nhỏ: vị trí vật đích đọc ra được ở tầng sau (token ảnh R² ~0.5, token hành động ~0.67) — trùng phát hiện
   "mã hoá được nhưng không điều khiển" (2610.06235).
+- **E1, Object, π0.5 gốc** (`mech_object_base`; follow = 1 nếu chunk đi theo đúng thứ đã dời, 0 nếu bỏ qua; trung vị):
+
+  | thời điểm | dời 3 cm | dời 20 cm | đổi chỗ | đổi tên trong câu lệnh | lệch proprio 5 cm |
+  |---|---|---|---|---|---|
+  | đầu pha tiếp cận (> 15 cm) | 0.18 | 0.22 | 0.22 | 0.25 | 0.0 |
+  | giữa (5–15 cm) | 0.61 | 0.31 | 0.03 | 0.02 | 0.0 |
+  | sát (< 5 cm) | 0.51 | 0.29 | 0.01 | −0.02 | 0.0 |
+  | đang mang (dời giỏ) | 0.09 | 0.06 | — | — | 0.0 |
+
+  Goal: đầu pha 0.23–0.33 (đổi chỗ 0.42, đổi tên 0.41), khi mang 0.48 → 0.14 theo cỡ dời. → (1) ở khoảnh khắc quyết định model
+  gần như mù; (2) khi đã tiến vào là bộ bám cục bộ (dời ít bám nhiều hơn dời xa), lựa chọn đã khoá (đổi chỗ / đổi tên ≈ 0);
+  (3) đặt vật vào giỏ hoàn toàn thuộc lòng; (4) proprio không có tác dụng ở mọi pha.
+- **E2 / E3, Object** (`internals_object_base`, 2579 truy vấn, bước flow đầu): attention của token hành động gần như giống
+  nhau giữa lúc mù và lúc bám (không phải lỗi "không nhìn"). **Probe trong cùng state** (`scripts/analyze_internals.py`: độ
+  chênh trạng thái ẩn giữa biến thể và state gốc ~ độ dời): dời giỏ ≥ 12 cm khi mang → token hành động tầng 8–17 R² 0.74–0.82,
+  token ảnh ~0.9; dời vật ≥ 12 cm trước kẹp → token hành động tầng sau ~0.58. Tức là **phần sinh hành động có mã hoá việc giỏ /
+  vật bị dời, nhưng động tác đầu ra gần như không đổi (follow 0.06–0.2)** → chỗ nghẽn ở khâu đọc ra cuối của action expert.
+  Lưu ý: R² cao không nói tín hiệu lớn (probe chuẩn hoá khuếch đại tín hiệu nhỏ nhất quán).
+- Thí nghiệm kiểm chứng đang chạy: (a) E1 / E2 trên model đã train (full s7, ECT s7) — mã hoá có đổi không, hay chỉ khâu đọc
+  ra đổi; (b) chỉ train khâu đọc ra (`--lora_scope readout`, 34 nghìn tham số) và 6 tầng cuối + đọc ra (`expert_late`, 4.65
+  triệu) với đúng dữ liệu của full s7.
