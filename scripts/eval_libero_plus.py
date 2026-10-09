@@ -18,6 +18,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", required=True)
     ap.add_argument("--lora", default="")
+    ap.add_argument("--state_blind", action="store_true", help="pi0.5: constant proprio input (see Pi05Policy.state_blind)")
     ap.add_argument("--suite", default="libero_object")
     ap.add_argument("--out", required=True)
     ap.add_argument("--per_category", type=int, default=60)
@@ -60,6 +61,8 @@ def main():
 
     torch.manual_seed(args.seed)
     policy = load_policy(args.ckpt, args.suite, "cuda:0")  # plain path, raw:<path> or oft:<path>
+    if args.state_blind:
+        policy.state_blind = True
     if args.lora:
         policy.add_lora(adapter_path=args.lora)
     if args.proprio_mode != "normal":

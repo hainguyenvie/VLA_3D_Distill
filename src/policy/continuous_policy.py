@@ -94,5 +94,10 @@ class AdapterOff:
         return getattr(self.policy, name)
 
     def act(self, *args, **kwargs):
-        with self.policy.peft.disable_adapter():
-            return self.policy.act(*args, **kwargs)
+        blind = getattr(self.policy, "state_blind", False)  # the teacher always sees the true proprio
+        self.policy.state_blind = False
+        try:
+            with self.policy.peft.disable_adapter():
+                return self.policy.act(*args, **kwargs)
+        finally:
+            self.policy.state_blind = blind

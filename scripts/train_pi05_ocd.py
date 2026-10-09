@@ -56,6 +56,9 @@ def parse():
                          "src.rollout.vec_env.ECT_TRANSFORMS")
     ap.add_argument("--ect_episodes", type=int, default=16,
                     help="ect mode: successful episodes of each iteration replayed in a transformed scene")
+    ap.add_argument("--state_blind", action="store_true",
+                    help="the student's proprio input is a constant (dataset mean): ablation of the proprio route; the "
+                         "teacher still sees the true state (evaluate with eval_libero.py --state_blind)")
     ap.add_argument("--cf_unique", action="store_true",
                     help="never move an object that has a twin of the same kind in the scene (the instruction can then only "
                          "refer to it by where it is)")
@@ -120,6 +123,7 @@ def main():
     params = student.add_lora(args.lora_rank, adapter_path=last if resume else None, scope=args.lora_scope)
     student.vla.model.gradient_checkpointing_enable()
     teacher = AdapterOff(student)
+    student.state_blind = args.state_blind
     opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.0)
     start_it, totals = 0, {"episodes": 0, "states": 0, "grad_steps": 0}
     if resume:

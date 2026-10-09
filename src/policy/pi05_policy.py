@@ -52,6 +52,11 @@ class Pi05Policy:
         stats = load_file(os.path.join(checkpoint, "policy_preprocessor_step_2_normalizer_processor.safetensors"))
         self.act_mean, self.act_std = stats["action.mean"].numpy(), stats["action.std"].numpy()
         self.fixed_noise = True  # deterministic sampling (see `_noise`); the LeRobot eval draws fresh noise per call
+        # `state_blind`: the proprio given to the model is a constant (the dataset mean), so it carries no information
+        # (ablation of the proprio route; the teacher of a distillation still sees the true state, see AdapterOff)
+        self.state_blind = False
+        self.state_const = (stats["observation.state.mean"].numpy().astype(np.float32)
+                            if "observation.state.mean" in stats else None)
 
     # ---------------------------------------------------------------- inputs
     @staticmethod
@@ -63,7 +68,8 @@ class Pi05Policy:
         raw = {
             "observation.images.image": self._images(images),
             "observation.images.image2": self._images([o["wrist_rgb"] for o in obs]),
-            "observation.state": torch.from_numpy(np.stack([proprio_state(o) for o in obs])).float(),
+            "observation.state": torch.from_numpy(np.stack([self.state_const if self.state_blind else proprio_state(o)
+                                                            for o in obs])).float(),
             "task": list(task_descriptions),
         }
         return self.pre(raw)
