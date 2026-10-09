@@ -9,15 +9,17 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 S="$1"
-ECT="--cf_mode ect --ect_episodes 16 --cf_frac 0.15 --lambda_cf 0 --seed $S"
+# FRAC (default 0.15) changes the share of states with a pair, and TAG the run names (e.g. FRAC=0.5 TAG=50 -> p05_ect50_s7)
+FRAC="${FRAC:-0.15}"; T="${TAG:-}"
+ECT="--cf_mode ect --ect_episodes ${EPIS:-16} --cf_frac $FRAC --lambda_cf 0 --seed $S"
 arm() {  # arm <gpu, "-" = skip> <suite> <max steps> <run> <transforms>
   [ "$1" = - ] && return 0
   SUITE="$2" MAX_STEPS="$3" bash "$HERE/pi05_arm.sh" "$1" "$4" $ECT --ect_transforms "$5" &
 }
-arm "$2" libero_object 280 "p05_ect_s$S" ymirror,xmirror_shift,xymirror_shift
-arm "$3" libero_spatial 220 "p05sp_ect_s$S" ymirror
-arm "$4" libero_goal 300 "p05gl_ect_s$S" ymirror
-arm "$5" libero_10 520 "p05lg_ect_s$S" shift
+arm "$2" libero_object 280 "p05_ect${T}_s$S" ymirror,xmirror_shift,xymirror_shift
+arm "$3" libero_spatial 220 "p05sp_ect${T}_s$S" ymirror
+arm "$4" libero_goal 300 "p05gl_ect${T}_s$S" ymirror
+arm "$5" libero_10 520 "p05lg_ect${T}_s$S" shift
 wait
 . "$HERE/env.sh"
 log "PI05_ROUND20_DONE s$S"

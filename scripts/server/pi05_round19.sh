@@ -14,15 +14,16 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MODE="$1"; S="$2"
+T="${TAG:-}"  # suffix of the run names, for variants (e.g. TAG=nogate)
 UNI="--cf_mode $MODE --cf_frac 0.15 --cf_unique --cf_agree 0.5 --obj_tint 0.5 --lambda_cf 0 --cf_coshift_post 0.15,0.4 --seed $S"
 arm() {  # arm <gpu, "-" = skip> <suite> <max steps> <run> <relocate tasks>
   [ "$1" = - ] && return 0
   SUITE="$2" MAX_STEPS="$3" bash "$HERE/pi05_arm.sh" "$1" "$4" $UNI --relocate_tasks "${5:?gate list missing}" &
 }
-arm "$3" libero_object 280 "p05_uni_${MODE}_s$S" "${REL_OBJECT:-}"
-arm "$4" libero_spatial 220 "p05sp_uni_${MODE}_s$S" "${REL_SPATIAL:-}"
-arm "$5" libero_goal 300 "p05gl_uni_${MODE}_s$S" "${REL_GOAL:-}"
-arm "$6" libero_10 520 "p05lg_uni_${MODE}_s$S" "${REL_LONG:-}"
+arm "$3" libero_object 280 "p05_uni${T}_${MODE}_s$S" "${REL_OBJECT:-}"
+arm "$4" libero_spatial 220 "p05sp_uni${T}_${MODE}_s$S" "${REL_SPATIAL:-}"
+arm "$5" libero_goal 300 "p05gl_uni${T}_${MODE}_s$S" "${REL_GOAL:-}"
+arm "$6" libero_10 520 "p05lg_uni${T}_${MODE}_s$S" "${REL_LONG:-}"
 wait
 . "$HERE/env.sh"
 log "PI05_ROUND19_DONE $MODE s$S"
