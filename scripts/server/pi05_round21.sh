@@ -4,12 +4,13 @@
 # segment in which the episode itself went for the target; fixes the drawer-first Goal task 3) + no execution gate (relocate
 # pairs on every task; the gate removed the most useful tasks) + objects recoloured at p 0.5; NOGRIP=1 also masks the
 # gripper of the relocate pairs (Long task 0 dropped objects in transit). Pairs on at most 15% of the states.
-#   [NOGRIP=1] [FRAC=0.15] [TINT=0.5] [TAG=..] pi05_round21.sh <seed> <gpu object> <gpu spatial> <gpu goal> <gpu long>    (a gpu of "-" skips that suite)
+#   [NOGRIP=1] [FRAC=0.15] [TINT=0.5] [SCOPE=vlm] [TAG=..] pi05_round21.sh <seed> <gpu object> <gpu spatial> <gpu goal> <gpu long>    (a gpu of "-" skips that suite)
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 S="$1"; T="${TAG:-}"
 V2="--cf_mode full --cf_frac ${FRAC:-0.15} --cf_unique --cf_agree 0.5 --hindsight --obj_tint ${TINT:-0.5} --lambda_cf 0 --cf_coshift_post 0.15,0.4 --seed $S"
 [ "${NOGRIP:-0}" = 1 ] && V2="$V2 --relocate_no_grip"
+[ -n "${SCOPE:-}" ] && V2="$V2 --lora_scope $SCOPE"  # e.g. SCOPE=vlm: only the VLM side is trained (the action expert stays)
 arm() {  # arm <gpu, "-" = skip> <suite> <max steps> <run>
   [ "$1" = - ] && return 0
   SUITE="$2" MAX_STEPS="$3" bash "$HERE/pi05_arm.sh" "$1" "$4" $V2 &
