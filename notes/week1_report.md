@@ -205,6 +205,7 @@ một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
 | xoay | 92.0 | 27.0 | 81.0 | 92.0 |
 | retarget | 94.5 | 32.5 | 79.5 | 91.0 |
 | relocate theo mục tiêu BDDL (7 task) | 97.0 | 28.5 | **74.0** | 97.0 |
+| **một cấu hình (đợt 19, full + 3 kiểm tra + màu)** | **89.5** | 28.5 | (đang đo) | (đang đo) |
 
 | Long (1 seed) | Chuẩn | **Swap** | Object | Lan |
 |---|---|---|---|---|
@@ -214,6 +215,19 @@ một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
 - Goal: lỗi chính là tụt vật khi mang lên nóc tủ / vào ngăn kéo (tương tác với đồ nội thất). Cận trên tiếp cận kịch bản chỉ
   23.0, thấp hơn base. Relocate (kể cả khi đã gồm nóc tủ / ngăn kéo) không tăng swap mà còn làm tụt ô object 13 điểm.
 - Long: task nhiều bước. Relocate chỉ dùng được ở 3/10 task, không tăng swap, và làm tụt chuẩn / lan.
+- **Cấu hình thống nhất trên Goal thất bại**, và nguyên nhân đã rõ. So từng task (chuẩn / swap):
+
+  | Task Goal | Base | Thống nhất |
+  |---|---|---|
+  | 8 – bát lên đĩa | 100 / 20 | 100 / **55** |
+  | 9 – chai lên giá | 95 / 0 | 100 / **55** |
+  | 3 – mở ngăn kéo rồi bỏ bát vào | 100 / 100 | **45 / 5** |
+  | 0 – mở ngăn kéo, cùng tủ | 90 / 0 | **60** / 0 |
+
+  Retarget có ích thật ở task 8 và 9 nhưng phá task 3. Đây đúng là trường hợp kiểm tra đồng ý không lọc được: ở đầu task 3
+  teacher bảo "tới cái bát" trong khi phải mở ngăn kéo trước, và hướng của hai việc giống nhau. Thử tiêu chí điểm đến (tay
+  của teacher và của π0.5 sau 25 bước cách nhau < 8 cm): task 3 chỉ còn giữ 30%, nhưng các cặp đúng cũng mất 30–50%, vì
+  π0.5 và teacher đi nhanh chậm khác nhau. → Cần cách phân pha tốt hơn (xem §9 D).
 
 ### 5.4 Các ablation khác
 
@@ -316,7 +330,7 @@ chữa lúc inference), HABILIS Brain 0. Chưa bài nào ngoài ECT cho số cù
 
 | Run | Nội dung | Vòng | Kết quả cuối (UTC) |
 |---|---|---|---|
-| đợt 19, s7, 4 bộ | **một cấu hình** (full + 3 kiểm tra + màu p 0.5) | Goal xong train, đang eval; Object 17, Spatial 15, Long 17 | ~02:30–04:30 |
+| đợt 19, s7, 4 bộ | **một cấu hình** (full + 3 kiểm tra + màu p 0.5) | Goal: chuẩn 89.5, swap 28.5 (§5.3); Object 17, Spatial 15, Long 17 | ~02:30–04:30 |
 | đợt 20, s7, 4 bộ | **ECT trong harness** | 12–15 | ~03:00–05:00 |
 | đợt 19, s8 | một cấu hình, Object + Spatial | 4–5 | ~06:00 |
 
@@ -350,6 +364,9 @@ Theo dõi giữa chừng của đợt 19 (đánh giá trên cảnh có đổi m�
   - trả lời điểm yếu "teacher viết tay";
   - dùng được cho mọi kỹ năng có đích (mở ngăn kéo, đặt lên bếp);
   - khác ECT ở chỗ cục bộ theo pha tại state bất kỳ, không phải biến đổi toàn cảnh từ đầu.
+- **Phân pha bằng hindsight.** Rollout thành công của π0.5 cho biết lúc nào nó thật sự đang tiến tới vật đích: đoạn từ lần
+  mở gripper cuối trước khi nhấc vật đến lúc nhấc. Chỉ đặt cặp tiếp cận trong đoạn đó; tương tự cho pha mang. Cách này sửa
+  đúng lỗi Goal 3 (§5.3) mà không cần luật riêng, và thay được kiểm tra đồng ý vốn còn thô.
 - Hạ tầng đã có một phần (bộ phát lại của ECT, cổng, ba kiểm tra).
 - Rủi ro: 1–2 ngày phát triển, chưa chắc tăng Goal / Long.
 

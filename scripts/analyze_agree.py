@@ -13,9 +13,16 @@ def cos(a, b):
     return (a * b).sum(1) / (na * nb + 1e-8), na, nb
 
 
-def criteria(nom, exp):
+def criteria(nom, exp, eef=None):
     """name -> boolean keep per pair."""
     out = {}
+    if eef is not None:  # where each chunk would bring the hand (kinematic model of src/rollout/scripted.py)
+        from src.rollout.scripted import TRACK_GAIN
+
+        for k, dmax in ((25, 0.05), (25, 0.08), (50, 0.08)):
+            end_t = (TRACK_GAIN * nom[:, :k, :3] * 0.05).sum(1)
+            end_e = (TRACK_GAIN * exp[:, :k, :3] * 0.05).sum(1)
+            out[f"e{k}<{int(dmax * 100)}"] = np.linalg.norm(end_t - end_e, axis=1) < dmax
     for k in (10, 25, 50):
         for dims, tag in (((0, 1, 2), "xyz"), ((0, 1), "xy")):
             c, nt, ne = cos(nom[:, :k, dims].sum(1), exp[:, :k, dims].sum(1))
@@ -30,7 +37,7 @@ def main():
         nom, exp, tids, post, ok = z["nom"], z["expert"], z["tids"], z["post"], z["cf_ok"]
         has = np.abs(nom).sum((1, 2)) > 0
         sel = ok & has
-        crit = criteria(nom, exp)
+        crit = criteria(nom, exp, z["eef"] if "eef" in z else None)
         print(f"== {run}: {sel.sum()} pairs with a factual-world label")
         print("task phase  n   " + " ".join(f"{k:>6}" for k in crit))
         for t in np.unique(tids):
