@@ -289,6 +289,7 @@ class EnvRunner:
             self.env.seed(0)  # upstream: the seed affects object positions even with a fixed initial state
         self.t, self.done, self.closed = 0, False, False
         self.pert, self.cf = None, None
+        self._geo_z0 = None
 
     def _cameras(self, enabled: bool) -> None:
         robo = self.env.env
@@ -298,10 +299,49 @@ class EnvRunner:
                 if enabled:  # enabling zeroes the sampling timer; put it back in the phase upstream stepping has
                     ob._time_since_last_sample, ob._sampled = self._phase[name]
 
+    def _geo_d(self) -> np.ndarray:
+        """Privileged 3D displacement from the hand to the current sub-goal, as in 2606.27663 ("Direct Action-Head
+        Injection of a Grounded 3D Point"): the target object (first object of interest) until it has risen 1 cm above
+        its height at the start of the episode, then its place target from the task goal (BDDL `on` / `in`: a movable
+        object's position or a region site's position; the last object of interest if the goal names none). NaN-free:
+        zeros when the task has no movable target."""
+        robo = self.env.env
+        d = robo.sim.data._data
+        names = getattr(robo, "obj_of_interest", None) or []
+        if not names or names[0] not in robo.obj_body_id:
+            return np.zeros(3, dtype=np.float32)
+        tgt = names[0]
+        p_t = d.xpos[robo.obj_body_id[tgt]].copy()
+        if getattr(self, "_geo_z0", None) is None:
+            self._geo_z0 = float(p_t[2])
+            self._geo_place = None
+            try:
+                for pred in robo.parsed_problem["goal_state"]:
+                    if len(pred) == 3 and str(pred[0]).lower() in ("on", "in") and pred[1] == tgt:
+                        self._geo_place = pred[2]
+                        break
+            except Exception:
+                pass
+            if self._geo_place is None and len(names) > 1:
+                self._geo_place = names[-1]
+        goal = p_t
+        if p_t[2] - self._geo_z0 > 0.01 and self._geo_place is not None:
+            place = self._geo_place
+            if place in robo.obj_body_id:
+                goal = d.xpos[robo.obj_body_id[place]].copy()
+            else:
+                try:
+                    goal = d.site_xpos[robo.sim.model.site_name2id(place)].copy()
+                except Exception:
+                    goal = p_t
+        eef = d.site_xpos[robo.robots[0].eef_site_id]
+        return (goal - eef).astype(np.float32)
+
     def _obs(self, obs) -> Dict[str, Any]:
         """Packed observation; in a perturbed episode `rgb` (and `depth`) show the perturbed view the student is fed,
         and `rgb_clean` keeps the nominal frame for the teacher."""
         out = _pack_obs(self.env, obs, self.cfg)
+        out["geo_d"] = self._geo_d()
         if self.pert:
             out["rgb_clean"] = out["rgb"]
             out.update(self._stash)
@@ -1088,6 +1128,7 @@ class EnvRunner:
                 robo.modify_observable(name, "enabled", True)
             self.env.reset()
             self.pert, self.cf = None, None
+            self._geo_z0 = None
             if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
@@ -1296,6 +1337,7 @@ class EnvRunner:
                            for name in cams}
             self._cameras(False)
         self.pert, self.cf = None, None
+        self._geo_z0 = None
         robot = robo.robots[0]
         # PandaGripper.format_action accumulates [-1, 1] * 0.01 * sign(cmd) per substep and saturates within 4 steps
         robot.gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))
@@ -1304,7 +1346,8 @@ class EnvRunner:
         robot.controller.update(force=True)
         robot.controller.reset_goal()
         self.t, self.done, self.closed = t0, False, gripper_cmd > 0
-        return dict(_pack_obs(self.env, obs, self.cfg), t=t0, done=False, active=True, closed_before=bool(self.closed))
+        return dict(_pack_obs(self.env, obs, self.cfg), geo_d=self._geo_d(), t=t0, done=False, active=True,
+                    closed_before=bool(self.closed))
 
     def step(self, actions) -> Dict[str, Any]:
         return self._run([a.tolist() for a in actions])  # (k, 7) actions, already gripper-post-processed

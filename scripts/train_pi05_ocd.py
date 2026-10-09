@@ -59,6 +59,9 @@ def parse():
     ap.add_argument("--state_blind", action="store_true",
                     help="the student's proprio input is a constant (dataset mean): ablation of the proprio route; the "
                          "teacher still sees the true state (evaluate with eval_libero.py --state_blind)")
+    ap.add_argument("--geo", action="store_true",
+                    help="baseline 2606.27663: inject the privileged 3D sub-goal displacement into the action expert's AdaLN "
+                         "(Pi05Policy.enable_geo); evaluate with eval_libero.py --geo")
     ap.add_argument("--cf_unique", action="store_true",
                     help="never move an object that has a twin of the same kind in the scene (the instruction can then only "
                          "refer to it by where it is)")
@@ -122,7 +125,12 @@ def main():
     student = Pi05Policy(args.ckpt)
     last, state_path = os.path.join(args.out, "adapter_last"), os.path.join(args.out, "state.pt")
     resume = os.path.exists(state_path)
+    geo_params = student.enable_geo() if args.geo else []
     params = student.add_lora(args.lora_rank, adapter_path=last if resume else None, scope=args.lora_scope)
+    if args.geo:
+        if resume:
+            student.load_geo(last)
+        params = params + [p for p in geo_params]
     student.vla.model.gradient_checkpointing_enable()
     teacher = AdapterOff(student)
     student.state_blind = args.state_blind
@@ -185,8 +193,9 @@ def main():
         pos = "cf_eef_pos" if cf and "cf_eef_pos" in arrays else "eef_pos"
         quat = "cf_eef_quat" if cf and "cf_eef_quat" in arrays else "eef_quat"
         grip = "cf_gripper_qpos" if cf and "cf_gripper_qpos" in arrays else "gripper_qpos"
+        geo = "cf_geo_d" if cf and "cf_geo_d" in arrays else "geo_d"
         return [{"wrist_rgb": aug(arrays[w][k], False), "eef_pos": arrays[pos][k], "eef_quat": arrays[quat][k],
-                 "gripper_qpos": arrays[grip][k]} for k in idx]
+                 "gripper_qpos": arrays[grip][k], **({"geo_d": arrays[geo][k]} if geo in arrays else {})} for k in idx]
 
     def ect_pairs(recs):
         """ECT baseline: counterparts (`EnvRunner.ect_replay`) of up to --ect_episodes successful episodes of this
@@ -254,6 +263,8 @@ def main():
         # flatten (episode, query) -> arrays
         cat = lambda k: np.concatenate([r["arrays"][k] for r in recs])  # noqa: E731
         A = {k: cat(k) for k in ("rgb", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "actions_teacher")}
+        if args.geo:
+            A["geo_d"] = cat("geo_d")
         descs_all = [r["task"] for r in recs for _ in range(r["n_queries"])]
         cf_ok = np.zeros(len(descs_all), dtype=bool)
         descs_cf = list(descs_all)

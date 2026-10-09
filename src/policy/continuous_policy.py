@@ -95,9 +95,10 @@ class AdapterOff:
 
     def act(self, *args, **kwargs):
         blind = getattr(self.policy, "state_blind", False)  # the teacher always sees the true proprio
-        self.policy.state_blind = False
+        geo = getattr(self.policy, "geo_on", False)  # and never the injected sub-goal point
+        self.policy.state_blind, self.policy.geo_on = False, False
         try:
             with self.policy.peft.disable_adapter():
                 return self.policy.act(*args, **kwargs)
         finally:
-            self.policy.state_blind = blind
+            self.policy.state_blind, self.policy.geo_on = blind, geo

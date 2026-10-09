@@ -55,6 +55,7 @@ class Pi05Policy:
         # `state_blind`: the proprio given to the model is a constant (the dataset mean), so it carries no information
         # (ablation of the proprio route; the teacher of a distillation still sees the true state, see AdapterOff)
         self.state_blind = False
+        self.geo, self.geo_on, self._geo_d = None, False, None  # see enable_geo
         self.state_const = (stats["observation.state.mean"].numpy().astype(np.float32)
                             if "observation.state.mean" in stats else None)
 
@@ -65,6 +66,9 @@ class Pi05Policy:
         return x.float() / 255.0
 
     def batch(self, images, task_descriptions, obs) -> Dict:
+        if self.geo is not None:  # the 3D sub-goal displacement of every row, read by the patched embed_suffix
+            self._geo_d = (torch.from_numpy(np.stack([np.asarray(o["geo_d"], dtype=np.float32) for o in obs])).to(self.device)
+                           if self.geo_on else None)
         raw = {
             "observation.images.image": self._images(images),
             "observation.images.image2": self._images([o["wrist_rgb"] for o in obs]),
@@ -180,6 +184,34 @@ class Pi05Policy:
             p.data = p.data.float()
         return params
 
+    def enable_geo(self, hidden: int = 1024) -> List[torch.nn.Parameter]:
+        """Grounded 3D point injection into the action head, after 2606.27663: the displacement d = sub-goal - hand
+        (3D, metres; obs["geo_d"], privileged here) goes through a 2-layer MLP (ReLU; last layer zero-initialised, so
+        the model starts exactly as pretrained) whose output is added to the flow-time embedding that conditions the
+        adaptive RMS norms of every action-expert layer (pi0.5's AdaLN). Call before add_lora; the teacher of a
+        distillation does not see it (AdapterOff). Returns the new parameters."""
+        m = self.vla.model
+        width = m.time_mlp_out.out_features
+        self.geo = torch.nn.Sequential(torch.nn.Linear(3, hidden), torch.nn.ReLU(), torch.nn.Linear(hidden, width)).to(self.device)
+        torch.nn.init.zeros_(self.geo[2].weight)
+        torch.nn.init.zeros_(self.geo[2].bias)
+        self.geo_on = True
+        orig = m.embed_suffix
+
+        def embed_suffix(noisy_actions, timestep):
+            embs, pad, att, cond = orig(noisy_actions, timestep)
+            if self.geo_on and self._geo_d is not None:
+                cond = cond + self.geo(self._geo_d).to(cond.dtype)
+            return embs, pad, att, cond
+
+        m.embed_suffix = embed_suffix  # the instance attribute shadows the method (sampling and training both call it)
+        return list(self.geo.parameters())
+
+    def load_geo(self, path: str) -> None:
+        f = os.path.join(path, "geo.pt")
+        if self.geo is not None and os.path.exists(f):
+            self.geo.load_state_dict(torch.load(f, map_location=self.device))
+
     def save_lora(self, path: str) -> None:
         """Adapter weights + config in the PEFT layout (PeftModel.from_pretrained loads it). PEFT's own
         save_pretrained fails on the model card of a non-transformers config, so it is written directly."""
@@ -190,3 +222,5 @@ class Pi05Policy:
         self.peft.peft_config["default"].save_pretrained(path)
         state = {k: v.detach().cpu().contiguous() for k, v in get_peft_model_state_dict(self.peft).items()}
         save_file(state, os.path.join(path, "adapter_model.safetensors"))
+        if self.geo is not None:
+            torch.save(self.geo.state_dict(), os.path.join(path, "geo.pt"))
