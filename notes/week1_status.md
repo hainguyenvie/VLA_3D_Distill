@@ -1243,3 +1243,17 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   băng. Đã chuyển sang `broken_*`, chạy lại với `--geo_lr_scale 0.1` (`p05_geocf01_s7`, `p05sp_geocf01_s7`).
 - Goal v2: lan 90.0, đổi màu 76.5, Plus 63 / 68. Long v2: swap 12.5 (thống nhất 17.0), lan 88.0.
 - Chia đôi phạm vi train (Object): chỉ VLM vòng 15 (đánh giá giữa chừng 0.79 → 0.98), chỉ action expert vòng 18 (0.88–0.93).
+- **Chia đôi phạm vi train (Object, cùng dữ liệu full s7):**
+
+  | phần được train | tham số | swap | position | chuẩn | lan |
+  |---|---|---|---|---|---|
+  | lớp đọc ra | 34 nghìn | 23.5 | 20.5 | 100 | 96.0 |
+  | 6 tầng cuối expert + đọc ra | 4.65 triệu | 34.5 | 30.5 | 82.5 | 81.0 |
+  | toàn bộ action expert | 13.9 triệu | 33.0 | 32.5 | 94.5 | 91.5 |
+  | **chỉ VLM (PaliGemma LM)** | 39.2 triệu | **50.0** | (đang đo) | 96.0 | |
+  | toàn bộ | — | 53.0 | 39.0 | 96.0 | 96.5 |
+
+  → Gần như toàn bộ gain ở ô swap (chọn đúng vật) đến từ thay đổi **phía VLM**, action expert đóng băng. Action expert đọc
+  prefix qua attention; training phản thực sửa cách VLM trình bày vị trí đích trong prefix để expert (không đổi) đọc ra được.
+  Khớp ECT (lựa chọn task đọc ra từ KV của prefix). Ô position: riêng expert đã lấy 32.5 / 39.0 → có thể "chọn vật" nằm ở
+  VLM, "đặt vật" ở expert.
