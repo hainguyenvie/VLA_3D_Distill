@@ -1,6 +1,6 @@
 # Báo cáo tổng hợp — thế giới phản thực và teacher có đặc quyền cho VLA (π0.5, LIBERO)
 
-Cập nhật 09/10/2026, 10:40 giờ VN (03:40 UTC). Mọi số là của chúng tôi, đo trong cùng một harness, trừ khi ghi "công bố".
+Cập nhật 09/10/2026, 14:30 giờ VN (07:30 UTC). Mọi số là của chúng tôi, đo trong cùng một harness, trừ khi ghi "công bố".
 Số từng run: [../results/pi05_runs.txt](../results/pi05_runs.txt). Nhật ký chi tiết theo ngày: [week1_status.md](week1_status.md).
 Đối thủ: [related_work.md](related_work.md) §9–11.
 
@@ -386,6 +386,50 @@ chữa lúc inference), HABILIS Brain 0. Chưa bài nào ngoài ECT cho số cù
 - Teacher viết tay cho nhặt–đặt: không tổng quát cho mở ngăn kéo, xoay núm, task nhiều bước.
 - Không tăng Goal / Long.
 - Tụt ô đổi màu.
+
+---
+
+## 7b. Hướng mới (09/10 chiều): mổ xẻ cơ chế bên trong π0.5
+
+Theo góp ý: augmentation chỉ là công cụ; đóng góp phải là insight về **chỗ hỏng bên trong model** và can thiệp đúng chỗ
+đó. Công cụ: dựng thế giới phản thực tại bất kỳ state nào, rồi đo phản ứng của model.
+
+**1. Lối tắt không đi qua trạng thái tay.** π0.5 nhận trạng thái tay dưới dạng ~120 token chữ số trong prompt. Nhưng thay nó
+bằng hằng số thì Object chuẩn vẫn 100%, swap vẫn 14%. Giả thuyết "cắt trạng thái tay" bị bác.
+
+**2. Bản đồ độ nhạy (E1)** — động tác có đi theo thứ bị dời không (1 = đi theo hoàn toàn, 0 = bỏ qua), Object:
+
+| Thời điểm | Base | ECT (train) | Ta – full (train) |
+|---|---|---|---|
+| đầu pha tiếp cận, dời vật | 0.13–0.22 | 0.14–0.23 | 0.20–0.30 |
+| giữa pha, dời 20 cm | 0.31 | 0.37 | **0.67** |
+| giữa pha, đổi chỗ vật | 0.03 | 0.07 | **0.53** |
+| giữa pha, đổi tên vật trong câu lệnh | 0.02 | 0.01 | **0.54** |
+| đang mang, dời giỏ 12–20 cm | 0.06 | 0.11 | **0.44–0.69** |
+| lệch trạng thái tay 5 cm (mọi pha) | 0.0 | 0.0 | 0.0 |
+
+Base: ở khoảnh khắc quyết định gần như mù; khi đã tiến vào thì bám cục bộ (dời ít bám nhiều hơn dời xa) và lựa chọn đã khoá;
+động tác đặt vật thuộc lòng hoàn toàn. Spatial, Goal cùng kiểu (nhẹ hơn).
+
+**3. Bên trong (E2 / E3).** Độ dời của vật / giỏ **đọc ra được từ trạng thái ẩn của chính token động tác** ở tầng sau, ở cả
+ba model với mức gần như nhau (R² trong cùng state 0.55–0.86). Attention của token động tác gần như giống hệt nhau giữa lúc mù
+và lúc bám. → Model **biết** vật / giỏ đã bị dời, nhưng thông tin không ra tới động tác; huấn luyện phản thực của ta **không
+dạy nhìn mà dạy dùng** điều đã biết; ECT (trong setup của ta) không làm được điều này.
+
+**4. So với tài liệu** (khảo sát ~40 bài, related_work §12): "mã hoá được nhưng không điều khiển" đã được chẩn đoán (2610.06235,
+2603.19233) nhưng chỉ dừng ở chẩn đoán. Đưa 3D dày đặc vào VLA không chữa swap — khớp với việc model vốn đã "thấy". Cách duy nhất
+mạnh là 2606.27663: đưa điểm 3D oracle (đích − tay) vào AdaLN của action expert ở mọi bước (Object 36 → 75, Spatial 58 → 69,
+train 69 task, oracle cả lúc test).
+
+**5. Phương pháp dự kiến: Decode-then-Act** (chờ kiểm chứng): lấy vị trí đích ra từ chính bên trong model (đầu giải mã, giám sát
+bằng toạ độ simulator lúc train) → nối thẳng vào khâu điều khiển (AdaLN của các tầng sau) → chỉ mở ở khoảnh khắc mù (cổng học
+từ độ nhạy phản thực). Khác 2606.27663: không oracle / cảm biến lúc test, can thiệp đúng chỗ và đúng lúc suy ra từ phân tích,
+nhắm cả 4 bộ.
+
+**Đang kiểm chứng:**
+- chỉ train khâu đọc ra (34 nghìn tham số) và 6 tầng cuối (4.65 triệu): có lấy lại gain không;
+- 2606.27663 cài lại trong setup của ta (Object, Spatial): có yếu ở Spatial train từng bộ / Goal / Long / ô đổi màu không, còn
+  mù ở đầu pha không.
 
 ---
 
