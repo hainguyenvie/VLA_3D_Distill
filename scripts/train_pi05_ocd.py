@@ -67,6 +67,9 @@ def parse():
                     help="full mode: pre-grasp pairs (retarget / coshift) only in the segment in which the episode itself went "
                          "for the target (after the last gripper release before the target's grasp, up to that grasp), and the "
                          "env renders them whenever the gripper is open and the target not lifted")
+    ap.add_argument("--relocate_no_grip", action="store_true",
+                    help="full mode: the relocate pairs' gripper dimension is masked (they teach where to carry, not when to "
+                         "release)")
     ap.add_argument("--cf_unique", action="store_true",
                     help="never move an object that has a twin of the same kind in the scene (the instruction can then only "
                          "refer to it by where it is)")
@@ -348,6 +351,10 @@ def main():
                                  [steps < n[:, None], steps <= close_first[:, None] + args.coshift_margin],
                                  steps <= rel_first[:, None] + 5).astype(np.float32)
                 A["cf_mask"] = mask
+                if args.relocate_no_grip:  # relocate pairs teach where to carry, not when to let go
+                    dims = np.repeat(mask[..., None], 7, axis=2)
+                    dims[kind == 2, :, 6] = 0.0
+                    A["cf_mask_dims"] = dims
                 ok = np.flatnonzero(cf_ok)
                 diff = np.abs(A["cf_teacher"][ok] - exact[ok]) * mask[ok][..., None]
                 teacher_gap = float(diff.sum() / max(mask[ok].sum() * 7, 1))
@@ -512,9 +519,13 @@ def main():
                 v2 = student.velocity([A["rgb_cf"][k] for k in jc], [descs_cf[k] for k in jc], obs_list(A, jc, cf=True),
                                       te2 * n2 + (1 - te2) * a2, t2)
                 u2 = n2 - a2
-                w = (torch.from_numpy(A["cf_mask"][jc]).to(student.device)[..., None] if "cf_mask" in A
-                     else torch.ones_like(u2[..., :1]))  # chunk steps for which the counterfactual label holds
-                wmean = lambda x: (x * w).sum() / (w.sum() * x.shape[-1])  # noqa: E731
+                if "cf_mask_dims" in A:  # per step and action dimension
+                    w = torch.from_numpy(A["cf_mask_dims"][jc]).to(student.device)
+                    wmean = lambda x: (x * w).sum() / w.sum().clamp(min=1.0)  # noqa: E731
+                else:
+                    w = (torch.from_numpy(A["cf_mask"][jc]).to(student.device)[..., None] if "cf_mask" in A
+                         else torch.ones_like(u2[..., :1]))  # chunk steps for which the counterfactual label holds
+                    wmean = lambda x: (x * w).sum() / (w.sum() * x.shape[-1])  # noqa: E731
                 loss = loss + wmean((v2 - u2) ** 2)
                 lcf = wmean(((v2 - v[sel]) - (u2 - u[sel])) ** 2)
                 loss = loss + args.lambda_cf * lcf
