@@ -1156,7 +1156,8 @@ Giữ nguyên: mọi log, `summary.json`, `episodes.jsonl`, `failures.*`, `train
   | sát (< 5 cm) | 0.51 | 0.29 | 0.01 | −0.02 | 0.0 |
   | đang mang (dời giỏ) | 0.09 | 0.06 | — | — | 0.0 |
 
-  Goal: đầu pha 0.23–0.33 (đổi chỗ 0.42, đổi tên 0.41), khi mang 0.48 → 0.14 theo cỡ dời. → (1) ở khoảnh khắc quyết định model
+  Goal: đầu pha 0.23–0.33 (đổi chỗ 0.42, đổi tên 0.41), khi mang 0.48 → 0.14 theo cỡ dời. Spatial: đầu pha 0.21–0.30, giữa
+  0.47 (3 cm) → 0.25 (20 cm), đổi chỗ 0.08–0.14, khi mang (dời đĩa) 0.17–0.30, proprio ≈ 0. → (1) ở khoảnh khắc quyết định model
   gần như mù; (2) khi đã tiến vào là bộ bám cục bộ (dời ít bám nhiều hơn dời xa), lựa chọn đã khoá (đổi chỗ / đổi tên ≈ 0);
   (3) đặt vật vào giỏ hoàn toàn thuộc lòng; (4) proprio không có tác dụng ở mọi pha.
 - **E2 / E3, Object** (`internals_object_base`, 2579 truy vấn, bước flow đầu): attention của token hành động gần như giống
