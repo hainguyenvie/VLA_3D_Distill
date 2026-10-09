@@ -62,6 +62,7 @@ def parse():
     ap.add_argument("--geo", action="store_true",
                     help="baseline 2606.27663: inject the privileged 3D sub-goal displacement into the action expert's AdaLN "
                          "(Pi05Policy.enable_geo); evaluate with eval_libero.py --geo")
+    ap.add_argument("--geo_lr_scale", type=float, default=10.0, help="--geo: learning-rate multiplier of the new MLP")
     ap.add_argument("--cf_unique", action="store_true",
                     help="never move an object that has a twin of the same kind in the scene (the instruction can then only "
                          "refer to it by where it is)")
@@ -134,7 +135,10 @@ def main():
     student.vla.model.gradient_checkpointing_enable()
     teacher = AdapterOff(student)
     student.state_blind = args.state_blind
-    opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.0)
+    groups = [{"params": [p for p in params if all(p is not q for q in geo_params)], "lr_scale": 1.0}]
+    if geo_params:  # a new, zero-initialised module: a larger learning rate (--geo_lr_scale)
+        groups.append({"params": list(geo_params), "lr_scale": args.geo_lr_scale})
+    opt = torch.optim.AdamW([dict(g, lr=args.lr * g["lr_scale"]) for g in groups], lr=args.lr, weight_decay=0.0)
     start_it, totals = 0, {"episodes": 0, "states": 0, "grad_steps": 0}
     if resume:
         st = torch.load(state_path, map_location="cpu")
@@ -448,7 +452,7 @@ def main():
         if args.lr_min > 0:
             lr = args.lr_min + 0.5 * (args.lr - args.lr_min) * (1 + np.cos(np.pi * (it - 1) / max(args.iters - 1, 1)))
             for g in opt.param_groups:
-                g["lr"] = float(lr)
+                g["lr"] = float(lr) * g.get("lr_scale", 1.0)
         student.vla.train()
         m = student.vla.model
         losses, cf_losses = [], []
