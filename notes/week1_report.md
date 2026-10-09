@@ -1,6 +1,6 @@
 # Báo cáo tổng hợp — thế giới phản thực và teacher có đặc quyền cho VLA (π0.5, LIBERO)
 
-Cập nhật 09/10/2026, 08:20 giờ VN (01:20 UTC). Mọi số là của chúng tôi, đo trong cùng một harness, trừ khi ghi "công bố".
+Cập nhật 09/10/2026, 10:40 giờ VN (03:40 UTC). Mọi số là của chúng tôi, đo trong cùng một harness, trừ khi ghi "công bố".
 Số từng run: [../results/pi05_runs.txt](../results/pi05_runs.txt). Nhật ký chi tiết theo ngày: [week1_status.md](week1_status.md).
 Đối thủ: [related_work.md](related_work.md) §9–11.
 
@@ -26,23 +26,33 @@ Số từng run: [../results/pi05_runs.txt](../results/pi05_runs.txt). Nhật k�
   | Spatial swap | 40.0 | **64.7** | 3 |
 
   Cảnh chuẩn vẫn ở 95–99.
-- Thay các lựa chọn chọn tay theo bộ / theo task bằng **ba kiểm tra tự động** cho teacher. Một cấu hình duy nhất đang chạy
-  trên cả 4 bộ.
+- Thay các lựa chọn chọn tay theo bộ / theo task bằng **ba kiểm tra tự động** cho teacher, rồi chạy **một cấu hình duy
+  nhất trên cả 4 bộ** (§5.6).
 
 **Chưa làm được.**
-- **Goal và Long không tăng.** Goal swap khoảng 28–32 so với base 29; Long swap 11 so với base 8.5, mà cảnh chuẩn Long còn
-  tụt 4 điểm.
-- **Tradeoff ở ô "object" của LIBERO-PRO** (đổi màu vật đích): base 92.5, phương pháp 74–81.
+- **Goal và Long:** tăng ít, và cảnh chuẩn bị tụt.
+  - Goal: swap 28–32 so với base 29.
+  - Long: swap 17 so với 8.5.
+  - Cảnh chuẩn: Goal 89.5 so với 97.5, Long 85.5 so với 95.
+- **Tradeoff ở ô "object" của LIBERO-PRO** (đổi màu vật đích): base 92.5, phương pháp 74–84.
+- **Cấu hình thống nhất kém hơn cấu hình chỉnh tay** trên Object và Spatial. Nguyên nhân chính là cổng thực thi (ngưỡng 60%)
+  đã loại đúng những task có lợi nhất (§5.6).
 
-**Vấn đề lớn nhất: ECT** (arXiv 2609.39971, công bố 30/09/2026) **trùng ý tưởng cốt lõi**.
-- Họ có cùng chẩn đoán: câu lệnh "truy xuất quỹ đạo".
-- Họ cũng làm thế giới đổi quan hệ tay–đích kèm nhãn có đặc quyền: gương / dịch cả cảnh, giữ robot, phát lại đường đi.
-- Base của ta khớp dòng π0.5 chính thức của họ, nên so được trực tiếp:
-  - Object: ta thắng (53–56 so với 40.8).
-  - Spatial: ta thua (64.7 so với 72.8).
-  - Goal: ta thua (khoảng 30 so với 35.8).
-  - Long: ta thua (11 so với 26.6).
-- Đã cài lại ECT trong harness của ta với cùng ngân sách để so công bằng. Đang chạy, kết quả có trong vài giờ.
+**ECT** (arXiv 2609.39971, công bố 30/09/2026) **trùng ý tưởng cốt lõi**:
+- cùng chẩn đoán "câu lệnh truy xuất quỹ đạo";
+- cũng đổi quan hệ tay–đích kèm nhãn có đặc quyền (gương / dịch cả cảnh, giữ robot, phát lại đường đi).
+
+Nhưng **cài lại ECT trong harness của ta, cùng ngân sách, thì ta hơn ở cả 4 bộ** (seed 7, ô swap):
+
+| | Spatial | Object | Goal | Long |
+|---|---|---|---|---|
+| Base | 40.0 | 18.7 | 29.0 | 8.5 |
+| ECT (cài lại) | 52.0 | 24.0 | 24.5 | 14.0 |
+| **Ta – một cấu hình cho cả 4 bộ** | **55.0** | **44.5** | 28.5 | **17.0** |
+| Ta – cấu hình tốt nhất từng bộ (3 seed) | 64.7 | 56.3 | 32.5 (1 seed) | 17.0 (1 seed) |
+
+- So với số **công bố** của ECT (họ train 4 bộ cùng lúc, full fine-tune, 30k bước) thì ta chỉ hơn ở Object (§6.1).
+- ECT và bản thống nhất mới có 1 seed.
 
 **Cần quyết định** (chi tiết ở §9): định vị lại đóng góp (A), kết hợp với ECT để vượt SOTA (B), thay teacher viết tay bằng
 một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
@@ -205,12 +215,15 @@ một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
 | xoay | 92.0 | 27.0 | 81.0 | 92.0 |
 | retarget | 94.5 | 32.5 | 79.5 | 91.0 |
 | relocate theo mục tiêu BDDL (7 task) | 97.0 | 28.5 | **74.0** | 97.0 |
-| **một cấu hình (đợt 19, full + 3 kiểm tra + màu)** | **89.5** | 28.5 | (đang đo) | (đang đo) |
+| **một cấu hình (đợt 19, full + 3 kiểm tra + màu)** | **89.5** | 28.5 | 74.5 | 86.0 |
+| ECT cài lại (đợt 20) | 96.5 | 24.5 | 81.0 | 94.5 |
 
 | Long (1 seed) | Chuẩn | **Swap** | Object | Lan |
 |---|---|---|---|---|
 | base | 95.0 | 8.5 | 70.0 | 96.0 |
 | relocate (3 task giỏ) | **91.0** | 11.0 | 65.0 | 89.5 |
+| **một cấu hình (đợt 19)** | **85.5** | **17.0** | 59.5 | 86.5 |
+| ECT cài lại (đợt 20) | **84.0** | 14.0 | (đang đo) | (đang đo) |
 
 - Goal: lỗi chính là tụt vật khi mang lên nóc tủ / vào ngăn kéo (tương tác với đồ nội thất). Cận trên tiếp cận kịch bản chỉ
   23.0, thấp hơn base. Relocate (kể cả khi đã gồm nóc tủ / ngăn kéo) không tăng swap mà còn làm tụt ô object 13 điểm.
@@ -228,6 +241,11 @@ một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
   teacher bảo "tới cái bát" trong khi phải mở ngăn kéo trước, và hướng của hai việc giống nhau. Thử tiêu chí điểm đến (tay
   của teacher và của π0.5 sau 25 bước cách nhau < 8 cm): task 3 chỉ còn giữ 30%, nhưng các cặp đúng cũng mất 30–50%, vì
   π0.5 và teacher đi nhanh chậm khác nhau. → Cần cách phân pha tốt hơn (xem §9 D).
+- **Long, cấu hình thống nhất:**
+  - Swap gấp đôi base (17.0 so với 8.5), chủ yếu nhờ task 2 (bật bếp rồi đặt ấm moka): từ 0 lên 65.
+  - Cảnh chuẩn sụp ở task 0 (hai vật vào giỏ): từ 95 xuống 35. Chưa rõ nguyên nhân.
+  - ECT cài lại cũng tụt cảnh chuẩn Long tương tự (84.0). Việc thêm cặp phản thực khi distill task dài có vẻ làm hại cảnh
+    chuẩn với mọi phương pháp, không riêng của ta.
 
 ### 5.4 Các ablation khác
 
@@ -250,6 +268,33 @@ một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
   | rr + màu | 74.0 |
 
   Với riêng retarget có dấu hiệu giúp; với rr thì không. **Chưa claim được.**
+
+### 5.6 Một cấu hình cho cả 4 bộ (đợt 19, s7) — kết quả và bài học
+
+Cấu hình: full + ba kiểm tra tự động + đổi màu p 0.5.
+
+| | Chuẩn | Swap | Position | Object | Lan |
+|---|---|---|---|---|---|
+| Object | 99.0 | **44.5** | **38.5** | 84.0 | 99.0 |
+| Spatial | 98.5 | **55.0** | — | 98.0 | 96.0 |
+| Goal | **89.5** | 28.5 | — | 74.5 | 86.0 |
+| Long | **85.5** | **17.0** | — | 59.5 | 86.5 |
+
+- **Kém hơn bản chỉnh tay ở Object** (swap 44.5 so với 53.0 của full s7) **và ở Spatial** (55.0 so với 64.7 của relocate).
+  So từng task thì phần mất nằm đúng ở các task mà **cổng thực thi đã loại**:
+
+  | Task | Relocate gốc | Thống nhất | Base |
+  |---|---|---|---|
+  | Spatial 7 | 85–100 | 25 | 0 |
+  | Object 7 (hộp sữa) | 65 | 25 | — |
+
+  Ngưỡng 60% quá chặt. Placer chỉ thành công khoảng 50% trong thế giới đã dời vẫn cho nhãn có ích, vì nhãn chỉ dùng tới lúc
+  thả. Ngưỡng này đã chốt trước khi chạy; đổi nó bây giờ là chỉnh theo kết quả test, nên phải báo như một ablation (có /
+  không có cổng).
+- **Goal:** retarget phá task 3 (§5.3).
+- **Long:** cảnh chuẩn sụp ở task 0 (§5.3).
+- **Cái được:** quy tắc "không dời vật có bản sao" và kiểm tra "đồng ý với chuyên gia" hoạt động đúng như thiết kế. Đã loại
+  được các trường hợp teacher sai rõ ràng (Long 2 / 6) mà không cần chọn tay.
 
 ---
 
@@ -280,7 +325,7 @@ một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
 - Điểm có lợi cho ta: trong **ablation train từng bộ bằng LoRA** của chính họ (Bảng 19), mọi biến đổi ECT cho Object swap chỉ
   0–12. Họ viết: biến đổi "does not by itself raise Object Swap". Ta được +34 trong chế độ đó.
 
-### 6.2 ECT cài lại trong harness của ta (đang chạy)
+### 6.2 ECT cài lại trong harness của ta — so sánh công bằng
 
 - **Cài đặt** (`--cf_mode ect`):
   - mỗi vòng chọn 16 tập thành công;
@@ -297,8 +342,26 @@ một cơ chế tổng quát (D), hoặc mở rộng sang model khác (E).
 
 - Hai lỗi đã tự phát hiện và sửa trước khi chạy: bộ bám chỉ dùng phản hồi vị trí làm hỏng thao tác ngăn kéo; tủ phản chiếu
   quay mặt ra ngoài.
-- **Tiến độ:** cả 4 bộ đang ở vòng 12–15/20, cảnh chuẩn giữa chừng 0.83–0.99. Kết quả cuối dự kiến 03:00–05:00 UTC
-  (10:00–12:00 giờ VN).
+
+**Kết quả (s7; ô swap, trong ngoặc là cảnh chuẩn):**
+
+| | Spatial | Object | Goal | Long |
+|---|---|---|---|---|
+| Base | 40.0 (97.5) | 18.7 (99.3) | 29.0 (97.5) | 8.5 (95.0) |
+| ECT cài lại | 52.0 (99.0) | 24.0 (98.0) | 24.5 (96.5) | 14.0 (84.0) |
+| Ta – thống nhất | **55.0** (98.5) | **44.5** (99.0) | **28.5** (89.5) | **17.0** (85.5) |
+| Ta – tốt nhất từng bộ | 64.7 (98.3) | 56.3 (96.8) | 32.5 (94.5) | 17.0 (85.5) |
+
+- Ở chế độ của ta (LoRA, từng bộ, ngân sách nhỏ):
+  - ECT tăng Spatial (+12) nhưng gần như không tăng Object (+5, ngang augmentation 2D). Điều này khớp với ablation từng bộ
+    của chính họ (Bảng 19).
+  - Ta hơn ECT ở cả 4 bộ; cách biệt lớn nhất ở Object (+20 đến +32) và Spatial (+3 đến +13).
+  - ECT không làm tụt cảnh chuẩn Goal; ta thì có (89.5).
+- **Hạn chế của phép so này:**
+  - 1 seed;
+  - cỡ dịch của ECT là ta tự chọn (bài không nêu);
+  - ECT gốc train với nửa batch là bản biến đổi, còn ở đây chỉ 15% (giống ta). Một bản ECT mạnh hơn (tỉ lệ 50%) là phép
+    kiểm tra cần chạy để không bị nói là làm yếu baseline.
 
 ### 6.3 Đối thủ khác (chưa đọc kỹ / chưa so được)
 
@@ -315,7 +378,7 @@ chữa lúc inference), HABILIS Brain 0. Chưa bài nào ngoài ECT cho số cù
 | Đổi quan hệ tay–đích + nhãn có đặc quyền | **không** về ý tưởng (ECT dùng phát lại; ta dùng teacher kịch bản) |
 | Biến đổi nhãn chính xác (giữ quan hệ tay–đích) không giúp | một phần (ECT có ablation gương; ta có xoay / coshift / soi gương cả tay) |
 | **Can thiệp theo pha tại state bất kỳ** (dời nơi đặt *khi đang mang*), một vật mỗi lần, không cần demo | **có** — ECT biến đổi cả cảnh từ trạng thái đầu của demo |
-| **Gain lớn khi train từng bộ bằng LoRA**, chế độ mà ECT không tăng Object swap | **có**, nhưng cần ECT trong harness để khẳng định |
+| **Gain lớn khi train từng bộ bằng LoRA**, chế độ mà ECT không tăng Object swap | **có** — đã xác nhận bằng ECT cài lại: Object 44.5–56.3 so với 24.0 |
 | **Ba kiểm tra tính hợp lệ** của teacher (bản sao, đồng ý với chuyên gia, cổng thực thi) | **có**, nhưng là đóng góp phụ |
 | Tradeoff vị trí ↔ ngoại hình | có, nhưng chưa có cách gỡ vững |
 
@@ -326,18 +389,13 @@ chữa lúc inference), HABILIS Brain 0. Chưa bài nào ngoài ECT cho số cù
 
 ---
 
-## 8. Đang chạy (card 0–3) và khi nào có kết quả
+## 8. Đang chạy (card 0–3)
 
-| Run | Nội dung | Vòng | Kết quả cuối (UTC) |
-|---|---|---|---|
-| đợt 19, s7, 4 bộ | **một cấu hình** (full + 3 kiểm tra + màu p 0.5) | Goal: chuẩn 89.5, swap 28.5 (§5.3); Object 17, Spatial 15, Long 17 | ~02:30–04:30 |
-| đợt 20, s7, 4 bộ | **ECT trong harness** | 12–15 | ~03:00–05:00 |
-| đợt 19, s8 | một cấu hình, Object + Spatial | 4–5 | ~06:00 |
-
-Theo dõi giữa chừng của đợt 19 (đánh giá trên cảnh có đổi màu):
-- Object 0.96, Spatial 0.98.
-- Goal 0.84–0.89.
-- Long 0.64–0.79: đáng lo; ECT Long cùng lúc được 0.83.
+| Run | Nội dung | Trạng thái |
+|---|---|---|
+| đợt 19 s7, 4 bộ | một cấu hình | xong (§5.6); Long / Spatial còn vài ô phụ |
+| đợt 20 s7, 4 bộ | ECT cài lại | xong ô swap / chuẩn (§6.2); còn ô phụ |
+| đợt 19 s8, Object + Spatial | một cấu hình, seed 2 | vòng ~8/20, xong ~06:00 UTC |
 
 ---
 
@@ -374,12 +432,16 @@ Theo dõi giữa chừng của đợt 19 (đánh giá trên cảnh có đổi m�
 - Đã có hạ tầng OFT. Nhánh phụ trước đây cho LIBERO-Plus 83.1 so với 68.7.
 - Rủi ro: tốn compute; không giải quyết vấn đề novelty với ECT.
 
-**Đề xuất:**
-- Chờ kết quả ECT trong harness và đợt 19 (sáng nay giờ VN), rồi:
-  - nếu ta thắng ECT ở Object và Spatial cùng ngân sách: chạy **B** ngay (rẻ, có cơ hội vượt SOTA), song song bắt đầu **D**
-    làm phương pháp chính cho bản nháp;
-  - nếu ECT trong harness ngang hoặc hơn ta: chuyển hẳn sang **D**, hoặc đổi trọng tâm bài.
-- Dù chọn hướng nào cũng cần thêm seed (đợt 19 s8 / s9; ECT s8) trước khi viết.
+**Đề xuất (cập nhật sau khi có ECT cài lại):**
+- Phép so công bằng cho thấy ta hơn ECT ở cả 4 bộ trong cùng chế độ, nên **hướng A có cơ sở**. Đóng góp chính:
+  - can thiệp theo pha tại state bất kỳ, với teacher có đặc quyền;
+  - mạnh ở chế độ ngân sách nhỏ / từng bộ, nơi biến đổi toàn cảnh của ECT không tăng Object.
+- Việc nên chạy tiếp (không phụ thuộc hướng chọn):
+  1. **ECT mạnh hơn** (50% cặp) và **ECT s8**, để baseline không bị nói là yếu.
+  2. **Ablation cổng thực thi** (có / không cổng) trên Object và Spatial, và **phân pha bằng hindsight** để sửa Goal 3.
+  3. **Gộp ta + ECT (B)** trên 4 bộ: rẻ, có thể cho số tốt nhất.
+  4. Thêm seed cho cấu hình cuối.
+- **D** (bẻ quỹ đạo chuyên gia theo pha) vẫn là cách trả lời "teacher viết tay"; nên làm nếu nhắm hội nghị lớn.
 
 **Câu hỏi cần trả lời:**
 1. Chấp nhận định vị "theo pha + kiểm tra hợp lệ" (A / B), hay muốn một phương pháp tổng quát hơn (D) dù tốn thêm thời gian?
