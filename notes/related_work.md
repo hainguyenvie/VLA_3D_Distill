@@ -340,3 +340,8 @@ biến đổi trên rollout thành công của π0.5) để so cùng ngân sách
 3. Dùng grounding của chính VLA làm kênh hình học liên tục (2606.27663 dùng oracle / VLM ngoài).
 4. Kết quả mạnh trên cả 4 bộ với huấn luyện chuẩn; lỗi thực hiện của Goal; mâu thuẫn màu ↔ danh tính (BeTTER 2604.18000
    xác nhận π0.5 hành động theo màu).
+- Bổ sung từ báo cáo đầy đủ: QuoVLA là phương pháp duy nhất tăng Goal position (38 → 57) — nút cổ chai lượng tử 8 bit giữa
+  prefix VLM và action expert. LEAP (2610.07015): bộ giải mã hình học thêm vào không được thấy state, nếu không sẽ đi tắt qua
+  state. ThinkProprio (2602.06575): đưa state vào muộn ≈ không có state. 2608.03052 (π0.5, RoboCasa): 8 khung state lịch sử vào
+  expert là tốt nhất. VLA-Trace: cấu hình π0.5 của họ không đưa state vào prompt (ta có). Lỗi LIBERO-PRO (issue #14): ô
+  Semantic / Task đọc câu lệnh từ tên file → policy có thể nhận câu lệnh gốc.
