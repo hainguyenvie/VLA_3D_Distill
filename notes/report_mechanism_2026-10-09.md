@@ -145,11 +145,14 @@ Cùng dữ liệu phản thực như run "full" s7, chỉ khác phần được 
 |---|---|---|---|---|
 | Không train (base) | 0 | 18.7 | 12.2 | 92.5 |
 | **Chỉ lớp đọc ra cuối** | 34 nghìn | **23.5** | 20.5 | 92.5 |
-| 6 tầng cuối action expert + lớp đọc ra | 4.65 triệu | (đang đánh giá) | | |
+| 6 tầng cuối action expert + lớp đọc ra | 4.65 triệu | 34.5 | (đang đo) | (đang đo); **chuẩn tụt 82.5** |
 | Toàn bộ (LoRA) | lớn hơn nhiều | 53.0 | 39.0 | 80.0 |
 
-→ Giả thuyết "nghẽn ở lớp đọc ra cuối" **bị bác**: việc "dùng" cần thay đổi cách action expert tính toán qua nhiều tầng.
-Kết quả 6 tầng cuối sẽ cho biết nửa sau của action expert có đủ không.
+→ Giả thuyết "nghẽn ở lớp đọc ra cuối" **bị bác**. Ép thay đổi vào nửa sau của action expert thì lấy được một phần gain
+(34.5) nhưng **phá hành vi gốc** (Object chuẩn 82.5); chỉ train toàn bộ mới vừa có gain vừa giữ được hành vi (53.0 / 96.0).
+→ Thay đổi cần thiết nằm ở **phần sớm hơn** (tầng đầu action expert hoặc phía VLM), khớp với ECT (lựa chọn task đọc ra được
+từ KV của prefix phía VLM). Đang chạy phép chia đôi: chỉ train VLM (39.2 triệu tham số) và chỉ train toàn bộ action expert
+(13.9 triệu), cùng dữ liệu.
 
 **Tradeoff đi cùng nhau:** run nào không học nhìn (base, chỉ lớp đọc ra, ECT) thì ô đổi màu giữ 92.5; run nào học nhìn thật
 thì ô đổi màu tụt (74–85).
