@@ -1217,3 +1217,13 @@ dùng. Còn mù ở đầu pha tiếp cận với cả ba (0.2–0.3) — khoả
   (full LoRA 53.0 / 39.0) → giả thuyết "nghẽn ở lớp đọc ra cuối" bị bác. Bỏ cổng thực thi: Spatial swap **65.5** (có cổng 55.0
   / 53.5), Object 54.0 / position 36.0 / đổi màu 86.0 (≈ có cổng) → bỏ cổng. ECT 50% cặp: Spatial swap 48.0 (15%: 52.0) →
   baseline không bị làm yếu bởi tỉ lệ 15%. Distill bỏ proprio: Spatial swap 40.5 (= base).
+
+**2606.27663 cài lại trong setup của ta (09/10 tối, `p05_geo1_s7`, `p05sp_geo1_s7`, lr chung):** chuẩn 98.5 / 99.0 nhưng swap
+**18.5 (Object, base 18.7)** và **40.0 (Spatial, base 40.0)** — dù được cho điểm đích thật cả lúc test, không tăng gì. Kiểm tra
+kênh: đầu ra MLP |f(0)| ≈ 1.6 (gần như hằng số), |f(d) − f(0)| chỉ 0.05–0.08 khi d đổi 10 cm → model học một độ lệch cố định
+và gần như bỏ qua d. Giải thích: trên dữ liệu bố cục cố định, d luôn đi cùng quỹ đạo đã thuộc, nên không có áp lực dùng kênh
+mới; bài gốc train 69 task bố cục đa dạng (và bản 20 task của họ với GR00T: Spatial chỉ 2 → 15). → **Có thông tin chưa đủ,
+phải có dữ liệu buộc model dùng nó** — đúng vai trò của dữ liệu phản thực. Đang đo E1 trên model này (`mech_object_p05_geo1_s7`).
+Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực của ta.
+- Định vị phạm vi train (Object, dữ liệu full s7): chỉ lớp đọc ra swap 23.5 / chuẩn 100; 6 tầng cuối swap 34.5, position 30.5,
+  **chuẩn 82.5, lan 81.0, Plus 70 / 65**; toàn bộ 53.0 / 96.0. ECT 50% Object: swap 25.0, position 19.0, đổi màu 94.0.

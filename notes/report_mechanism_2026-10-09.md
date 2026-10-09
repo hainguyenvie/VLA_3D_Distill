@@ -188,7 +188,26 @@ không chữa swap; ba đối thủ liên quan nhất (2606.27663, ECT, QuoVLA) 
 - ECT 50% cặp **không tốt hơn** ECT 15% (Spatial 48.0 so với 52.0), nên so ở 15% không làm yếu baseline.
 - Cảnh chuẩn Object và Spatial của ta: 95.5–99.
 
-### 3.3 2606.27663 (đối thủ mạnh nhất) — đang chạy
+### 3.3 2606.27663 (đối thủ mạnh nhất) — kết quả: không tăng gì trong setup của ta
+
+| Swap | Base | **2606.27663 cài lại** (điểm 3D oracle, cả lúc test) | ECT | Ta |
+|---|---|---|---|---|
+| Object | 18.7 | **18.5** | 24.0 | 54.0 |
+| Spatial | 40.0 | **40.0** | 52.0 | 65.5 |
+
+- Cảnh chuẩn vẫn 98.5 / 99.0.
+- **Kiểm tra kênh hình học:**
+  - đầu ra MLP có độ lớn khoảng 1.6 nhưng gần như **không đổi theo d**;
+  - d đổi 10 cm thì đầu ra chỉ đổi 0.05–0.08.
+
+  Model học một độ lệch cố định và **bỏ qua vị trí đích**.
+- **Giải thích:** trên dữ liệu bố cục cố định, vị trí đích luôn đi cùng quỹ đạo đã thuộc, nên không có áp lực phải dùng kênh
+  mới. Bài gốc train 69 task với bố cục đa dạng. Bản 20 task của chính họ (với GR00T) cũng cho Spatial chỉ 2 → 15.
+- **Hệ quả:** *có thông tin là chưa đủ, phải có dữ liệu buộc model dùng nó* — đúng vai trò của dữ liệu phản thực. Thí
+  nghiệm tự nhiên tiếp theo: điểm 3D **cộng** dữ liệu phản thực của ta.
+- E1 trên model này đang chạy, để xác nhận ở mức động tác.
+
+**Phần cài đặt:**
 
 - **Cài lại:** d = vị trí đích con − vị trí tay (3D, oracle). Đích là vật cho tới khi vật được nhấc lên quá 1 cm, sau đó là
   nơi đặt theo mục tiêu BDDL. d đi qua MLP 3 → 1024 → 1024 (lớp cuối khởi tạo 0), rồi cộng vào điều biến thời gian AdaLN ở
