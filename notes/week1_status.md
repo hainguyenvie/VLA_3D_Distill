@@ -1257,3 +1257,11 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   prefix qua attention; training phản thực sửa cách VLM trình bày vị trí đích trong prefix để expert (không đổi) đọc ra được.
   Khớp ECT (lựa chọn task đọc ra từ KV của prefix). Ô position: riêng expert đã lấy 32.5 / 39.0 → có thể "chọn vật" nằm ở
   VLM, "đặt vật" ở expert.
+- **Điểm 3D + dữ liệu phản thực** (`p05_geocf01_s7`, lr MLP × 0.1): Object chuẩn 99.5, swap **43.0** (ta không có điểm 3D:
+  44.5 / 54.0) → không giúp thêm. Kênh 3D vẫn bị bỏ qua: |f(0)| 1.08, |f(d) − f(0)| 0.03–0.12 khi d đổi 10–30 cm (còn nhỏ hơn
+  bản chỉ điểm 3D: 0.05–0.24). Dữ liệu phản thực tạo áp lực, nhưng model giải qua **đường VLM** (trình bày lại prefix), không
+  qua kênh mới — khớp phép định vị (chỉ train VLM: 50.0). → Không cần kênh hình học tường minh trong setup này; giải thích vì
+  sao 3D thêm vào VLA không chữa swap: model không thiếu thông tin hình học mà thiếu cách dùng.
+- Long 5% cặp: chuẩn 84.5 (15%: 84.0), swap 11.0, lan 82.5, đổi màu 48.0, Plus 78 / 57 → bác giả thuyết "quá nhiều cặp".
+  Long không đổi màu (`p05lg_v2notint_s7`) đang chạy; rollout vòng 3 đã tụt 0.95 → 0.68 dù không đổi màu.
+- Chỉ K/V của VLM (`p05_ocd_full_vlm_kv_s7`): vòng 8 đánh giá giữa chừng 0.65, rollout 0.63–0.67 (tụt mạnh, đang theo dõi).
