@@ -312,8 +312,11 @@ class EnvRunner:
             return np.zeros(3, dtype=np.float32)
         tgt = names[0]
         p_t = d.xpos[robo.obj_body_id[tgt]].copy()
+        eef = d.site_xpos[robo.robots[0].eef_site_id]
         if getattr(self, "_geo_z0", None) is None:
             self._geo_z0 = float(p_t[2])
+            if self.t > 0 and self.closed and np.linalg.norm(p_t - eef) < 0.08:  # restored mid-episode while carrying
+                self._geo_z0 -= 0.02
             self._geo_place = None
             try:
                 for pred in robo.parsed_problem["goal_state"]:
@@ -334,7 +337,6 @@ class EnvRunner:
                     goal = d.site_xpos[robo.sim.model.site_name2id(place)].copy()
                 except Exception:
                     goal = p_t
-        eef = d.site_xpos[robo.robots[0].eef_site_id]
         return (goal - eef).astype(np.float32)
 
     def _obs(self, obs) -> Dict[str, Any]:

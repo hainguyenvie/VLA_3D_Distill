@@ -102,6 +102,7 @@ def main():
     ap.add_argument("--suite", required=True)
     ap.add_argument("--ckpt", required=True)
     ap.add_argument("--lora", default="")
+    ap.add_argument("--geo", action="store_true", help="the policy has the 3D sub-goal point injection (Pi05Policy.enable_geo)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--episodes_per_task", type=int, default=3)
     ap.add_argument("--states_per_episode", type=int, default=8)
@@ -123,8 +124,12 @@ def main():
     torch.manual_seed(args.seed)
     vec = LiberoVecEnv(args.suite, args.num_envs, max_steps=600, wrist=True)
     policy = load_policy(args.ckpt, args.suite, "cuda:0")
+    if args.geo:
+        policy.enable_geo()
     if args.lora:
         policy.add_lora(adapter_path=args.lora)
+        if args.geo:
+            policy.load_geo(args.lora)
 
     def motion(chunk):  # where the first 25 steps of a chunk (env units) would bring the hand, horizontally (m)
         return (TRACK_GAIN[:2] * chunk[:25, :2] * 0.05).sum(0)
