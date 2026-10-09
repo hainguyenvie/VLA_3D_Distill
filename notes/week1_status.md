@@ -1227,3 +1227,11 @@ phải có dữ liệu buộc model dùng nó** — đúng vai trò của dữ l
 Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực của ta.
 - Định vị phạm vi train (Object, dữ liệu full s7): chỉ lớp đọc ra swap 23.5 / chuẩn 100; 6 tầng cuối swap 34.5, position 30.5,
   **chuẩn 82.5, lan 81.0, Plus 70 / 65**; toàn bộ 53.0 / 96.0. ECT 50% Object: swap 25.0, position 19.0, đổi màu 94.0.
+
+**Cấu hình v2 (hindsight + bỏ cổng; Long thêm che gripper relocate), s7:**
+- Goal: chuẩn **94.0** (thống nhất 89.5, base 97.5); task 3: 45 → 70, task 0: 60 → 70 (base 100 / 90). Swap **31.0** (base
+  29.0, ECT 24.5): task 8 → 100 (base 20), task 9 55 (0), nhưng task 1 55 (80) và **task 3 swap 0 (base 100)** → hindsight sửa
+  được lỗi dạy sai giai đoạn mở ngăn kéo trên cảnh chuẩn, nhưng task 3 vẫn hỏng khi bố cục đổi chỗ; cần phân tích riêng.
+- Long: chuẩn **84.0** (thống nhất 85.5, ECT 84.0, base 95); task 0: 35 → 50 (base 95), task 8 55 (80). Che gripper chỉ
+  sửa một phần. **Mọi phương pháp thêm cặp phản thực (ECT, ta) đều kéo Long chuẩn về ~84**, khác nhau ở task bị ảnh hưởng →
+  nghi do thêm cặp khi distill task dài (mỗi vòng chỉ 20–40 tập Long, giám sát cảnh thật thưa). Phép thử rẻ: cap 5%.
