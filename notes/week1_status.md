@@ -1169,3 +1169,19 @@ Giữ nguyên: mọi log, `summary.json`, `episodes.jsonl`, `failures.*`, `train
 - Thí nghiệm kiểm chứng đang chạy: (a) E1 / E2 trên model đã train (full s7, ECT s7) — mã hoá có đổi không, hay chỉ khâu đọc
   ra đổi; (b) chỉ train khâu đọc ra (`--lora_scope readout`, 34 nghìn tham số) và 6 tầng cuối + đọc ra (`expert_late`, 4.65
   triệu) với đúng dữ liệu của full s7.
+
+## Tái hiện đối thủ trong harness và kiểm tra setup tương xứng (09/10)
+
+- **Mức tương xứng của setup.** Đánh giá: base π0.5 của ta khớp π0.5 chính thức mà ECT đo (Object 18.7 vs 18.2, Long 8.5 vs
+  9.4; Spatial 40 vs 46.6, Goal 29 vs 34.2), 20 tập / task (họ 50). Huấn luyện: **không** tương xứng — ta LoRA, từng bộ, 20 ×
+  1024 state; ECT 4 bộ cùng lúc, 30k bước × batch 64; 2606.27663 69 task, full FT 30k bước × batch 256 và **dùng điểm oracle
+  của simulator cả lúc test**. → So công bằng = cài lại đối thủ trong setup của ta (ECT: xong; 2606.27663: đang chạy), hoặc
+  đưa ta vào setup lớn của họ (chưa làm).
+- **2606.27663 cài lại** (`--geo`, `Pi05Policy.enable_geo`, `EnvRunner._geo_d`): d = đích con − tay (3D, đặc quyền; đích =
+  vật cho tới khi nó cao hơn lúc đầu 1 cm, sau đó nơi đặt theo mục tiêu BDDL); MLP 3 → 1024 → 1024 (ReLU, lớp cuối khởi tạo 0)
+  cộng vào embedding thời gian = điều kiện adaRMS (AdaLN) của mọi tầng action expert; thầy π0.5 không thấy d. Lựa chọn của
+  ta: learning rate của MLP × 10 (module mới, ngân sách nhỏ). Đang chạy `p05_geo_s7` (Object), `p05sp_geo_s7` (Spatial).
+  Chẩn đoán sau đó: E1 trên model này (còn mù ở khoảnh khắc quyết định không), và các chỗ ta nghi nó yếu — Spatial khi train
+  từng bộ (bài gốc chỉ có GR00T: 15.2), Goal / Long (bài không báo), ô đổi màu.
+- Có code nhưng không ưu tiên: Spatial Forcing, ROCKET (theo tài liệu không tăng swap), GAM (mô hình riêng). Không có code:
+  2606.27663 ("coming soon"), ECT, QuoVLA ("sẽ công bố").
