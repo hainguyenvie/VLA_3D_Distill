@@ -366,6 +366,7 @@ class EnvRunner:
                 self._stash_cf = self._counterfactual_view()
                 # the privileged teacher's chunk in the factual world (zeros when the view has no scripted label)
                 self._stash_cf.setdefault("cf_label_nom", np.zeros((50, 7), dtype=np.float32))
+                self._stash_cf.setdefault("cf_geo_d", self._geo_d())
             return img
 
         both.__modality__ = sensor.__modality__
@@ -947,6 +948,7 @@ class EnvRunner:
                     d.qpos[a : a + 2] = d.qpos[ta : ta + 2]
                 d.qpos[ta : ta + 2] += shift
                 mujoco.mj_kinematics(m, d)
+                out["cf_geo_d"] = (d.xpos[self._cs_body] - d.site_xpos[self._cs_site]).astype(np.float32)
                 lab, n = approach_chunk(d.site_xpos[self._cs_site].copy(), d.xpos[self._cs_body].copy())
                 out["cf_label"], out["cf_len"] = lab.astype(np.float32), np.int16(n)
             mujoco.mj_camlight(m, d)
@@ -993,6 +995,13 @@ class EnvRunner:
                         d.qpos[a : a + 2] += shift
                 mujoco.mj_kinematics(m, d)
                 out["cf_label"] = self._placer_label(d, spec)
+                if spec[0] == "fixture":
+                    goal = d.site_xpos[spec[2]]
+                else:
+                    goal = d.qpos[spec[1] : spec[1] + 3].copy()
+                    if spec[2] is not None:
+                        goal[:2] = d.site_xpos[spec[2]][:2]
+                out["cf_geo_d"] = (goal - d.site_xpos[self._cs_site]).astype(np.float32)
             mujoco.mj_camlight(m, d)
             self._render_cf(robo, res, conv, out)
         finally:

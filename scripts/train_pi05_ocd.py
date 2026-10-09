@@ -300,6 +300,8 @@ def main():
         A = {k: cat(k) for k in ("rgb", "wrist_rgb", "eef_pos", "eef_quat", "gripper_qpos", "actions_teacher")}
         if args.geo:
             A["geo_d"] = cat("geo_d")
+            if not args.no_cf and all("cf_geo_d" in r["arrays"] for r in recs):
+                A["cf_geo_d"] = cat("cf_geo_d")  # the displacement in each counterfactual world
         descs_all = [r["task"] for r in recs for _ in range(r["n_queries"])]
         cf_ok = np.zeros(len(descs_all), dtype=bool)
         descs_cf = list(descs_all)
