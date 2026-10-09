@@ -1133,3 +1133,17 @@ Giữ nguyên: mọi log, `summary.json`, `episodes.jsonl`, `failures.*`, `train
   thành phần của baseline đã công bố, chạy bản gốc tới hết ngân sách trước.
 - Tín hiệu "teacher rất bất định trên state lỗi của student" đến từ checkpoint RLinf lệch pipeline; với teacher
   đúng pipeline thì hiệu ứng gần như biến mất.
+
+## Mổ xẻ cơ chế (09/10 sáng)
+
+- Cấu hình π0.5 LIBERO của ta đưa proprio vào prompt dạng ~120 token chữ số (`Task: … , State: 255 255 173 … ;\nAction: `),
+  câu lệnh chỉ ~13 token.
+- **Phép thử bỏ proprio lúc test** (`--state_blind`: proprio = trung bình dataset, không mang thông tin; π0.5 gốc, không train):
+  Object chuẩn **100.0** (thật: 99), swap **14.0** (thật: 18.5) → π0.5 không cần proprio trên Object, và lối tắt quỹ đạo
+  **không đi qua đường proprio**. Bác bỏ giả thuyết "cắt proprio ở state mù". Quỹ đạo được truy xuất từ câu lệnh + ảnh (bố
+  cục, có thể cả hình ảnh cánh tay — khớp với teacher chuẩn hoá 22%). Run distill state_blind (Object, Spatial, s7) vẫn
+  chạy như ablation.
+- Đang chạy: E1 (`scripts/probe_mechanism.py`, độ nhạy theo thời điểm: dời / đổi chỗ vật, dời giỏ, lệch proprio, đổi tên vật
+  trong câu lệnh), E2 / E3 (`scripts/probe_internals.py`, probe tuyến tính theo tầng + attention của token hành động theo
+  đoạn). Bản thử E2 nhỏ: vị trí vật đích đọc ra được ở tầng sau (token ảnh R² ~0.5, token hành động ~0.67) — trùng phát hiện
+  "mã hoá được nhưng không điều khiển" (2610.06235).
