@@ -137,12 +137,36 @@ thái tay" **bị bác**.
 của ta) thì không. Vẫn còn một chỗ mù chung: **đầu pha tiếp cận** (0.2–0.3 với cả ba). Khoảnh khắc quyết định đầu tiên chưa
 ai sửa được.
 
-### 2.5 Chỗ cần sửa nằm ở đâu? (ablation phạm vi huấn luyện)
+### 2.5 Chỗ cần sửa nằm ở đâu? (ablation phạm vi huấn luyện) — **phía VLM**
 
-Cùng dữ liệu phản thực như run "full" s7, chỉ khác phần được phép thay đổi:
+Cùng dữ liệu phản thực như run "full" s7, chỉ khác phần được phép thay đổi (Object):
 
-| Phần được train | Số tham số | Object swap | Object position | Ô đổi màu |
-|---|---|---|---|---|
+| Phần được train | Số tham số | Swap | Position | Chuẩn | Lan | Đổi màu |
+|---|---|---|---|---|---|---|
+| Không train (base) | 0 | 18.7 | 12.2 | 99.3 | 99.2 | 92.5 |
+| Chỉ lớp đọc ra cuối | 34 nghìn | 23.5 | 20.5 | 100 | 96.0 | 92.5 |
+| 6 tầng cuối action expert + đọc ra | 4.65 triệu | 34.5 | 30.5 | **82.5** | 81.0 | 80.5 |
+| Toàn bộ action expert | 13.9 triệu | 33.0 | 32.5 | 94.5 | 91.5 | 84.5 |
+| **Chỉ VLM** (action expert đóng băng) | 39.2 triệu | **50.0** | **35.5** | **96.0** | 91.5 | (đang đo) |
+| Toàn bộ (LoRA) | lớn hơn | 53.0 | 39.0 | 96.0 | 96.5 | 80.0 |
+
+- **Riêng phía VLM đã đủ** để lấy gần hết gain: khoảng 94% gain swap và 86% gain position, trong khi action expert giữ nguyên.
+- Riêng action expert sửa được việc đặt vật (position), nhưng chỉ khoảng một nửa việc chọn vật (swap).
+- Ép thay đổi vào cuối action expert thì phá hành vi gốc.
+
+→ **Bức tranh cơ chế.** Action expert đọc prefix của VLM qua attention. Ở base, thông tin "vật đích ở đâu" có trong những gì
+nó đọc, nhưng bị lấn át bởi thành phần "câu lệnh → quỹ đạo thuộc lòng". Huấn luyện phản thực **sửa cách VLM trình bày** thông
+tin đó, để action expert (không đổi) đọc ra được. Khớp với ECT (lựa chọn task đọc ra từ KV của prefix).
+
+**Đang thu hẹp tiếp:**
+- chỉ phép chiếu K/V của VLM (2.65 triệu tham số; đây chính là thứ action expert đọc);
+- chỉ 9 tầng sau của VLM (19.6 triệu);
+- nhân bản "chỉ VLM" với seed 8.
+
+**Tradeoff đi cùng nhau:** run nào không học nhìn (base, chỉ lớp đọc ra, ECT, 2606.27663) thì ô đổi màu giữ khoảng 92–93; run
+nào học nhìn thật thì ô đổi màu tụt (74–85).
+
+---|---|---|---|---|
 | Không train (base) | 0 | 18.7 | 12.2 | 92.5 |
 | **Chỉ lớp đọc ra cuối** | 34 nghìn | **23.5** | 20.5 | 92.5 |
 | 6 tầng cuối action expert + lớp đọc ra | 4.65 triệu | 34.5 | (đang đo) | (đang đo); **chuẩn tụt 82.5** |
