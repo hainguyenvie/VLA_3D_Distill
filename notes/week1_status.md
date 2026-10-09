@@ -1200,3 +1200,20 @@ Probe trong cùng state (E2, token hành động, tầng cuối): dời vật xa
 xa 0.80 / 0.86 / 0.85 (base / ECT / ta). → **Mức mã hoá gần như như nhau ở cả ba; khác biệt nằm ở việc dùng**: huấn luyện
 phản thực của ta không dạy model nhìn tốt hơn mà dạy nó dùng điều đã mã hoá; ECT (trong setup của ta) không đổi được việc
 dùng. Còn mù ở đầu pha tiếp cận với cả ba (0.2–0.3) — khoảnh khắc quyết định đầu tiên chưa ai sửa.
+
+**Vì sao cấu hình thống nhất kém ở vài ô (09/10, theo từng task):**
+- Goal (chuẩn / lan / đổi màu) tụt gần như chỉ ở task 3 (mở ngăn kéo rồi bỏ bát vào: chuẩn 100 → 45, lan 90 → 25, đổi màu
+  45 → 0, swap 100 → 5) và task 0 (cùng tủ: 90 → 60); 8 task còn lại bằng hoặc hơn base; swap tăng ở task 8 (20 → 55) và 9
+  (0 → 55). Nguyên nhân: cặp retarget ở giai đoạn mở ngăn kéo (thầy "tới cái bát" khi phải mở ngăn kéo trước). Sửa:
+  `--hindsight` (cặp trước kẹp chỉ trong đoạn episode thật sự tiến tới vật đích; env dựng cặp khi gripper mở và vật chưa nhấc).
+  Thử 1 vòng trên Goal: task 3 giữ 125 / 149 cặp (bỏ 24 ở giai đoạn mở ngăn kéo), task 5 (đẩy đĩa, không nhấc) 0 / 78.
+- Long chuẩn tụt gần như chỉ ở task 0 (hai vật vào giỏ; 95 → 35, chạy lại 20 tập: 65). Kiểu lỗi (`diag_lg_uni_t0_steps`):
+  6 / 7 là rơi giữa đường — kẹp đúng súp chữ cái, nhấc, mang ~40 cm rồi rơi trước giỏ (có lần nghiêng 40–70°), nên vật thứ hai
+  không được đụng tới; base 0 lần rơi. Nghi: nhãn relocate dạy thời điểm thả theo giỏ đã dời → thả sớm ở cảnh thật. Thử:
+  che chiều gripper trong cặp relocate.
+- Ô đổi màu Object tụt ở task 4 (tương cà: 100 → 55 / 65) và task 0 (35 → 15): model đã nhìn nhưng nhận vật theo màu; base
+  / ECT "bền" vì không nhìn.
+- **Ablation:** chỉ train khâu đọc ra (`readout`, 34 nghìn tham số, dữ liệu như full s7): Object swap **23.5**, position 20.5
+  (full LoRA 53.0 / 39.0) → giả thuyết "nghẽn ở lớp đọc ra cuối" bị bác. Bỏ cổng thực thi: Spatial swap **65.5** (có cổng 55.0
+  / 53.5), Object 54.0 / position 36.0 / đổi màu 86.0 (≈ có cổng) → bỏ cổng. ECT 50% cặp: Spatial swap 48.0 (15%: 52.0) →
+  baseline không bị làm yếu bởi tỉ lệ 15%. Distill bỏ proprio: Spatial swap 40.5 (= base).
