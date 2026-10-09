@@ -151,7 +151,9 @@ class Pi05Policy:
     # ------------------------------------------------------------------ LoRA
     def add_lora(self, rank: int = 32, adapter_path: Optional[str] = None, scope: str = "all"):
         """LoRA on the attention / MLP projections. scope "all": every such projection (vision tower included);
-        "llm": only the PaliGemma language model and the action expert (the image encoder stays frozen)."""
+        "llm": only the PaliGemma language model and the action expert (the image encoder stays frozen);
+        "readout": only the action expert's output projection (hidden state -> action velocity);
+        "expert_late": the projections of the action expert's last 6 layers (12-17) and its output projection."""
         from peft import LoraConfig, PeftModel, get_peft_model
 
         if adapter_path:
@@ -159,7 +161,16 @@ class Pi05Policy:
             self.vla.model = self.peft
         else:
             proj = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
-            targets = proj if scope == "all" else r".*(language_model|gemma_expert).*\.(" + "|".join(proj) + ")"
+            if scope == "all":
+                targets = proj
+            elif scope == "llm":
+                targets = r".*(language_model|gemma_expert).*\.(" + "|".join(proj) + ")"
+            elif scope == "readout":
+                targets = r"(.*\.)?action_out_proj"
+            elif scope == "expert_late":
+                targets = r"(.*gemma_expert.*layers\.1[2-7]\..*\.(" + "|".join(proj) + r")|(.*\.)?action_out_proj)"
+            else:
+                raise ValueError(scope)
             cfg = LoraConfig(r=rank, lora_alpha=min(rank, 16), lora_dropout=0.0, target_modules=targets,
                              init_lora_weights="gaussian")
             self.peft = get_peft_model(self.vla.model, cfg)

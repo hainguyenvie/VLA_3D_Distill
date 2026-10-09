@@ -88,7 +88,9 @@ def parse():
     ap.add_argument("--lr", type=float, default=5e-5)
     ap.add_argument("--lr_min", type=float, default=5e-6)
     ap.add_argument("--lora_rank", type=int, default=32)
-    ap.add_argument("--lora_scope", choices=["all", "llm"], default="all", help="llm: keep the image encoder frozen")
+    ap.add_argument("--lora_scope", choices=["all", "llm", "readout", "expert_late"], default="all",
+                    help="llm: keep the image encoder frozen; readout: only the action expert's output projection; "
+                         "expert_late: the action expert's last 6 layers and its output projection (see Pi05Policy.add_lora)")
     ap.add_argument("--grad_clip", type=float, default=1.0)
     ap.add_argument("--eval_every", type=int, default=2)
     ap.add_argument("--eval_trials", type=int, default=10)
