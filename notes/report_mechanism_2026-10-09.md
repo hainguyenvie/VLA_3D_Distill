@@ -158,10 +158,16 @@ Cùng dữ liệu phản thực như run "full" s7, chỉ khác phần được 
 nó đọc, nhưng bị lấn át bởi thành phần "câu lệnh → quỹ đạo thuộc lòng". Huấn luyện phản thực **sửa cách VLM trình bày** thông
 tin đó, để action expert (không đổi) đọc ra được. Khớp với ECT (lựa chọn task đọc ra từ KV của prefix).
 
-**Đang thu hẹp tiếp:**
-- chỉ phép chiếu K/V của VLM (2.65 triệu tham số; đây chính là thứ action expert đọc);
-- chỉ 9 tầng sau của VLM (19.6 triệu);
-- nhân bản "chỉ VLM" với seed 8.
+**Thu hẹp tiếp trong VLM:**
+
+| Phạm vi | Tham số | Swap | Chuẩn |
+|---|---|---|---|
+| Chỉ K/V của VLM (thứ action expert đọc) | 2.65 triệu | 20.0 | **72.0** |
+| 9 tầng sau của VLM | 19.6 triệu | **41.0** | 92.0 |
+| Toàn bộ VLM (seed 7 / seed 8) | 39.2 triệu | 50.0 / 44.0 (TB **47.0**) | 96.0 / 94.0 |
+
+→ Thay đổi cần thiết là cách VLM **xử lý** bên trong, chủ yếu ở nửa sau (tầng 9–17). Chỉ đổi cách trình bày K/V cho attention
+thì không tăng mà còn phá hành vi. Kết quả "chỉ VLM" nhân bản được qua 2 seed (khoảng 83% gain, action expert đóng băng).
 
 **Tradeoff đi cùng nhau:** run nào không học nhìn (base, chỉ lớp đọc ra, ECT, 2606.27663) thì ô đổi màu giữ khoảng 92–93; run
 nào học nhìn thật thì ô đổi màu tụt (74–85).

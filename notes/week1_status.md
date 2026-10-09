@@ -1265,3 +1265,9 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
 - Long 5% cặp: chuẩn 84.5 (15%: 84.0), swap 11.0, lan 82.5, đổi màu 48.0, Plus 78 / 57 → bác giả thuyết "quá nhiều cặp".
   Long không đổi màu (`p05lg_v2notint_s7`) đang chạy; rollout vòng 3 đã tụt 0.95 → 0.68 dù không đổi màu.
 - Chỉ K/V của VLM (`p05_ocd_full_vlm_kv_s7`): vòng 8 đánh giá giữa chừng 0.65, rollout 0.63–0.67 (tụt mạnh, đang theo dõi).
+- **Thu hẹp phía VLM (Object, dữ liệu full s7):** chỉ K/V của VLM (2.65 triệu): swap **20.0**, chuẩn **72.0** (không tăng, phá
+  hành vi); 9 tầng sau của VLM (19.6 triệu): swap **41.0**, chuẩn 92.0; chỉ VLM seed 8: swap 44.0, chuẩn 94.0 (seed 7: 50.0 /
+  96.0; TB **47.0**). → Thay đổi cần thiết là cách VLM **xử lý** bên trong (MLP / truy vấn), chủ yếu ở nửa sau (tầng 9–17, ~65%
+  gain); chỉ đổi cách trình bày K/V cho attention không đủ. Action expert đóng băng vẫn đạt ~83% gain của train toàn bộ.
+- Card 0–3 lại là của mình (23:00 UTC 09/10). Khởi chạy: v2 + chỉ VLM trên 4 bộ (`p05*_v2vlm_s7`; giả thuyết: giữ action
+  expert nguyên thì Goal / Long không bị phá cảnh chuẩn); ECT s8 Object, Spatial.
