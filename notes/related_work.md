@@ -310,3 +310,33 @@ theo pha tại state bất kỳ của rollout (dời nơi đặt **khi đang man
 từng bộ, nơi biến đổi của ECT không làm tăng Object Swap; (3) ba kiểm tra tính hợp lệ của teacher (unique / agree / cổng);
 (4) tradeoff vị trí ↔ ngoại hình và cách gỡ. Cần: cài ECT trong harness (gương cả cảnh, robot giữ, nhãn = bám đường đi đã
 biến đổi trên rollout thành công của π0.5) để so cùng ngân sách.
+
+## 12. Khảo sát can thiệp kiến trúc / hình học cho lỗi vị trí (09/10, ~40 bài; [V] đọc toàn văn, [R] agent con đọc)
+
+**Đã chật:**
+- *Chẩn đoán "mã hoá được nhưng không điều khiển"* trên π0.5: Encoded but Not in Control (2610.06235: 86–98% đi tới vật
+  cũ, probe tuyến tính vẫn đọc ra vật mới), Not All Features Are Created Equal (2603.19233: "chương trình vận động gắn không
+  gian", tiêm qua expert lệch hành vi gấp 2 qua VLM), VLA-Trace (2605.30117), Scrubbing Visual Cues (2610.10912: lối tắt vào
+  ở tầng đầu, chữa bằng huấn luyện đối kháng ở ảnh), ECT (KV prefix tầng cuối chọn task; patch KV đổi hướng tay 109/200).
+- *3D dày đặc* (depth / point cloud / VGGT) vào VLA: không chữa swap ở nơi có đo — GLaD Position 3–12, FALCON 0.6 / 12.2,
+  HABILIS 18.05 vs π0.5 20.8; Spatial Forcing không tăng layout của LIBERO-Plus.
+- *Grounding dạng chữ / CoT / vẽ lên ảnh* (ECoT, MolmoAct, TraceVLA…): kể cả với điểm oracle chỉ +3 đến +11 position.
+- **2606.27663 (Tsai et al.)** [V]: d = p_đích − p_tay (3D, khung base) → MLP 2 lớp (lớp cuối khởi tạo 0) → cộng vào embedding
+  thời gian ở AdaLN của action expert, mọi bước. Điểm từ mask + depth của simulator (oracle); robot thật dùng Qwen3-VL-4B.
+  Train 69 task (Object + Spatial + 49 task LIBERO-90), batch 256, 30k bước. LIBERO-PRO π0.5: Position Object 36.0 → **75.0**,
+  Spatial 58.0 → **69.4**; Task 37.3 → 75.9. Chỉ Object / Spatial; không Goal / Long / LIBERO-Plus. Ablation (GR00T): d qua
+  token state 51.7 < token trong ngữ cảnh 58.5 < AdaLN 68.9; train 20 task chuẩn: Position Object 4.8 → 67.8, Spatial
+  2.0 → 15.2. Code "sắp có". **Baseline bắt buộc cho mọi đề xuất hình học.**
+- GAM (2609.23863, không phải VLA): Position Spatial .60 / Object .47 / Goal .19 / Long .05 (π0.5 bảng xếp hạng .20 / .17 /
+  .38 / .08). QuoVLA (2605.24890, π0.5, nút cổ chai lượng tử giữa VLM và expert): 40 / 26 / 57 / 21.
+
+**Còn mở:**
+1. Định vị lối tắt *trạng thái tay* trong π0.5 theo loại token × tầng × thời điểm rồi can thiệp đúng đó — chưa ai làm.
+   Gần nhất: GAP (2602.12032, không phải π0.5: ở pha chuyển động proprio lấn át ảnh; chữa bằng giảm trọng số gradient
+   proprio theo pha); State-free Policy (2509.18644, π0: bỏ state → tổng quát vị trí robot thật 6 → 64%; chưa đo LIBERO-PRO).
+   **Cấu hình π0.5 LIBERO của ta đưa state vào prompt dạng ~120 token chữ số** (`State: 255 255 173 …`; câu lệnh 13 token).
+2. Chỉ đưa thông tin 3D của đích ở các state "mù" (AFI dùng trigger heuristic + waypoint; IDR tăng thị giác khi mù nhưng
+   không thêm hình học; HABILIS router không thêm hình học đích).
+3. Dùng grounding của chính VLA làm kênh hình học liên tục (2606.27663 dùng oracle / VLM ngoài).
+4. Kết quả mạnh trên cả 4 bộ với huấn luyện chuẩn; lỗi thực hiện của Goal; mâu thuẫn màu ↔ danh tính (BeTTER 2604.18000
+   xác nhận π0.5 hành động theo màu).
