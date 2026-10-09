@@ -1185,3 +1185,18 @@ Giữ nguyên: mọi log, `summary.json`, `episodes.jsonl`, `failures.*`, `train
   từng bộ (bài gốc chỉ có GR00T: 15.2), Goal / Long (bài không báo), ô đổi màu.
 - Có code nhưng không ưu tiên: Spatial Forcing, ROCKET (theo tài liệu không tăng swap), GAM (mô hình riêng). Không có code:
   2606.27663 ("coming soon"), ECT, QuoVLA ("sẽ công bố").
+
+**Phép thử 1 của insight: đo E1 / E2 trên model đã train (Object).** Follow (E1, trung vị):
+
+| | base | ECT s7 | full s7 (ta) |
+|---|---|---|---|
+| đầu pha tiếp cận, dời vật | 0.13–0.22 | 0.14–0.23 | 0.20–0.30 |
+| giữa pha, dời 20 cm | 0.31 | 0.37 | **0.67** |
+| giữa pha, đổi chỗ | 0.03 | 0.07 | **0.53** |
+| giữa pha, đổi tên trong câu lệnh | 0.02 | 0.01 | **0.54** |
+| đang mang, dời giỏ 12–20 cm | 0.06 | 0.11 | **0.44–0.69** |
+
+Probe trong cùng state (E2, token hành động, tầng cuối): dời vật xa 0.58 / 0.62 / 0.65; đổi chỗ 0.55 / 0.56 / 0.70; dời giỏ
+xa 0.80 / 0.86 / 0.85 (base / ECT / ta). → **Mức mã hoá gần như như nhau ở cả ba; khác biệt nằm ở việc dùng**: huấn luyện
+phản thực của ta không dạy model nhìn tốt hơn mà dạy nó dùng điều đã mã hoá; ECT (trong setup của ta) không đổi được việc
+dùng. Còn mù ở đầu pha tiếp cận với cả ba (0.2–0.3) — khoảnh khắc quyết định đầu tiên chưa ai sửa.
