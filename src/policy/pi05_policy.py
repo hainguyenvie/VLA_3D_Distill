@@ -157,7 +157,9 @@ class Pi05Policy:
         """LoRA on the attention / MLP projections. scope "all": every such projection (vision tower included);
         "llm": only the PaliGemma language model and the action expert (the image encoder stays frozen);
         "readout": only the action expert's output projection (hidden state -> action velocity);
-        "expert_late": the projections of the action expert's last 6 layers (12-17) and its output projection."""
+        "expert_late": the projections of the action expert's last 6 layers (12-17) and its output projection;
+        "vlm": only the PaliGemma language model (the action expert and the image encoder stay frozen);
+        "expert": every layer of the action expert and its output projection (the VLM stays frozen)."""
         from peft import LoraConfig, PeftModel, get_peft_model
 
         if adapter_path:
@@ -171,6 +173,10 @@ class Pi05Policy:
                 targets = r".*(language_model|gemma_expert).*\.(" + "|".join(proj) + ")"
             elif scope == "readout":
                 targets = r"(.*\.)?action_out_proj"
+            elif scope == "vlm":
+                targets = r".*paligemma\.model\.language_model.*\.(" + "|".join(proj) + ")"
+            elif scope == "expert":
+                targets = r"(.*gemma_expert.*\.(" + "|".join(proj) + r")|(.*\.)?action_out_proj)"
             elif scope == "expert_late":
                 targets = r"(.*gemma_expert.*layers\.1[2-7]\..*\.(" + "|".join(proj) + r")|(.*\.)?action_out_proj)"
             else:
