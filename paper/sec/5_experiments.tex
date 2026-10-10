@@ -169,7 +169,8 @@ listed LoRA adapters trained. Adapting the VLM with the action expert frozen giv
 \end{table}
 
 With the counterfactual data fixed, we restrict which LoRA adapters may change (\cref{tab:local}).
-The readout of the action expert, the natural place for a decoding bottleneck, gains almost nothing.
+The readout of the action expert, the natural place for a decoding bottleneck and the layer whose re-training suffices in
+image classification~\cite{kirichenko2023dfr}, gains almost nothing.
 Forcing the change into the last layers of the action expert gains part of the swap cell but breaks nominal behavior
 (82.5).
 The full action expert recovers about 40\% of the swap gain and two thirds of the position gain.

@@ -21,16 +21,19 @@
 \backcite {dehaan2019causal}{{2}{2}{section*.3}}
 \backcite {wen2020copycat}{{2}{2}{section*.3}}
 \backcite {geirhos2020shortcut}{{2}{2}{section*.3}}
+\backcite {pezeshki2021gradient}{{2}{2}{section*.3}}
+\backcite {shah2020pitfalls}{{2}{2}{section*.3}}
+\backcite {kirichenko2023dfr}{{2}{2}{section*.3}}
 \backcite {chen2026ect}{{2}{2}{section*.3}}
 \backcite {encoded2026}{{2}{2}{section*.3}}
 \backcite {features2026}{{2}{2}{section*.3}}
 \backcite {shi2026vlatrace}{{2}{2}{section*.3}}
-\backcite {fang2026whenvision}{{2}{2}{section*.3}}
-\backcite {zhang2026cofactvla}{{2}{2}{section*.3}}
-\backcite {zhan2026stable}{{2}{2}{section*.3}}
-\backcite {flatness2026}{{2}{2}{section*.3}}
-\backcite {qu2025spatialvla}{{2}{2}{section*.4}}
-\backcite {zhen20243dvla}{{2}{2}{section*.4}}
+\backcite {fang2026whenvision}{{3}{2}{section*.3}}
+\backcite {zhang2026cofactvla}{{3}{2}{section*.3}}
+\backcite {zhan2026stable}{{3}{2}{section*.3}}
+\backcite {flatness2026}{{3}{2}{section*.3}}
+\backcite {qu2025spatialvla}{{3}{2}{section*.4}}
+\backcite {zhen20243dvla}{{3}{2}{section*.4}}
 \backcite {tsai2026point}{{3}{2}{section*.4}}
 \backcite {xu2026afi}{{3}{2}{section*.5}}
 \backcite {core2026}{{3}{2}{section*.5}}
@@ -49,11 +52,12 @@
 \backcite {hu2022lora}{{5}{5}{section*.15}}
 \backcite {ross2011dagger}{{5}{5}{section*.15}}
 \backcite {chen2026ect}{{5}{5}{equation.5}}
-\backcite {liu2023libero}{{5}{6}{section*.20}}
-\backcite {zhou2025liberopro}{{5}{6}{section*.20}}
+\backcite {liu2023libero}{{6}{6}{section*.20}}
+\backcite {zhou2025liberopro}{{6}{6}{section*.20}}
 \backcite {chen2026ect}{{6}{6}{section*.21}}
 \backcite {tsai2026point}{{6}{6}{section*.21}}
 \backcite {chen2026ect}{{6}{6.1}{section*.24}}
+\backcite {kirichenko2023dfr}{{6}{6.3}{table.caption.27}}
 \backcite {tsai2026point}{{7}{\caption@xref {??}{ on input line 38}}{table.caption.22}}
 \backcite {chen2026ect}{{7}{\caption@xref {??}{ on input line 39}}{table.caption.22}}
 \backcite {chen2026ect}{{2}{10}{section*.45}}

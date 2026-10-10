@@ -13,6 +13,10 @@ We study the position failures of \pizf, the strongest open model on these suite
 \paragraph{Memorization and shortcuts in imitation.}
 Behavior cloning is known to latch onto spurious correlates of the expert's action, such as past actions or
 proprioception~\cite{dehaan2019causal,wen2020copycat}, an instance of shortcut learning~\cite{geirhos2020shortcut}.
+Gradient-based training can leave predictive features unused~\cite{shah2020pitfalls,pezeshki2021gradient}, and in image
+classification the core features are often learned yet ignored, so that re-training the last layer on data without the
+spurious correlation restores robustness~\cite{kirichenko2023dfr}. We find the same ``learned but unused'' state in a VLA,
+but not the same cure: re-training the action readout does not restore use (\cref{sec:exp:local}).
 For VLAs, recent analyses report that instructions retrieve memorized trajectories~\cite{chen2026ect}, that new target
 positions remain decodable from internal features while the arm goes to the old one~\cite{encoded2026}, and that spatial
 motor programs are tied to the scene layout~\cite{features2026}.
