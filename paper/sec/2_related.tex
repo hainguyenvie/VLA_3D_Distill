@@ -36,11 +36,10 @@ We re-implement the injection with an oracle point in our per-suite setting and 
 counterfactual supervision added, the policy still solves the task through the VLM rather than through the point.
 
 \paragraph{Escaping memorized trajectories.}
-Inference-time methods leave the policy unchanged: Affordance Field Intervention~\cite{xu2026afi} detects ``memory traps''
-and steers \pizf with 3D affordance fields and waypoints (reporting +20.2\% on LIBERO-PRO), and CoRe~\cite{core2026} plans
-recoveries in imagination. CounterAlign~\cite{counteralign2026} learns a reward from counterfactual discriminators for
-offline RL and reports gains under position perturbations. These are complementary to ours: they act at test time or
-through a learned reward, whereas we ask where in the policy the failure lives and supervise that decision directly.
+Affordance Field Intervention~\cite{xu2026afi} detects ``memory traps'' and steers \pizf with 3D affordance fields at test
+time (+20.2\% on LIBERO-PRO), CoRe~\cite{core2026} plans recoveries in imagination, and CounterAlign~\cite{counteralign2026}
+learns a reward from counterfactual discriminators for offline RL. These act at test time or through a learned reward and
+are complementary to supervising the decision directly.
 
 \paragraph{Counterfactual data and privileged teachers.}
 Counterfactual data augmentation~\cite{pitis2020coda} and demonstration generation by replaying transformed
