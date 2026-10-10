@@ -1271,3 +1271,9 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   gain); chỉ đổi cách trình bày K/V cho attention không đủ. Action expert đóng băng vẫn đạt ~83% gain của train toàn bộ.
 - Card 0–3 lại là của mình (23:00 UTC 09/10). Khởi chạy: v2 + chỉ VLM trên 4 bộ (`p05*_v2vlm_s7`; giả thuyết: giữ action
   expert nguyên thì Goal / Long không bị phá cảnh chuẩn); ECT s8 Object, Spatial.
+- **Spatial bỏ cổng s8: swap 66.5** (s7 65.5; TB **66.0**; base 40.0, ECT s7 52.0), chuẩn 98.0 → nhân bản tốt.
+- Chỉ VLM s8: position 25.5 (s7 35.5), đổi màu **69.5** (s7 70.0), lan 96.0, Plus 80 / 77. Tầng 9-17: position 28.5, lan 92.5,
+  đổi màu 76.5. Chỉ K/V: position 9.5, lan 72.0, đổi màu 63.5 (phá hành vi ở mọi ô).
+- **Điểm 3D (oracle) + phản thực, Object: ô đổi màu 92.5** (= base; ta không điểm 3D 84–86), swap 43.0, position 41.5, Plus 90 /
+  78; Spatial: swap 62.0, đổi màu 97.5. Ô đổi màu được giữ nhiều khả năng nhờ oracle chỉ đúng vật đích bất kể màu (thông tin
+  đặc quyền) — muốn claim phải thay bằng nguồn không đặc quyền.
