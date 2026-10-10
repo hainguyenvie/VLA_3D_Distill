@@ -18,8 +18,7 @@ re-render, and ask the policy again.
 Comparing the two predictions measures how much the action \emph{uses} the change; probing the hidden states before and
 after the change measures how well the change is \emph{encoded}.
 The two disagree (\cref{fig:teaser}).
-The displacement is linearly decodable from the hidden states of \pizf ($R^2$ 0.81--0.92 at the input of its VLM,
-0.54--0.78 in its action tokens), but at the moments that decide
+The displacement is linearly decodable from the hidden states of \pizf ($R^2$ up to 0.92), but at the moments that decide
 the task, when the hand is still on its way to the target or carries the object to the container, the predicted action
 follows the displacement by only 2--25\%.
 \pizf \emph{knows where} the target is and does not \emph{go there}.
@@ -54,8 +53,7 @@ that move a single decision variable at decision states, with labels that depend
 this account hold in our experiments, including that privileged 3D goal injection is ignored (\cref{sec:exp:mech}).
 \item A localization of the change that does fix use: the VLM's mid-to-late layers, not the action pathway
 (\cref{sec:exp:local}).
-\item Decision-time counterfactual supervision with validity-gated privileged labels, which improves LIBERO-PRO swap by
-31.3 points (LIBERO-Object) and 14.8 points (LIBERO-Spatial) over \ect under the same teacher and budget
-(\cref{sec:exp:main}), together with an account of its costs and of an evaluation detail of LIBERO, the per-reset
-re-placement of furniture, that changes per-task results by up to 25 points (\cref{sec:exp:limits}).
+\item Decision-time counterfactual supervision, which improves LIBERO-PRO swap by 31.3 (LIBERO-Object) and 14.8
+(LIBERO-Spatial) points over \ect under the same teacher and budget (\cref{sec:exp:main}), and an account of its costs and
+of LIBERO's per-reset furniture re-placement, which moves per-task results by up to 25 points (\cref{sec:exp:limits}).
 \end{itemize}

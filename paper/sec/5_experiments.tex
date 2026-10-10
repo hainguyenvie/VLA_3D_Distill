@@ -18,8 +18,7 @@ Pairs on 50\% of the states do not help \ect (Object swap 25.0, Spatial 48.0).
 \emph{\pt}~\cite{tsai2026point}: the 3D displacement from the gripper to the current sub-goal (the target until it is
 lifted, then its goal region), taken from the simulator at training \emph{and} test time, is mapped by an MLP with a
 zero-initialized last layer and added to the flow-time conditioning of every action-expert layer; the teacher does not see
-it. Published numbers of these methods come from different training regimes (four suites jointly, 30k steps, or 69 tasks)
-and are not comparable to a per-suite adaptation; we therefore compare re-implementations.
+it. Their published numbers come from other regimes (four suites jointly, or 69 tasks), hence our re-implementations.
 
 \subsection{Main results}
 \label{sec:exp:main}
