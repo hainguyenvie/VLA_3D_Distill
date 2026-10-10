@@ -1193,6 +1193,8 @@ class EnvRunner:
             if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
+            if self.cfg.get("fixture_pin"):  # diagnostic: the furniture where a fresh env puts it, plus an offset
+                self._pin_fixtures(robo)
             if self.cfg.get("obj_tint"):  # training: random colours on the movable objects (appearance variation)
                 self._tint_objects(robo, float(self.cfg["obj_tint"]))
             if self.cfg.get("displace_distractor"):  # diagnostic: one non-target object starts somewhere unusual
@@ -1263,6 +1265,22 @@ class EnvRunner:
         out = self._run([DUMMY_ACTION] * self.cfg["num_steps_wait"], stop_at_end=False)  # upstream ignores `done` here
         self.t, self.done, self.closed = 0, False, False
         return dict(out, t=0, done=False, active=True, closed_before=False)
+
+    def _pin_fixtures(self, robo) -> None:
+        """Diagnostic. LIBERO places the furniture (bodies fixed to the world: cabinet, stove, rack) at random on every
+        reset, and the benchmark's initial states (joint positions) do not hold it, so consecutive episodes of one env
+        see the cabinet up to ~2 cm elsewhere (an env seeded 0, as upstream, always puts it at the same spots in the same
+        order). Pin it where the first reset of this env put it (a fresh env's placement), shifted by `fixture_offset`."""
+        import mujoco
+
+        m, d = robo.sim.model._model, robo.sim.data._data
+        fixed = [b for b in world_fixed_bodies(robo) if not (robo.sim.model.body_id2name(b) or "").endswith("table")]
+        if getattr(self, "_fix0", None) is None:
+            self._fix0 = {b: m.body_pos[b].copy() for b in fixed}
+        off = np.r_[np.asarray(self.cfg.get("fixture_offset") or (0.0, 0.0), dtype=np.float64), 0.0]
+        for b in fixed:
+            m.body_pos[b] = self._fix0[b] + off
+        mujoco.mj_forward(m, d)
 
     def _ect_transform(self, robo, spec: Dict[str, Any]):
         """Apply an ECT scene transform to the freshly reset scene (free objects and the furniture standing on the table;
@@ -1463,7 +1481,7 @@ class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
                  depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None,
                  counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0, displace_distractor: float = 0.0,
-                 obj_tint: float = 0.0):
+                 obj_tint: float = 0.0, fixture_pin: bool = False, fixture_offset=None):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
@@ -1471,7 +1489,8 @@ class LiberoVecEnv:
                         counterfactual=counterfactual,  # as in COUNTERFACTUAL, used per reset
                         q1_offset=q1_offset,  # diagnostic: first arm joint turned by this much at every reset (radians)
                         displace_distractor=displace_distractor,  # diagnostic: one non-target object moved this far
-                        obj_tint=obj_tint)  # training: probability that a movable object is recoloured in an episode
+                        obj_tint=obj_tint,  # training: probability that a movable object is recoloured in an episode
+                        fixture_pin=fixture_pin, fixture_offset=fixture_offset)  # diagnostic: EnvRunner._pin_fixtures
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs

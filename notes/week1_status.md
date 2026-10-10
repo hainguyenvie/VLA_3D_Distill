@@ -1316,3 +1316,22 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   hợp lệ) → cặp "lon dưới tay — đừng gắp, đi tới lon súp" dạy do dự đúng ở lúc gắp. **Sửa:** `--no_cotarget_swap` (không đổi
   chỗ với vật nhiệm vụ cũng mang; không ảnh hưởng Object / Spatial / Goal vì chỉ có một vật mang).
 - Cấu hình **v3** = v2 + `--scene_tol 0.01` + `--no_cotarget_swap` (`scripts/server/pi05_round22.sh`).
+- **Bản sửa tách pha chưa đủ:** v3 Goal vòng 4: task 0 / 3 = 0.6 / 0.3 (v2 0.4 / 0.2, ECT 0.6 / 0.6, distill thường 0.9 / 1.0).
+  Theo vòng: chỉ retarget 0.5 / 0.2 ở vòng 4 (không bao giờ dời tủ), xoay cả cảnh 0.3–0.6 / 0.5–0.8, chỉ relocate (bản cũ,
+  trước khi có dời đồ cố định) 0.9 / 0.8–0.9. Task 0 không có cặp nào mà vẫn tụt → không phải lỗi nhãn của riêng task đó.
+
+### 10/10 — Eval phụ thuộc lịch chạy: LIBERO đặt lại đồ cố định ở mỗi lần reset
+- Cùng adapter `p05gl_v2_s7`: eval cả bộ task 0 / 3 = 70 / 70 (chạy lại: 70 / 45); eval riêng task 0,3 (8 worker) = 95 / 85
+  (seed 11: 95 / 65); mỗi task một worker chạy tuần tự = 65 / 80 và hỏng **đúng các trial** [1, 2, 3, 4, 8, 14] như eval cả bộ.
+  Bộ lập lịch giữ mỗi worker trên một task, nên eval cả bộ ≈ giao thức chính thức của LIBERO (một env mỗi task, reset liên
+  tiếp), còn eval riêng cho nhiều lần thử chạy ở env mới dựng.
+- `scripts/check_env_reuse.py`: env vừa chạy một tập so với env mới, cùng initial state: trạng thái mô phỏng, bộ điều khiển,
+  tay kẹp **giống hệt**, vật lý trùng khớp suốt 120 bước, nhưng ảnh lệch (TB 4.3 / 255, max 190) suốt tập. Nguyên nhân:
+  **mỗi lần reset LIBERO đặt lại ngẫu nhiên đồ cố định** (tủ, bếp, giá rượu; `model.body_pos`), initial state của benchmark
+  (qpos) không chứa chúng. `scripts/check_fixture_draws.py`: qua 20 lần reset của env seed 0 (như upstream), tủ dao động
+  x 0.020–0.040, y −0.248…−0.234 (biên ~2 cm); env mới luôn cho (0.040, −0.234) — rìa phân bố. Lần reset thứ k của mọi env
+  seed 0 cho cùng vị trí → giao thức chính thức gắn mỗi trial với một vị trí tủ cố định.
+- → Mức tụt Goal của các bản phản thực là **có thật theo giao thức chuẩn**, nhưng nó là độ nhạy với vị trí đồ cố định (±1 cm)
+  mà base π0.5 chịu được; so sánh giữa các phương pháp vẫn công bằng (cùng giao thức). Đang đo có kiểm soát:
+  `--fixture_pin [--fixture_offset dx,dy]` (đồ cố định ở vị trí của env mới, cộng độ lệch), task 0 và 3, độ lệch 0 / ±2 cm,
+  base / distill thường / ECT / v2 (`scripts/server/fixture_sweep.sh`).
