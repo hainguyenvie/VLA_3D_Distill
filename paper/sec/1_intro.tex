@@ -1,0 +1,58 @@
+\section{Introduction}
+\label{sec:intro}
+
+Generalist vision-language-action (VLA) policies~\cite{brohan2023rt2,kim2024openvla,black2024pi0,pi2025pi05} now solve
+the standard LIBERO suites~\cite{liu2023libero} almost perfectly.
+The same policies fail in a strikingly simple way when the scene is rearranged.
+LIBERO-PRO~\cite{zhou2025liberopro} keeps every task and only moves the objects; under its \emph{swap} perturbation,
+where the target trades places with another object, \pizf drops from 99\% to 19\% on LIBERO-Object and from 98\% to 40\% on
+LIBERO-Spatial.
+Watching the rollouts shows why: the arm drives to where the target used to be.
+The policy behaves as if the instruction retrieved a memorized trajectory~\cite{chen2026ect}.
+
+A natural reading is that the policy does not \emph{perceive} where things are, and a large body of work adds
+perception: depth, point clouds, 3D features, or an explicit 3D goal point~\cite{zhen20243dvla,qu2025spatialvla,tsai2026point}.
+We test this reading directly and find it wrong for \pizf.
+Because our policies run in a simulator, we can stop any rollout at any state, change exactly one thing (move the target,
+swap it with another object, move the container while the object is carried, rename the target in the instruction),
+re-render, and ask the policy again.
+Comparing the two predictions measures how much the action \emph{uses} the change; probing the hidden states before and
+after the change measures how well the change is \emph{encoded}.
+The two disagree (\cref{fig:teaser}).
+The displacement is linearly decodable from the action tokens of \pizf ($R^2$ 0.55--0.86), but at the moments that decide
+the task, when the hand is still on its way to the target or carries the object to the container, the predicted action
+follows the displacement by only 3--22\%.
+\pizf \emph{knows where} the target is and does not \emph{go there}.
+
+This distinction predicts which remedies can work.
+If the information is already present, adding more of it should not help, and it does not: re-implementing the injection
+of a privileged 3D goal point into the action expert~\cite{tsai2026point} in our setting leaves swap success at the base
+level, and the injected channel is learned as a constant offset that ignores the point.
+Equivariant counterfactual training (\ect)~\cite{chen2026ect}, which pairs demonstrations with geometrically transformed
+replays, diagnoses the same memorization but, in a matched setting, leaves the measured use where it was.
+What does change use is supervision \emph{at the decision states themselves}: building, at a state of the policy's own
+rollout, a world in which the memorized action is wrong (the target or the container has moved) and supervising the
+correct action there.
+We call this decision-time counterfactual supervision (\ours).
+It raises use from 0.03--0.09 to 0.44--0.69 while the encoding does not change: it teaches the policy to act on what it
+already represents rather than to see better.
+
+The same instrument tells us \emph{where} the change happens.
+Restricting the trainable parameters to different parts of \pizf, with the same counterfactual data, shows that the
+action expert, its readout layer, or the keys and values the action expert reads from the VLM are not where the fix lives;
+adapting the VLM backbone alone, with the action expert frozen, recovers about 90\% of the swap gain, and most of that
+comes from its layers 9--17.
+
+\paragraph{Contributions.}
+\begin{itemize}
+\item A decision-time intervention protocol that separates \emph{use} from \emph{encoding} in a VLA, per task phase, and
+the finding that \pizf encodes object and container displacements it does not act on (\cref{sec:probing}).
+\item Evidence that two recent remedies do not change use in a matched setting, including privileged 3D goal injection,
+whose channel collapses to a constant: geometric information is not what is missing (\cref{sec:exp:mech}).
+\item A localization of the change that does fix use: the VLM's mid-to-late layers, not the action pathway
+(\cref{sec:exp:local}).
+\item Decision-time counterfactual supervision with validity-gated privileged labels, which improves LIBERO-PRO swap by
+30.8 points (LIBERO-Object) and 14.3 points (LIBERO-Spatial) over \ect under the same teacher and budget
+(\cref{sec:exp:main}), together with an account of its costs and of an evaluation detail of LIBERO, the per-reset
+re-placement of furniture, that changes per-task results by up to 25 points (\cref{sec:exp:limits}).
+\end{itemize}

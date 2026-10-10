@@ -1,0 +1,21 @@
+\begin{abstract}
+Vision-language-action (VLA) policies that are near-perfect on LIBERO collapse once the objects in the scene trade
+places: \pizf completes 99\% of LIBERO-Object episodes but only 19\% after two objects are swapped, driving to where the
+target used to be.
+We ask whether this is a failure of \emph{perception} or of \emph{use}.
+Intervening on the simulator at arbitrary states of the policy's own rollouts, we measure, phase by phase, how far the
+predicted action follows a displacement of the target or the container (use) and how well that displacement can be
+decoded from the policy's hidden states (encoding).
+\pizf encodes the displacement (in-state probe $R^2$ 0.55--0.86), yet at the moments the task is decided its action
+follows it by only 3--22\%.
+Two recent remedies leave use unchanged in a matched setting: equivariant counterfactual training on transformed
+demonstrations, and injecting a privileged 3D goal point into the action expert, which is learned as a constant bias.
+Supervising the policy in counterfactual worlds built at its own decision states, with privileged labels gated for
+validity, raises use to 0.44--0.69 while encoding stays where it was.
+Restricting which parameters may change localizes the effect: adapting only the VLM backbone, mostly its layers 9--17,
+recovers about 90\% of the gain, whereas the action expert, its readout, or the VLM's keys and values alone do not.
+Under the same teacher and training budget, this improves LIBERO-PRO object swaps by 30.8 points on LIBERO-Object and
+14.3 points on LIBERO-Spatial over equivariant counterfactual training, at unchanged nominal success.
+We also report what it costs: a trade-off with appearance changes, and a sensitivity to the furniture placement that
+LIBERO re-draws at every reset, an evaluation detail we show moves per-task success by up to 25 points.
+\end{abstract}

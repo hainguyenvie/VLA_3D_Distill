@@ -1,0 +1,39 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{VLA policies and their generalization.}
+VLAs fine-tune vision-language backbones to output robot actions, as discrete tokens~\cite{brohan2023rt2,kim2024openvla}
+or through a flow-matching action expert attached to the backbone~\cite{black2024pi0,pi2025pi05}; continuous-action
+fine-tuning brought them close to saturation on LIBERO~\cite{liu2023libero,kim2025oft}.
+Robustness benchmarks built on LIBERO show how narrow this success is: LIBERO-Plus~\cite{fei2025liberoplus} perturbs
+camera, lighting, robot initial state and layout, and LIBERO-PRO~\cite{zhou2025liberopro} swaps and moves objects,
+rephrases instructions and changes tasks, with near-zero success for most models under position changes.
+We study the position failures of \pizf, the strongest open model on these suites.
+
+\paragraph{Memorization and shortcuts in imitation.}
+Behavior cloning is known to latch onto spurious correlates of the expert's action, such as past actions or
+proprioception~\cite{dehaan2019causal,wen2020copycat}, an instance of shortcut learning~\cite{geirhos2020shortcut}.
+For VLAs, recent analyses report that instructions retrieve memorized trajectories~\cite{chen2026ect}, that new target
+positions remain decodable from internal features while the arm goes to the old one~\cite{encoded2026}, and that spatial
+motor programs are tied to the scene layout~\cite{features2026}.
+Our measurements agree with this diagnosis; what we add is a per-phase, per-intervention separation of use and encoding
+that compares models before and after a remedy, and a localization of the parameters whose change restores use.
+
+\paragraph{Adding geometry.}
+Many works feed depth, point clouds or 3D features to VLAs~\cite{zhen20243dvla,qu2025spatialvla}; where position
+perturbations were measured, they did not resolve them.
+Closest to our question, Tsai \etal~\cite{tsai2026point} inject a grounded 3D goal point into the adaptive normalization of
+the action expert and report large gains when training on 69 tasks with varied layouts.
+We re-implement the injection with an oracle point in our per-suite setting and find that the channel is ignored; with
+counterfactual supervision added, the policy still solves the task through the VLM rather than through the point.
+
+\paragraph{Counterfactual data and privileged teachers.}
+Counterfactual data augmentation~\cite{pitis2020coda} and demonstration generation by replaying transformed
+trajectories~\cite{mandlekar2023mimicgen,xue2025demogen} create new supervision from existing episodes.
+\ect~\cite{chen2026ect} is the closest method: it mirrors or shifts the whole scene at the start of a demonstration and
+replays the transformed end-effector path, training on both.
+Our counterfactuals are instead built at \emph{arbitrary states of on-policy rollouts}, one change at a time (the target
+before the grasp, the container while carrying), and labeled by a privileged scripted teacher, in the spirit of learning
+from privileged experts~\cite{chen2019lbc} and on-policy distillation~\cite{ross2011dagger,agarwal2024onpolicy}.
+We use them as an instrument to ask where VLAs fail, and treat the resulting training procedure as the minimal
+intervention the analysis calls for rather than as a data-generation contribution.

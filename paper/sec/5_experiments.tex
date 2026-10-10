@@ -1,0 +1,260 @@
+\section{Experiments}
+\label{sec:exp}
+
+\paragraph{Benchmarks.}
+We train on one LIBERO suite at a time~\cite{liu2023libero} and evaluate on its nominal tasks and on the LIBERO-PRO
+perturbations of the same suite~\cite{zhou2025liberopro}: \emph{swap} (objects exchange places), \emph{position} (the
+target is moved; LIBERO-Object only), \emph{object} (objects recolored or re-textured) and \emph{language} (instruction
+rephrased). Each cell is 10 tasks $\times$ 20 initial states; horizons are 280 (Object), 220 (Spatial), 300 (Goal) and 520
+(Long) steps. Seeds are 7, 8, 9 unless stated.
+
+\paragraph{Baselines, all in the same harness, teacher and budget.}
+\emph{Distill}: the on-policy distillation of \cref{sec:method} without counterfactuals.
+\emph{\ect}~\cite{chen2026ect}: each iteration, 16 successful episodes are replayed in a transformed scene (robot and start
+pose unchanged; Object: mirror in $y$, mirror in $x$ and in $xy$ with a shift; Spatial and Goal: mirror in $y$; Long: a
+shift; furniture is reflected so that it faces the work area); a tracking controller follows the transformed end-effector
+path, and successful replays are paired with the original queries, on at most 15\% of the states as for \ours.
+Pairs on 50\% of the states do not help \ect (Object swap 25.0, Spatial 48.0).
+\emph{\pt}~\cite{tsai2026point}: the 3D displacement from the gripper to the current sub-goal (the target until it is
+lifted, then its goal region), taken from the simulator at training \emph{and} test time, is mapped by an MLP with a
+zero-initialized last layer and added to the flow-time conditioning of every action-expert layer; the teacher does not see
+it. Published numbers of these methods come from different training regimes (four suites jointly, 30k steps, or 69 tasks)
+and are not comparable to a per-suite adaptation; we therefore compare re-implementations.
+
+\subsection{Main results}
+\label{sec:exp:main}
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{l c ccccc c cccc}
+\toprule
+& & \multicolumn{5}{c}{LIBERO-Object} & & \multicolumn{4}{c}{LIBERO-Spatial} \\
+\cmidrule{3-7}\cmidrule{9-12}
+Method & seeds & nominal & swap & position & object & language & & nominal & swap & object & language \\
+\midrule
+Distill (no counterfactual) & 3 / 2 & 99.3 & 18.7\,{\scriptsize$\pm$2.8} & 12.2\,{\scriptsize$\pm$1.3} & 92.5 & 99.2 & & 97.5 & 40.0\,{\scriptsize$\pm$2.8} & 98.5 & 96.5 \\
+\pt~\cite{tsai2026point} (oracle point) & 1 & 98.5 & 18.5 & 12.5 & 93.0 & 100.0 & & 99.0 & 40.0 & 98.0 & 97.0 \\
+\ect~\cite{chen2026ect} & 2\pending{+1} & 99.0 & 23.8\,{\scriptsize$\pm$0.4} & 16.5\,{\scriptsize$\pm$0.0} & 93.3 & 98.5 & & 98.8 & 50.8\,{\scriptsize$\pm$1.8} & 98.0 & 96.8 \\
+\ours (ours) & 3 & 97.3 & \textbf{54.5}\,{\scriptsize$\pm$3.8} & \textbf{38.2}\,{\scriptsize$\pm$5.6} & 81.8\pending{$^\dagger$} & 98.0\pending{$^\dagger$} & & 98.8 & \textbf{65.0}\,{\scriptsize$\pm$1.8} & 98.8\pending{$^\dagger$} & 96.8\pending{$^\dagger$} \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{LIBERO-PRO success (\%) after per-suite adaptation of \pizf}, mean $\pm$ std over seeds (200 episodes per
+cell and seed). All methods share the teacher, rollouts, budget and optimizer. The untrained \pizf scores 99 / 18.5 on
+Object nominal / swap. Distill has 3 seeds on Object and 2 on Spatial. \pending{$^\dagger$: 2 seeds, third running.}}
+\label{tab:main}
+\end{table*}
+
+\Cref{tab:main} shows the outcome on the two suites where the swap failure is largest.
+\ours raises Object swap from 18.7 to 54.5 and Object position from 12.2 to 38.2, and Spatial swap from 40.0 to 65.0,
+keeping nominal success at 97--99.
+Under the same teacher and budget, \ect gains 5.1 and 10.8 points on the swap cells, \ours 35.8 and 25.0;
+the difference to \ect is 30.8 points on Object swap, 21.7 on Object position and 14.3 on Spatial swap.
+\pt does not move any cell.
+The cost is on the \emph{object} cell of LIBERO-Object, where recolored or re-textured objects drop from 92.5 to 81.8;
+we analyze this trade-off in \cref{sec:exp:limits}.
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lcccc}
+\toprule
+Counterfactual (LIBERO-Object) & seeds & swap & position & nominal \\
+\midrule
+none (Distill) & 3 & 18.7 & 12.2 & 99.3 \\
+\multicolumn{5}{l}{\emph{whole scene transformed}} \\
+\quad mirror (equivariant label) & 2 & 20.8 & 12.8 & 98.0 \\
+\quad rotation about the robot & 3 & 29.2 & 16.2 & 99.2 \\
+\multicolumn{5}{l}{\emph{hand--target geometry preserved}} \\
+\quad hand and target co-shifted & 3 & 24.3 & 20.7 & 98.7 \\
+\multicolumn{5}{l}{\emph{decision changed, privileged label}} \\
+\quad retarget (before grasp) & 3 & 53.0 & 20.5 & 99.0 \\
+\quad relocate (while carrying) & 2 & 22.5 & 32.8 & 98.8 \\
+\quad retarget + relocate & 3 & 56.3 & 23.7 & 96.8 \\
+\quad retarget/co-shift + relocate & 1 & 53.0 & 39.0 & 96.0 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Which counterfactual helps.} Only counterfactuals that change what the policy must do at a decision state,
+labeled by the privileged teacher, raise the cells: retargeting fixes \emph{which} object (swap), relocating fixes
+\emph{where} it goes (position). Without validity checks or recoloring.}
+\label{tab:kinds}
+\end{table}
+
+\paragraph{Which counterfactual matters.}
+\Cref{tab:kinds} varies the counterfactual and keeps everything else fixed.
+Transforming the whole scene, by mirroring with the equivariantly mapped action or by rotating the world about the robot,
+changes little, consistent with the per-suite ablations of \ect itself~\cite{chen2026ect}.
+Co-shifting hand and target, which preserves the geometry the memorized action relies on, does not help either.
+What helps is a counterfactual that changes the decision: moving the target before the grasp fixes the choice of object
+(swap 53.0) but not the placement, and moving the container while carrying fixes the placement (position 32.8) but not the
+choice; combining them fixes both.
+The label matters as much as the world: on Spatial, labeling the relocated world with \pizf's own chunk instead of the
+privileged placer gives swap 40.0 (= Distill), against 64.7 with the placer (3 seeds), because \pizf, as
+\cref{sec:probing} shows, does not act on the relocation it sees.
+
+\subsection{What changes inside the policy}
+\label{sec:exp:mech}
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{llcccc}
+\toprule
+& Probe (LIBERO-Object) & \pizf & \pt & \ect & \ours \\
+\midrule
+\multirow{5}{*}{\rotatebox{90}{use}} & early, target moved & .13--.22 & .12--.21 & .14--.23 & .20--.30 \\
+& mid, moved 20\,cm & .31 & .32 & .37 & \textbf{.67} \\
+& mid, swap & .03 & .03 & .07 & \textbf{.53} \\
+& mid, target renamed & .02 & .02 & .01 & \textbf{.54} \\
+& carrying, cont.\ $\geq$12\,cm & .06 & .06 & .11 & \textbf{.44--.69} \\
+\midrule
+\multirow{3}{*}{\rotatebox{90}{enc.}} & target moved $\geq$12\,cm & .58 & -- & .62 & .65 \\
+& swap & .55 & -- & .56 & .70 \\
+& container moved $\geq$12\,cm & .80 & -- & .86 & .85 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Use and encoding after training} (seed 7; \ours: the configuration of the last row of \cref{tab:kinds}).
+Use: median follow of the action (\cref{sec:probing}); ranges span displacement sizes. Encoding: in-state probe $R^2$ of
+the action tokens, late expert layers. Every model encodes the change; only \ours acts on it.}
+\label{tab:mech}
+\end{table}
+
+\Cref{tab:mech} applies the probes of \cref{sec:probing} to the trained policies.
+The encoding is nearly the same in the three models.
+What differs is use: \ect leaves it at the level of \pizf, while \ours makes the action follow a swap (0.03 $\to$ 0.53), a
+renamed target (0.02 $\to$ 0.54) and a moved container (0.06 $\to$ 0.44--0.69).
+Counterfactual supervision thus does not teach the policy to see; it teaches it to act on what it sees.
+One blind spot is shared by all three models: early in the approach, the action follows a moved target by only 0.13--0.30.
+
+\paragraph{Explicit geometry is ignored.}
+\pt is the most direct test of whether information is missing: the policy receives the exact displacement to the
+sub-goal, including after a swap.
+Its use is identical to that of \pizf (\cref{tab:mech}).
+The injected branch converges to a near-constant offset: its output has a norm of about 1.6 but changes by only 0.05--0.08
+when the displacement changes by 10\,cm.
+On fixed layouts the goal point always coincides with the memorized trajectory, so nothing forces the policy to read it.
+Adding the counterfactual data of \ours to \pt (with a 10$\times$ smaller learning rate for the branch, which otherwise
+destabilizes training) gives Object swap 43.0 and position 41.5, no better than \ours alone, and the branch is still
+ignored ($\lVert f(\mathbf{d}) - f(\mathbf{0}) \rVert$ 0.03--0.12 for 10--30\,cm against $\lVert f(\mathbf{0})\rVert$ 1.08):
+under pressure to use the target's position, the policy solves the task through its VLM rather than through the new
+channel.
+
+\subsection{Where the change lives}
+\label{sec:exp:local}
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrcccc}
+\toprule
+Trainable part & params & swap & pos. & nominal & object \\
+\midrule
+none (Distill) & -- & 18.7 & 12.2 & 99.3 & 92.5 \\
+expert readout & 34K & 23.5 & 20.5 & 100 & 92.5 \\
+expert, last 6 layers & 4.7M & 34.5 & 30.5 & 82.5 & 80.5 \\
+action expert (2 seeds) & 13.9M & 32.0 & 29.8 & 94.3 & 87.5 \\
+VLM keys and values & 2.7M & 20.0 & 9.5 & 72.0 & 63.5 \\
+VLM layers 9--17 & 19.6M & 41.0 & 28.5 & 92.0 & 76.5 \\
+VLM (3 seeds) & 39.2M & \textbf{49.3} & 29.8 & 96.0 & 68.7 \\
+all & & 53.0 & 39.0 & 96.0 & 80.0 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Localization.} LIBERO-Object, the counterfactual data of the last row of \cref{tab:kinds}, only the
+listed LoRA adapters trained. Adapting the VLM with the action expert frozen gives 89\% of the swap gain.}
+\label{tab:local}
+\end{table}
+
+With the counterfactual data fixed, we restrict which LoRA adapters may change (\cref{tab:local}).
+The readout of the action expert, the natural place for a decoding bottleneck, gains almost nothing.
+Forcing the change into the last layers of the action expert gains part of the swap cell but breaks nominal behavior
+(82.5).
+The full action expert recovers about 40\% of the swap gain and two thirds of the position gain.
+Adapting only the VLM, with the action expert frozen, recovers 89\% of the swap gain at nominal 96, replicated over three
+seeds (50.0, 44.0, 54.0); most of it comes from layers 9--17 (41.0).
+Yet the change is not a re-presentation of what the action expert reads: adapting only the keys and values of the VLM, the
+exact interface the expert attends to, gives nothing and damages every cell.
+The fix requires the VLM to \emph{process} the scene differently in its mid-to-late layers: deciding which object to go
+to is computed in the VLM, and \pizf learned to compute it from the instruction alone.
+Placement (position) needs both halves.
+The appearance trade-off also originates in the VLM: adapting only the VLM yields the lowest \emph{object} cell (68.7),
+the action expert the highest (87.5).
+
+\subsection{Costs, other suites, and an evaluation detail}
+\label{sec:exp:limits}
+
+\paragraph{Appearance.}
+A policy that ignores the scene is robust to recoloring for free; a policy that looks at it can start to identify objects
+by color.
+In the VLM-only configuration, the validity checks of \cref{sec:method} raise the \emph{object} cell from 69 to 83.5;
+recoloring objects during the rollouts adds only 1.5 points to it and costs 9 points of swap (48.5 $\to$ 39.5), so its
+benefit is doubtful. \pending{The main model uses recoloring at probability 0.5; \ect with the same recoloring, and the main
+model without it, are running.} With the oracle point of \pt added, the \emph{object} cell returns to 92.5, since the point identifies the
+target regardless of its color; a non-privileged grounding source would be needed to claim this.
+
+\paragraph{LIBERO-Goal and LIBERO-Long.}
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccc}
+\toprule
+& \multicolumn{2}{c}{Goal} & \multicolumn{2}{c}{Long} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Method (seed 7) & nominal & swap & nominal & swap \\
+\midrule
+Distill & 97.5 & 29.0 & 95.0 & 8.5 \\
+\ect & 96.5 & 24.5 & 84.0 & 14.0 \\
+\ours & 89.5--94.0 & 28.5--31.0 & 84.0--87.0 & 11.0--17.0 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Multi-step suites.} Ranges over the \ours configurations we tried. \pending{Re-evaluation with fixed
+furniture placement running.}}
+\label{tab:goal_long}
+\end{table}
+On the multi-step suites (\cref{tab:goal_long}) neither method improves swap much, and both lose nominal success on Long.
+Per-task analysis traced the Goal drop to the two drawer tasks, and, within them, to two causes.
+First, \pizf opens the top drawer by pushing its handle without closing the gripper, so a gripper-based phase rule took the
+drawer phase for the approach to the bowl; segmenting phases by when the rest of the scene stops changing removes these
+pairs, but does not remove the drop.
+Second, LIBERO \emph{re-draws the furniture placement at every reset}: the cabinet moves by up to 2\,cm in $x$ and 1.4\,cm in
+$y$, and the benchmark's initial states, which store joint positions only, do not fix it.
+Pinning the cabinet at controlled offsets shows that \ours, unlike \pizf and Distill, is sensitive to it on the
+top-drawer task (\cref{tab:furniture}): having learned to act on where movable objects are, it lost part of \pizf's ability
+to follow the furniture.
+\pending{Counterfactuals that nudge the furniture and keep the teacher's own response there, which \pizf handles reliably
+within this range, are running.}
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccc}
+\toprule
+Cabinet offset & \pizf & Distill & \ect & \ours \\
+\midrule
+none & 90 & 95 & 90 & 80 \\
+$-1$\,cm in $x$ & 95 & 95 & 80 & 65 \\
+$-2$\,cm in $x$ & 85 & 90 & 85 & 60 \\
+$(-2, -1.4)$\,cm & 95 & 90 & 85 & 55 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Furniture sensitivity}, Goal task ``open the top drawer and put the bowl inside'' (20 trials, furniture
+pinned at the placement of a fresh environment plus the offset; offsets within the range LIBERO itself draws).}
+\label{tab:furniture}
+\end{table}
+
+\paragraph{Evaluation protocol.}
+The re-drawn furniture has a second consequence.
+The standard LIBERO loop runs the trials of a task sequentially in one seeded environment, so trial $k$ sees the furniture
+of the $k$-th draw, while evaluation scripts that spread trials over parallel workers give the same trial a different
+placement depending on scheduling.
+With one adapter, the drawer task of LIBERO-Goal scores 70\% when its 20 trials run sequentially and 95\% when they run in
+freshly built environments, failing on exactly the same trials in repeated sequential runs.
+All numbers in this paper use the same scheduler for every method; for strict comparability we seed the environment per
+(task, trial) before each reset, which fixes the furniture of every trial independently of scheduling, and recommend
+reporting it.
+LIBERO-Object has no furniture and is unaffected.

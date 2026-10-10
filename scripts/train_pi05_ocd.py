@@ -543,6 +543,12 @@ def main():
             kind_all = cat("cf_kind").astype(int)
             print("[full] pairs by kind (retarget, coshift, relocate, furniture):",
                   [int((cf_ok & (kind_all == k)).sum()) for k in range(4)], flush=True)
+            if args.dump_segments and it == 1:  # a few kept pairs of each kind, factual and counterfactual frames (figures)
+                ex = np.concatenate([rng.permutation(np.flatnonzero(cf_ok & (kind_all == k)))[:6] for k in range(4)]).astype(int)
+                np.savez_compressed(os.path.join(args.out, "pair_examples.npz"), kind=kind_all[ex],
+                                    tid=np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])[ex],
+                                    rgb=A["rgb"][ex], rgb_cf=A["rgb_cf"][ex], wrist=A["wrist_rgb"][ex], wrist_cf=A["wrist_rgb_cf"][ex],
+                                    desc=np.array([descs_all[k] for k in ex]), desc_cf=np.array([descs_cf[k] for k in ex]))
         keep = np.sort(rng.choice(n_all, size=min(args.states_per_iter, n_all), replace=False))
         t_collect = time.time() - t0
 

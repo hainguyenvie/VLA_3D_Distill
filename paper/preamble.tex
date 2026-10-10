@@ -85,3 +85,12 @@
 \newcommand{\ect}{ECT\xspace}
 \newcommand{\pt}{\textsc{3D-Point}\xspace}
 \newcommand{\pending}[1]{\textcolor{orange}{#1}}  % numbers still running; remove before submission
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usepgfplotslibrary{groupplots}
+% categorical slots (validated: lightness, chroma, CVD and normal-vision separation; slot 3 below 3:1 contrast,
+% so its bars carry direct value labels)
+\definecolor{seriesA}{HTML}{2A78D6}  % pi0.5
+\definecolor{seriesB}{HTML}{EB6834}  % ECT
+\definecolor{seriesC}{HTML}{1BAF7A}  % DCS (ours)
+\definecolor{inkMuted}{HTML}{52514E}

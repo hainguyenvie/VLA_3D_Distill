@@ -1,0 +1,51 @@
+\begin{strip}
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[
+    group style={group size=2 by 1, horizontal sep=1.6cm},
+    ybar, /pgf/bar width=6pt, ymin=0, ymax=1.0, height=4.0cm,
+    axis lines*=left, axis line style={inkMuted},
+    tick style={inkMuted}, ticklabel style={font=\footnotesize, text=inkMuted},
+    ymajorgrids, grid style={black!10},
+    enlarge x limits=0.18,
+    xtick=data, x tick label style={font=\footnotesize, align=center, text=black},
+    every node near coord/.append style={font=\scriptsize, text=black},
+    nodes near coords style={/pgf/number format/.cd, fixed, precision=2, zerofill},
+    x tick label style={font=\scriptsize, align=center, text=black},
+    title style={font=\small, yshift=-1ex},
+  ]
+  \nextgroupplot[
+    width=0.58\textwidth,
+    title={\textbf{Use:} does the action follow the change? (follow, 1 = fully)},
+    symbolic x coords={swap,rename,moved,container},
+    xticklabels={{target swapped\\(mid-approach)},{target renamed\\(mid-approach)},{target moved 20\,cm\\(mid-approach)},{container moved\\20\,cm (carrying)}},
+    legend style={at={(0.02,0.97)}, anchor=north west, legend columns=3, draw=none, fill=none, font=\footnotesize,
+                  /tikz/every even column/.append style={column sep=8pt}},
+    legend image code/.code={\draw[#1, draw=none] (0cm,-0.08cm) rectangle (0.25cm,0.12cm);},
+  ]
+  \addplot[fill=seriesA, draw=white, line width=0.8pt] coordinates {(swap,0.03) (rename,0.02) (moved,0.31) (container,0.06)};
+  \addplot[fill=seriesB, draw=white, line width=0.8pt] coordinates {(swap,0.07) (rename,0.01) (moved,0.37) (container,0.11)};
+  \addplot[fill=seriesC, draw=white, line width=0.8pt, nodes near coords, nodes near coords align={vertical}]
+    coordinates {(swap,0.53) (rename,0.54) (moved,0.67) (container,0.69)};
+  \legend{{$\pi_{0.5}$ (\textsc{3D-Point} identical)},{ECT},{DCS (ours)}}
+  \nextgroupplot[
+    width=0.40\textwidth,
+    title={\textbf{Encoding:} is the change decodable? (in-state $R^2$)},
+    symbolic x coords={swap,target,container},
+    xticklabels={{target\\swapped},{target moved\\$\geq$12\,cm},{container moved\\$\geq$12\,cm}},
+  ]
+  \addplot[fill=seriesA, draw=white, line width=0.8pt] coordinates {(swap,0.55) (target,0.58) (container,0.80)};
+  \addplot[fill=seriesB, draw=white, line width=0.8pt] coordinates {(swap,0.56) (target,0.62) (container,0.86)};
+  \addplot[fill=seriesC, draw=white, line width=0.8pt, nodes near coords, nodes near coords align={vertical}]
+    coordinates {(swap,0.70) (target,0.65) (container,0.85)};
+\end{groupplot}
+\end{tikzpicture}
+\captionsetup{hypcap=false}
+\captionof{figure}{\textbf{\pizf knows where, but does not go there.} Probes at decision states of LIBERO-Object
+rollouts (\cref{sec:probing}). \emph{Right:} the displacement of the target or the container is decodable from the action
+tokens of every model. \emph{Left:} at the moments that decide the task, the action of \pizf barely follows it; neither
+equivariant counterfactual training (\ect) nor an injected oracle 3D goal point (\pt, identical to \pizf) changes that.
+Decision-time counterfactual supervision (\ours) does, without changing the encoding.}
+\captionsetup{hypcap=true}
+\label{fig:teaser}
+\end{strip}

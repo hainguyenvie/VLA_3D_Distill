@@ -2,16 +2,91 @@
 \setcounter{page}{1}
 \maketitlesupplementary
 
+\section{Implementation details}
+\label{sec:supp:impl}
 
-\section{Rationale}
-\label{sec:rationale}
-% 
-Having the supplementary compiled together with the main paper means that:
-% 
-\begin{itemize}
-\item The supplementary can back-reference sections of the main paper, for example, we can refer to \cref{sec:intro};
-\item The main paper can forward reference sub-sections within the supplementary explicitly (e.g. referring to a particular experiment); 
-\item When submitted to arXiv, the supplementary will already included at the end of the paper.
-\end{itemize}
-% 
-To split the supplementary pages from the main paper, you can use \href{https://support.apple.com/en-ca/guide/preview/prvw11793/mac#:~:text=Delete%20a%20page%20from%20a,or%20choose%20Edit%20%3E%20Delete).}{Preview (on macOS)}, \href{https://www.adobe.com/acrobat/how-to/delete-pages-from-pdf.html#:~:text=Choose%20%E2%80%9CTools%E2%80%9D%20%3E%20%E2%80%9COrganize,or%20pages%20from%20the%20file.}{Adobe Acrobat} (on all OSs), as well as \href{https://superuser.com/questions/517986/is-it-possible-to-delete-some-pages-of-a-pdf-document}{command line tools}.
+\paragraph{Policy and training.}
+LeRobot port of the \pizf LIBERO checkpoint; LoRA rank 32, $\alpha=16$, no dropout, on all linear layers of the VLM
+language model and of the action expert (vision encoder frozen). Adam, learning rate $5\cdot10^{-5}$ with cosine decay to
+$5\cdot10^{-6}$, batch 8, gradient clipping. Each iteration collects rollouts of the student (20 episodes per batch, 8
+parallel environments) until at least 1024 queried states are available, samples 1024 of them, and runs one epoch (128
+steps). 20 iterations, i.e.\ 2560 optimizer steps. Every 4 iterations the adapter is evaluated on 10 trials per task (used
+only for monitoring). Rendering at $256\times256$ for both cameras.
+
+\paragraph{Scripted teachers.}
+The \emph{approach} teacher moves the hand to a pre-grasp pose above the target (height from the target's bounding box)
+with the controller's maximal translation and the gripper open; its chunk is valid for the steps it takes to get there.
+The \emph{placer} lifts the held object to a safe height above the container's rim, moves above the container's opening (or
+the site of a furniture region), descends and releases; its chunk is valid until 5 steps after the release. Both act in the
+same action space as \pizf (end-effector deltas, gripper command) and are rolled out in a kinematic model to produce 50-step
+chunks.
+
+\paragraph{Placing counterfactual objects.}
+A moved target is placed at 8--30\,cm from its position (or on the spot of another movable object, which takes the
+target's spot, with probability 0.5), inside the area the objects occupy, without overlapping any other object's bounding
+circle. A relocated container is moved by 15--40\,cm, may leave the object area by up to 15\,cm, and carries the objects
+lying in it. Furniture regions (top of a cabinet, a stove burner, a rack) are moved with their whole fixture, for rendering
+only.
+
+\paragraph{Validity checks.}
+Uniqueness uses the class name of every object and fixture. Agreement compares the sum of the first 25 translation commands
+of the scripted teacher in the factual world with that of the \pizf teacher (cosine $\geq 0.5$; pairs where both barely
+move are kept). An \emph{execution gate} that kept relocate pairs only on tasks whose placer succeeds in closed loop in at
+least 60\% of 20 trials was used in earlier versions; it removed the tasks with the largest gains (\eg Spatial swap 55.0
+with the gate, 65.5 without) and is not used.
+
+\paragraph{Compute.}
+One run (one suite, 20 iterations) takes 5--7 hours on one H200 GPU, of which about half is simulation and rendering.
+
+\section{Re-implemented baselines}
+\label{sec:supp:baselines}
+
+\paragraph{\ect.}
+Following~\cite{chen2026ect}, a transformed scene reflects the free objects and the furniture standing on the table (in $x$
+about the objects' centre, in $y$ about the robot base) and/or shifts them, while the robot and its start pose are
+unchanged. Furniture is reflected so that it keeps facing the work area. The end-effector path of a successful episode is
+mapped by the same transform and tracked by a controller that applies the transformed commands as feed-forward and
+corrects half of the tracking error at every step; rotation commands are mapped as pseudo-vectors and the gripper command
+is copied. Untransformed replays succeed in 90--100\% of the episodes with this controller. Only successful replays are
+kept, and each is paired with the queries of its source episode. Transforms per suite follow the paper's choices; the
+sizes of the shifts, not given there, are ours ($-$8\,cm in $x$; $(-6, 6)$\,cm with the double mirror).
+
+\paragraph{\pt.}
+Following~\cite{tsai2026point}: $\mathbf{d}=\mathbf{p}_{\text{goal}}-\mathbf{p}_{\text{hand}}$ in the robot frame, where
+the goal is the target until it is lifted by 1\,cm, then the region named by the task's BDDL goal (\texttt{on}/\texttt{in});
+an MLP $3\to1024\to1024$ with a zero-initialized last layer maps $\mathbf{d}$ to a vector added to the flow-time
+conditioning of every action-expert layer, at every step. $\mathbf{d}$ comes from the simulator at training and test time.
+The branch is trained with the LoRA learning rate; a 10$\times$ larger rate made Object training collapse.
+
+\section{Additional results}
+\label{sec:supp:results}
+
+\paragraph{Label failures found by per-task analysis.}
+Per-task breakdowns of every cell located the remaining failures of the scripted labels, all of which we fixed with
+task-agnostic rules: (i) instructions that identify an object by its position (``the black bowl next to the plate''),
+fixed by the uniqueness check; (ii) tasks that begin with another step, \eg opening a drawer before placing a bowl, fixed by
+the agreement check and by starting pre-grasp pairs only once the rest of the scene stops changing (\pizf pushes the drawer
+open without closing its gripper, so gripper events do not mark the step); (iii) tasks with two objects to carry, where
+swapping the target with the second object labels ``go elsewhere'' while a valid object is under the hand, fixed by never
+swapping with another object the task carries. \pending{Results of the configuration with (ii) and (iii) on Goal and Long
+are running.}
+
+\paragraph{LIBERO-Plus.}
+On the robot-initial-state and layout categories of LIBERO-Plus~\cite{fei2025liberoplus} (60 episodes each, LIBERO-Object),
+\ours scores 88 / 77 and 83 / 80 (layout / robot, seeds 7 and 8), \ect 83 / 78 and 87 / 77, Distill 85 / 83, 83 / 83 and
+80 / 83: these categories are not affected.
+
+\section{Furniture placement in LIBERO}
+\label{sec:supp:furniture}
+
+LIBERO builds each scene from a BDDL file whose placement initializer samples the pose of every object and fixture at
+reset. The benchmark's initial states then overwrite the joint positions, which hold the free objects and the robot, but
+not the poses of fixtures attached to the world (cabinets, stoves, racks), which live in the model. Consecutive resets of one
+environment therefore place the furniture differently: over 20 resets of LIBERO-Goal, the cabinet moves within 1.9\,cm in
+$x$ and 1.4\,cm in $y$, the stove and the rack within 1.5--1.9\,cm. A freshly built environment, seeded as in the official
+evaluation, always uses the first draw. Simulation state, controller state and the robot's trajectory under identical
+commands are bit-identical between a reused and a fresh environment; only the images differ. Because the official loop
+evaluates the trials of a task sequentially in one environment, trial $k$ is tied to the $k$-th draw; parallel evaluation
+with workers that take over trials breaks this tie. Seeding the environment's random stream with $1000\cdot\text{task} +
+\text{trial}$ before each reset makes the placement a function of the trial alone; we verified that permuting the order of
+trials leaves every placement unchanged. LIBERO-Object scenes have no furniture.

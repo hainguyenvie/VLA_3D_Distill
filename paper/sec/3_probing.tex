@@ -1,0 +1,78 @@
+\section{Does \pizf See the Displacement, and Does It Use It?}
+\label{sec:probing}
+
+\paragraph{Model.}
+\pizf~\cite{pi2025pi05} couples a PaliGemma VLM~\cite{beyer2024paligemma} (18 layers, width 2048) with an action expert
+(18 layers, width 1024) that produces a 50-step action chunk by flow matching~\cite{lipman2023flow}.
+At every layer the action tokens attend to the VLM's prefix: 512 image tokens from an agent-view and a wrist camera, the
+instruction, and the proprioceptive state, which the LIBERO checkpoint writes into the prompt as about 120 digit tokens.
+The time step of the flow conditions the expert through adaptive RMS normalization.
+We use the public LIBERO checkpoint in its LeRobot port; on LIBERO-PRO it matches the numbers reported for the official
+model (swap: Object 18.7 \vs 18.2, Long 8.5 \vs 9.4~\cite{chen2026ect}).
+
+\paragraph{Decision-time interventions.}
+We take states $s_t$ from successful rollouts of the policy and build a counterfactual state $s'_t$ that differs in one
+respect, by editing the simulator's kinematic state and re-rendering both cameras: (i) before the grasp, the target is
+moved by 3, 6, 12 or 20\,cm to a free spot, or (ii) it swaps places with another object; (iii) while the object is
+carried, the container is moved by the same amounts; (iv) before the grasp, the instruction names another object of the
+scene; (v) only the proprioceptive input is offset by 5\,cm.
+Nothing else changes, the robot included.
+States are binned by phase: \emph{early} (hand farther than 15\,cm from the target), \emph{mid} (5--15\,cm), \emph{near}
+(closer than 5\,cm) and \emph{carrying}.
+
+\paragraph{Use.}
+With the flow noise held fixed, we roll the first 25 steps of each predicted chunk through a kinematic model of the
+controller to obtain the hand's intended displacement $m(s)$, and define
+\begin{equation}
+\mathrm{use} = \frac{\langle m(s'_t) - m(s_t),\, \mathbf{d} \rangle}{\lVert \mathbf{d} \rVert^2},
+\end{equation}
+where $\mathbf{d}$ is the displacement of what moved (for (iv), from the target to the newly named object).
+A value of 1 means the motion follows the change fully, 0 that it ignores it.
+
+\paragraph{Encoding.}
+For every layer we pool the hidden states of four streams (image tokens, instruction tokens, the last prefix token and the
+action tokens) and regress the \emph{within-state} difference $h(s'_t) - h(s_t)$ on $\mathbf{d}$ with ridge regression,
+reporting cross-validated $R^2$ with folds grouped by episode.
+Differencing the same state removes everything that varies across states (where the hand is, the time in the episode),
+so the probe only asks whether the stream registers where the object was moved to.
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccccc}
+\toprule
+Phase & 3\,cm & 20\,cm & swap & rename & proprio \\
+\midrule
+early ($>$15\,cm) & 0.18 & 0.22 & 0.22 & 0.25 & 0.00 \\
+mid (5--15\,cm) & 0.61 & 0.31 & \textbf{0.03} & \textbf{0.02} & 0.00 \\
+near ($<$5\,cm) & 0.51 & 0.29 & 0.01 & $-$0.02 & 0.00 \\
+carrying & \textbf{0.09} & \textbf{0.06} & -- & -- & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Use of a displacement by \pizf}, LIBERO-Object (median over states). Columns: target moved by 3 or
+20\,cm (container while carrying), target swapped with another object, target renamed in the instruction, proprioception
+offset by 5\,cm. At the decision moments (bold) the action barely follows the change.}
+\label{tab:use_base}
+\end{table}
+
+\paragraph{Findings.}
+\Cref{tab:use_base} reads as follows.
+\emph{(1) At the decision moments the policy is nearly blind.}
+Early in the approach the action follows a moved target by about 20\%; mid-way it ignores a swap (0.03) or a renamed
+target (0.02) entirely, and while carrying it follows a moved container by 6--9\%: placing is a memorized motion.
+\emph{(2) Once close, it is a local tracker.}
+Small displacements near the hand are followed (0.51--0.61) more than large ones, but the choice of object is locked.
+\emph{(3) Proprioception is not the shortcut.}
+Offsetting the proprioceptive input has no effect in any phase, and replacing it by a constant at test time (Object swap
+14.0, nominal 100) or during training (Spatial swap 40.5 \vs 40.0) does not change the failure.
+The same pattern holds on LIBERO-Spatial (early 0.21--0.30, swap 0.08--0.14, carrying 0.17--0.30) and LIBERO-Goal.
+
+At the same time, the displacement is \emph{encoded}.
+It is decodable from the image tokens at every layer ($R^2$ 0.7--0.8 for a target moved by 12\,cm or more, about 0.9 for a
+moved container) and is carried into the action tokens over the expert's layers, from about 0.05 in its first layers to
+0.58 (target) and 0.74--0.82 (container) in its last ones.
+The attention of the action tokens is also nearly identical between blind and tracking phases (instruction 0.6--0.8 at a
+few layers, wrist image 0.2--0.3, agent image 0.1--0.3 in early layers), so the failure is not that the action tokens do
+not look at the image.
+\pizf knows where the target and the container are; at the moments that matter, its action does not depend on it.
