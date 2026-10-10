@@ -36,13 +36,13 @@ Method & seeds & nominal & swap & position & object & language & & nominal & swa
 \midrule
 Distill (no counterfactual) & 3 / 2 & 99.3 & 18.7\,{\scriptsize$\pm$2.8} & 12.2\,{\scriptsize$\pm$1.3} & 92.5 & 99.2 & & 97.5 & 40.0\,{\scriptsize$\pm$2.8} & 98.5 & 96.5 \\
 \pt~\cite{tsai2026point} (oracle point) & 1 & 98.5 & 18.5 & 12.5 & 93.0 & 100.0 & & 99.0 & 40.0 & 98.0 & 97.0 \\
-\ect~\cite{chen2026ect} & 3 & 99.0 & 23.2\,{\scriptsize$\pm$1.0} & 17.0\,{\scriptsize$\pm$0.9} & 93.3\pending{$^\dagger$} & 98.5\pending{$^\dagger$} & & 98.5 & 50.2\,{\scriptsize$\pm$1.6} & 98.0\pending{$^\dagger$} & 96.8\pending{$^\dagger$} \\
+\ect~\cite{chen2026ect} & 3 & 99.0 & 23.2\,{\scriptsize$\pm$1.0} & 17.0\,{\scriptsize$\pm$0.9} & 93.3 & 98.7 & & 98.5 & 50.2\,{\scriptsize$\pm$1.6} & 97.5 & 96.3 \\
 \ours (ours) & 3 & 97.3 & \textbf{54.5}\,{\scriptsize$\pm$3.8} & \textbf{38.2}\,{\scriptsize$\pm$5.6} & 83.2 & 97.3 & & 98.8 & \textbf{65.0}\,{\scriptsize$\pm$1.8} & 98.3 & 96.5 \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{LIBERO-PRO success (\%) after per-suite adaptation of \pizf}, mean $\pm$ std over seeds (200 episodes per
 cell and seed). All methods share the teacher, rollouts, budget and optimizer. The untrained \pizf scores 99 / 18.5 on
-Object nominal / swap. Distill has 3 seeds on Object and 2 on Spatial. \pending{$^\dagger$: 2 seeds, third being evaluated.}}
+Object nominal / swap. Distill has 3 seeds on Object and 2 on Spatial.}
 \label{tab:main}
 \end{table*}
 
@@ -89,7 +89,9 @@ changes little, consistent with the per-suite ablations of \ect itself~\cite{che
 A direct test of (P3) evaluates the policies in mirrored LIBERO-Object scenes of the kind \ect trains on: \pizf succeeds in
 11.0\% of the episodes, \ect in 63.5\%. \ect has learned the transformed scenes, which also confirms that our
 re-implementation works, yet its swap success stays at 23.2: it has learned to respond to the transform, not to the position
-of the target. \pending{\ours in mirrored scenes: running.}
+of the target. \ours, which never sees a mirrored scene, succeeds in 56.0\% of them (seed 7; \pending{seed 8 running}):
+learning to use the position of one object transfers to transformed scenes, while learning the transforms does not transfer
+to a single object's move.
 Co-shifting hand and target, which preserves the geometry the memorized action relies on, does not help either.
 What helps is a counterfactual that changes the decision: moving the target before the grasp fixes the choice of object
 (swap 53.0) but not the placement, and moving the container while carrying fixes the placement (position 32.8) but not the
