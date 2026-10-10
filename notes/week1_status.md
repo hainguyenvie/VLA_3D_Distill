@@ -1406,3 +1406,12 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
 - Không đổi màu (s7): Object 98.0 / 48.0 / 40.5 / đổi màu 84.5 / lan 96.5; Spatial 98.5 / **71.5** / 97.0 / 98.0, Plus 100 / 92.
   → đổi màu không cần thiết (Spatial còn tốt hơn khi bỏ); cân nhắc bỏ khi chốt cấu hình cuối (cần thêm seed).
 - Tắt kiểm tra đồng thuận (s7): Object 97.5 / 49.5 / 38.0 / đổi màu 90.5 / lan 98.0.
+- **Độ nhạy (Object s7):** ngưỡng đồng thuận 0 / 0.5 / 0.8 → swap 49.5 / 54.0 / 52.0, position 38.0 / 36.0 / 42.0; tỉ lệ cặp
+  0 / 5 / 15 / 30% → swap 18.7 / 38.0 / 54.0 / 53.5, position 12.2 / 24.0 / 36.0 / 37.5 (bão hoà); ECT dịch chuyển ×0.5 / ×1 /
+  ×1.5 → swap 24.0 / 24.0 / 21.5, position 15.5 / 16.5 / 16.0.
+- **v3 trên Object: swap 36.5** (cấu hình chính 54.0) → quy tắc pha của v3 (hindsight + scene_tol) lọc mất phần lớn cặp
+  retarget ở Object (cảnh chật, tay xô vật khác; lần thử: 12 cặp retarget so với 127 relocate). **v5:** chỉ tính khớp của đồ có
+  khớp (`--joint_tol`, ngăn kéo / núm / cửa; vật bị xô không tính), không hindsight, + no_cotarget_swap + cặp neo đồ cố định;
+  thử 1 vòng: Object giữ đủ cặp trước kẹp (retarget 35), Goal task 3 vẫn loại pha mở ngăn kéo (45 / 85). Đang chạy 4 bộ s7
+  (`pi05_round24.sh`).
+- Đang chạy: seed 8 của v4 và ECT trên Goal / Long.

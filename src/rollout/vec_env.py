@@ -369,9 +369,19 @@ class EnvRunner:
                     idx.append(a)
                     w.append(1.0 if t == 2 else 0.1)
             self._scene_idx, self._scene_w = np.array(idx, dtype=int), np.array(w)
-            self._scene_prev, self._scene_acc = d.qpos[self._scene_idx].copy(), 0.0
+            art = []
+            for j in range(m.njnt):
+                name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or ""
+                if name.startswith(("robot", "gripper", "mount")) or name == skip:
+                    continue
+                t = int(m.jnt_type[j])
+                art += [False] * 3 if t == 0 else ([True] if t in (2, 3) else [])
+            self._scene_art = np.array(art, dtype=bool)  # entries of articulated furniture joints (drawers, knobs, doors)
+            self._scene_prev, self._scene_acc, self._joint_acc = d.qpos[self._scene_idx].copy(), 0.0, 0.0
         q = d.qpos[self._scene_idx]
-        self._scene_acc += float((self._scene_w * np.abs(q - self._scene_prev)).sum())
+        dq = self._scene_w * np.abs(q - self._scene_prev)
+        self._scene_acc += float(dq.sum())
+        self._joint_acc += float(dq[self._scene_art].sum())  # the same, articulated joints only (no object bumped)
         self._scene_prev = q.copy()
         return self._scene_acc
 
@@ -381,6 +391,7 @@ class EnvRunner:
         out = _pack_obs(self.env, obs, self.cfg)
         out["geo_d"] = self._geo_d()
         out["scene_path"] = np.float32(self._scene_path())
+        out["joint_path"] = np.float32(self._joint_acc)
         if self.pert:
             out["rgb_clean"] = out["rgb"]
             out.update(self._stash)
@@ -1482,7 +1493,8 @@ class EnvRunner:
         robot.controller.update(force=True)
         robot.controller.reset_goal()
         self.t, self.done, self.closed = t0, False, gripper_cmd > 0
-        return dict(_pack_obs(self.env, obs, self.cfg), geo_d=self._geo_d(), scene_path=np.float32(self._scene_path()), t=t0, done=False, active=True,
+        return dict(_pack_obs(self.env, obs, self.cfg), geo_d=self._geo_d(), scene_path=np.float32(self._scene_path()),
+                    joint_path=np.float32(self._joint_acc), t=t0, done=False, active=True,
                     closed_before=bool(self.closed))
 
     def step(self, actions) -> Dict[str, Any]:

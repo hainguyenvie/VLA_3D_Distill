@@ -71,6 +71,10 @@ def parse():
     ap.add_argument("--scene_tol", type=float, default=0.0,
                     help="--hindsight: an approach starts only after the last query from which the rest of the scene still "
                          "moves by at least this much (m, 0.1 m per radian) before the target's grasp; 0 = off (rounds <= 21)")
+    ap.add_argument("--joint_tol", type=float, default=0.0,
+                    help="full mode, without --hindsight: pre-grasp pairs (retarget / co-shift) only after the last query from "
+                         "which an articulated fixture (drawer, knob, door) still moves by at least this much before the "
+                         "target's first lift (m, 0.1 m per radian); objects bumped by the hand do not count; 0 = off")
     ap.add_argument("--no_cotarget_swap", action="store_true",
                     help="retarget: the target never swaps places with another object the task carries (multi-object tasks)")
     ap.add_argument("--cf_fixture", type=float, default=0.0,
@@ -532,6 +536,26 @@ def main():
                                     eef=A["eef_pos"].astype(np.float32), geo_d=np.concatenate([np.asarray(r["arrays"].get(
                                         "geo_d", np.zeros((r["n_queries"], 3)))) for r in recs]).astype(np.float32))
             cf_ok &= ~pre | appr
+        if args.joint_tol > 0 and args.cf_mode == "full":  # pre-grasp pairs only after the articulated fixtures settle
+            def joint_segment(r):
+                ar, nq = r["arrays"], r["n_queries"]
+                out = np.ones(nq, dtype=bool)
+                if "joint_path" not in ar:
+                    return out
+                jp = np.asarray(ar["joint_path"], dtype=np.float64)
+                tz = np.asarray(ar.get("target_pos", np.full((nq, 3), np.nan)))[:, 2]
+                lifted = (tz - tz[0] > 0.02) if np.isfinite(tz).all() else np.zeros(nq, dtype=bool)
+                end = int(np.argmax(lifted)) if lifted.any() else nq - 1
+                moving = [q for q in range(end) if jp[end] - jp[q] >= args.joint_tol]
+                if moving:
+                    out[: moving[-1] + 1] = False
+                return out
+            seg = np.concatenate([joint_segment(r) for r in recs])
+            pre_j = np.isin(cat("cf_kind"), (0, 1))
+            tids_j = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
+            print("[joints] task: pre-grasp pairs kept / before", {int(t): f"{int((cf_ok & pre_j & seg & (tids_j == t)).sum())}/"
+                  f"{int((cf_ok & pre_j & (tids_j == t)).sum())}" for t in np.unique(tids_j)}, flush=True)
+            cf_ok &= ~pre_j | seg
         # furniture pairs (kind 3) have their own budget, so that they do not crowd out the pairs the method is about
         fx = (cat("cf_kind").astype(int) == 3) if (args.cf_mode == "full" and not args.no_cf) else np.zeros(n_all, dtype=bool)
         main = cf_ok & ~fx
