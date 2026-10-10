@@ -2,6 +2,52 @@
 \setcounter{page}{1}
 \maketitlesupplementary
 
+\section{Proofs}
+\label{sec:supp:proofs}
+
+\paragraph{Proposition 1.}
+For $(o,\ell)\sim\mathcal{D}$ with $o=R(h,x,z)$ and $x=g(\ell)+\eta$, (A1) gives
+$\pi_\lambda(o,\ell)=A(h,\,g(\ell)+\lambda\eta)$, while the label is $A(h,\,g(\ell)+\eta)$. By the upper bound in (A2),
+$\lVert\pi_\lambda(o,\ell)-A(h,x)\rVert\le L\lVert(1-\lambda)\eta\rVert$; squaring and taking the expectation gives
+$\mathcal{R}_{\mathcal{D}}(\pi_\lambda)\le(1-\lambda)^2L^2\sigma^2$. \hfill$\square$
+
+\paragraph{Corollary 1.}
+Let the observation be $(o,c)$ with $c=c(h,x)$. The policies $\pi_\lambda$ do not read $c$, so their risks are those of
+\cref{prop:unidentified}; in particular $\pi_0$, which uses neither $\hat x(o)$ nor $c$, has risk at most $L^2\sigma^2$.
+The same bound holds for $\pi'_\lambda=A(\hat h, g(\ell)+\lambda(\hat x_c-g(\ell)))$ that reads the position from $c$
+instead of $o$. \hfill$\square$
+
+\paragraph{Proposition 2.}
+On $\mathcal{D}$, $\pi_1(o,\ell)=A(h,x)$ by (A1), so its risk is zero; on $\mathcal{D}_{\text{cf}}$ the observation is
+$o'=R(h,x+\Delta,z)$, so $\pi_1(o',\ell)=A(h,x+\Delta)$, the label. For $\pi_\lambda$ on $\mathcal{D}_{\text{cf}}$,
+$\pi_\lambda(o',\ell)=A(h,\,g+\lambda(\eta+\Delta))$ and the label is $A(h,\,g+\eta+\Delta)$; the lower bound in (A2)
+gives an error of at least $m(1-\lambda)\lVert\eta+\Delta\rVert$. Since $\Delta$ is independent of $\eta$ with
+$\mathbb{E}\Delta=0$, $\mathbb{E}\lVert\eta+\Delta\rVert^2=\sigma^2+\mathbb{E}\lVert\Delta\rVert^2$, and
+$\mathcal{R}_{\mathcal{D}_\rho}(\pi_\lambda)\ge\rho\,\mathcal{R}_{\mathcal{D}_{\text{cf}}}(\pi_\lambda)\ge\rho\,m^2(1-\lambda)^2
+(\sigma^2+\mathbb{E}\lVert\Delta\rVert^2)$. \hfill$\square$
+
+\paragraph{Remarks (i)--(iii).}
+(i) If $\mathcal{D}_{\text{cf}}$ is labeled by $\pi_0$, then $\mathcal{R}_{\mathcal{D}_{\text{cf}}}(\pi_0)=0$ and
+$\mathcal{R}_{\mathcal{D}_\rho}(\pi_0)\le(1-\rho)L^2\sigma^2$: the memorizing policy remains a near-minimizer.
+(ii) Let the counterfactual apply a map $T$ to the whole scene, $x'=Tx$, $z'=Tz$, with the robot fixed and label
+$A(h,Tx)$, and assume $T$ is recognizable from $z'$ (\eg the mirrored furniture). The policy
+$\pi_T(o,\ell)=A(\hat h,\,\hat T(o)\,g(\ell))$, with $\hat T(o)$ the transform read off $z$ (the identity on unmodified
+scenes), has error at most $L\lVert T\eta\rVert$ on $\mathcal{D}_{\text{cf}}$ and $L\lVert\eta\rVert$ on $\mathcal{D}$, so
+it fits the mixture to within $O(L^2\sigma^2)$ without reading $x$; when only $x$ moves, $\hat T=\mathrm{id}$ and
+$\pi_T=\pi_0$. (iii) The bound of \cref{prop:identified} involves only the states and displacements in the support of
+$\mathcal{D}_{\text{cf}}$; outside it, the argument of \cref{prop:unidentified} applies unchanged.
+
+\paragraph{Scope of the assumptions.}
+(A1) idealizes what the probes measure (decodable, not perfectly decoded, positions). With a noisy decoder
+$\hat x=x+\nu$, independent zero-mean $\nu$ and a linear $A$, the risk of $\pi_\lambda$ becomes
+$L^2[(1-\lambda)^2 s^2+\lambda^2\mathbb{E}\lVert\nu\rVert^2]$ with $s^2=\sigma^2$ on $\mathcal{D}$ and
+$s^2=\sigma^2+\rho\,\mathbb{E}\lVert\Delta\rVert^2$ on $\mathcal{D}_\rho$, minimized at
+$\lambda^\star=s^2/(s^2+\mathbb{E}\lVert\nu\rVert^2)$: the classical shrinkage of a noisy cue toward a prior. Under a
+fixed layout ($s^2=\sigma^2$ small) noise in the read-out position pushes the optimal use toward 0; counterfactual mass
+raises it toward 1.
+(A2) needs to hold only on the range of displacements considered, where the scripted approach and placement directions
+change monotonically with the target or container position.
+
 \section{Implementation details}
 \label{sec:supp:impl}
 

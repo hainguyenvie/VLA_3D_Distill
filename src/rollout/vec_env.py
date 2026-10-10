@@ -1246,6 +1246,10 @@ class EnvRunner:
             self.env.set_init_state(init_state)
             if self.cfg.get("fixture_pin"):  # diagnostic: the furniture where a fresh env puts it, plus an offset
                 self._pin_fixtures(robo)
+            if self.cfg.get("scene_transform"):  # evaluation in an ECT-transformed scene (robot and start pose unchanged)
+                self._ect_transform(robo, ECT_TRANSFORMS[self.cfg["scene_transform"]])
+                robo.robots[0].controller.update(force=True)
+                robo.robots[0].controller.reset_goal()
             if self.cfg.get("obj_tint"):  # training: random colours on the movable objects (appearance variation)
                 self._tint_objects(robo, float(self.cfg["obj_tint"]))
             if self.cfg.get("displace_distractor"):  # diagnostic: one non-target object starts somewhere unusual
@@ -1538,7 +1542,8 @@ class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
                  depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None,
                  counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0, displace_distractor: float = 0.0,
-                 obj_tint: float = 0.0, fixture_pin: bool = False, fixture_offset=None, fixture_seed: bool = False):
+                 obj_tint: float = 0.0, fixture_pin: bool = False, fixture_offset=None, fixture_seed: bool = False,
+                 scene_transform: str = ""):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
@@ -1548,7 +1553,8 @@ class LiberoVecEnv:
                         displace_distractor=displace_distractor,  # diagnostic: one non-target object moved this far
                         obj_tint=obj_tint,  # training: probability that a movable object is recoloured in an episode
                         fixture_pin=fixture_pin, fixture_offset=fixture_offset,  # diagnostic: EnvRunner._pin_fixtures
-                        fixture_seed=fixture_seed)  # evaluation: furniture placement fixed per (task, trial), see _worker
+                        fixture_seed=fixture_seed,  # evaluation: furniture placement fixed per (task, trial), see _worker
+                        scene_transform=scene_transform)  # evaluation: an ECT_TRANSFORMS name applied at every reset
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs

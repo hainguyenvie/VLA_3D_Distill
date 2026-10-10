@@ -1,0 +1,86 @@
+\section{Why Fixed Layouts Leave Use Unidentified}
+\label{sec:theory}
+
+The gap between encoding and use is not an accident of \pizf.
+We show that it is what the training risk permits when layouts are fixed, and derive what a remedy must satisfy.
+
+\paragraph{Setup.}
+Write the scene state as $s=(h,x,z)$: the robot state $h$, the position $x$ of the object that decides the next motion
+(the target before the grasp, the container while carrying), and the rest of the scene $z$.
+The policy sees an observation $o=R(s)$ and the instruction $\ell$; the correct action is $A(h,x)$.
+We assume (A1) the scene is \emph{encoded}: there are maps $\hat h,\hat x$ with $\hat h(R(s))=h$ and $\hat x(R(s))=x$, as
+our probes indicate; and (A2) the action depends on $x$ regularly: $m\lVert x-x'\rVert\le\lVert A(h,x)-A(h,x')\rVert\le
+L\lVert x-x'\rVert$ for some $0<m\le L$.
+A training distribution $\mathcal{D}$ has a \emph{fixed layout with spread} $\sigma$ if $x=g(\ell)+\eta$ with
+$\mathbb{E}\lVert\eta\rVert^2=\sigma^2$: the instruction determines where the object is, up to $\eta$.
+In LIBERO, the target moves by 0--0.6\,cm across the initial states of a LIBERO-Object task and by about 1\,cm in
+LIBERO-Spatial and LIBERO-Goal.
+Consider the policies
+\begin{equation}
+\pi_\lambda(o,\ell)=A\big(\hat h(o),\, g(\ell)+\lambda\,(\hat x(o)-g(\ell))\big),\qquad \lambda\in[0,1],
+\end{equation}
+which read the scene equally well but act on the observed position with weight $\lambda$; $\lambda$ is their \emph{use}
+(\cref{sec:probing}): $\pi_0$ replays the memorized target, $\pi_1$ follows the scene.
+
+\begin{proposition}[Fixed layouts do not identify use]
+\label{prop:unidentified}
+Under (A1--A2), for a fixed layout with spread $\sigma$ and every $\lambda\in[0,1]$,
+$\mathcal{R}_{\mathcal{D}}(\pi_\lambda)=\mathbb{E}_{\mathcal{D}}\lVert\pi_\lambda(o,\ell)-A(h,x)\rVert^2\le(1-\lambda)^2L^2\sigma^2$.
+\end{proposition}
+
+All $\pi_\lambda$ thus fit the data to within $L^2\sigma^2$, and exactly when $\sigma=0$: the training risk does not care
+whether the policy uses the position it encodes.
+Which $\lambda$ is learned is then decided by inductive bias and initialization, not by the data.
+Two consequences follow directly.
+
+\begin{corollary}[Information is not identification]
+\label{cor:info}
+Adding to the observation any channel $c=c(h,x)$, such as the exact displacement $x-h$ to the goal, leaves
+\cref{prop:unidentified} unchanged: $\pi_0$, which ignores $c$, still has risk at most $L^2\sigma^2$.
+\end{corollary}
+
+Now let $\mathcal{D}_{\text{cf}}$ be built from $\mathcal{D}$ by moving the decision variable,
+$x\mapsto x+\Delta$ with $\Delta\sim P_\Delta$, $\mathbb{E}\Delta=0$, independent of $(\ell,h,z,\eta)$, keeping $h$ and $z$, and
+labeling with
+$A(h,x+\Delta)$. Train on the mixture $\mathcal{D}_\rho=(1-\rho)\mathcal{D}+\rho\,\mathcal{D}_{\text{cf}}$.
+
+\begin{proposition}[Decision-time counterfactuals identify use]
+\label{prop:identified}
+Under (A1--A2), $\mathcal{R}_{\mathcal{D}_\rho}(\pi_1)=0$ and, for every $\lambda\in[0,1]$,
+\begin{equation}
+\mathcal{R}_{\mathcal{D}_\rho}(\pi_\lambda)\;\ge\;\rho\,m^2(1-\lambda)^2\big(\sigma^2+\mathbb{E}\lVert\Delta\rVert^2\big).
+\end{equation}
+\end{proposition}
+
+Use becomes identified, with a margin that grows with the counterfactual mass $\rho\,\mathbb{E}\lVert\Delta\rVert^2$ rather
+than with the tiny layout spread.
+Proofs are in the supplementary material.
+The construction of $\mathcal{D}_{\text{cf}}$ matters, and each of its three conditions fails in a way that existing remedies
+illustrate.
+
+\emph{(i) The label must depend on the counterfactual.}
+If $\mathcal{D}_{\text{cf}}$ is labeled by a policy that itself ignores $x$, such as the base policy $\pi_0$, then $\pi_0$
+has zero risk on it: self-labeled counterfactuals reinforce non-use.
+
+\emph{(ii) Only the decision variable may change.}
+If the counterfactual transforms $x$ and $z$ together by a map $T$ (mirroring the whole scene) and labels accordingly,
+a policy that reads $T$ off $z$ (the mirrored furniture, say) and applies $T$ to its memorized action fits
+$\mathcal{D}_{\text{cf}}$ without using $x$; it identifies the response to $T$, not to $x$, and behaves like $\pi_0$ when only
+$x$ moves.
+
+\emph{(iii) Identification is local.}
+The margin constrains the policy only on the states and displacements that $\mathcal{D}_{\text{cf}}$ covers: use before the
+grasp and use while carrying are identified separately.
+
+\paragraph{Predictions.}
+The analysis makes five predictions, which we test in \cref{sec:exp}:
+\textbf{(P1)} an oracle geometric input is ignored without counterfactuals (\cref{cor:info});
+\textbf{(P2)} self-labeled counterfactuals do not help (i);
+\textbf{(P3)} whole-scene transforms do not raise the use of a single object's position, although the policy can learn
+the transformed scenes themselves (ii);
+\textbf{(P4)} counterfactuals before the grasp fix the choice of object and counterfactuals while carrying fix the
+placement, separately (iii);
+\textbf{(P5)} use grows with the counterfactual mass $\rho\,\mathbb{E}\lVert\Delta\rVert^2$ (\cref{prop:identified}).
+The analysis does not predict the value of an unidentified use: the partial following of small displacements near the hand
+that \pizf shows (\cref{tab:use_base}) is such an inductive bias, a local visual alignment learned from the wrist camera,
+which does not extend to the choice of object.

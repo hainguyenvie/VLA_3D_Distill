@@ -46,6 +46,8 @@ def parse():
     ap.add_argument("--fixture_seed", action="store_true",
                     help="furniture placement (re-drawn by LIBERO at every reset) fixed per (task, trial), independent of which "
                          "worker runs the episode and of the episodes before it: identical across evaluated models")
+    ap.add_argument("--scene_transform", default="", help="evaluate in a transformed scene (vec_env.ECT_TRANSFORMS name, e.g. "
+                    "ymirror): free objects and furniture reflected / shifted, robot and start pose unchanged")
     ap.add_argument("--device", default="cuda:0")
     ap.add_argument("--proprio_mode", default="normal", choices=["normal", "zero", "noise"],
                     help="diagnostic: ablate the proprio input of a standard OFT policy")
@@ -64,7 +66,7 @@ def main():
                        wrist=args.ckpt.startswith(("oft:", "pi05:")), q1_offset=args.q1_offset,
                        displace_distractor=args.displace_distractor, fixture_pin=args.fixture_pin,
                        fixture_offset=[float(x) for x in args.fixture_offset.split(",")] if args.fixture_offset else None,
-                       fixture_seed=args.fixture_seed)
+                       fixture_seed=args.fixture_seed, scene_transform=args.scene_transform)
 
     import torch
 

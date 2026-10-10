@@ -1,58 +1,65 @@
 \section{Decision-Time Counterfactual Supervision}
 \label{sec:method}
 
-\Cref{sec:probing} suggests what a remedy has to do: not add information, but create, at the states where the task is
-decided, pressure to act on the information that is there.
-Behavior cloning on fixed layouts never creates this pressure, since the memorized action is always correct.
-We therefore supervise the policy in counterfactual worlds built at its own decision states, where the memorized action is
-wrong and the correct one is known.
+\Cref{prop:identified} says what a remedy must provide: training samples in which the decision variable moves while
+everything else stays, at the states where the policy decides, labeled with the action that is correct after the move.
+Decision-time counterfactual supervision (\ours) builds exactly such a $\mathcal{D}_{\text{cf}}$ inside the policy's own
+rollouts; each of its components answers one condition of \cref{sec:theory}.
 
-\paragraph{On-policy distillation.}
+\paragraph{States: the policy's own decisions.}
 The student is \pizf with LoRA adapters~\cite{hu2022lora} (rank 32) on the linear layers of the VLM and the action expert;
 the teacher is the same checkpoint with the adapters disabled.
 Each iteration, the student drives fresh rollouts, and at every queried state $s_t$ the teacher labels the 50-step chunk
-$A_t$ (DAgger-style~\cite{ross2011dagger}).
-The student is trained with the flow-matching loss of \pizf on these labels, with $\epsilon\sim\mathcal{N}(0,I)$ and the
-flow time $\tau\in(0,1]$ drawn from the Beta-shaped distribution of \pizf ($\tau=1$ is pure noise),
+$A_t$, as in DAgger~\cite{ross2011dagger}, so that counterfactuals are placed on the states the policy actually visits
+(condition (iii)).
+The student is trained with the flow-matching loss of \pizf, with $\epsilon\sim\mathcal{N}(0,I)$ and the flow time
+$\tau\in(0,1]$ drawn from the Beta-shaped distribution of \pizf ($\tau=1$ is pure noise),
 \begin{equation}
 \mathcal{L}_{\text{fact}} = \lVert v_\theta(o_t, x_\tau, \tau) - (\epsilon - A_t) \rVert^2,\quad x_\tau = \tau\epsilon + (1-\tau)A_t .
 \end{equation}
-Without counterfactuals this is our matched control (``Distill''); it leaves \pizf's behavior essentially unchanged.
+Without counterfactuals this is our matched control (``Distill''); it leaves \pizf's behavior essentially unchanged, as
+\cref{prop:unidentified} predicts.
 
-\paragraph{Counterfactual worlds.}
-At a state $s_t$, the simulator renders a world $s'_t$ that differs in one respect, chosen by the phase of the episode:
+\paragraph{Interventions: one decision variable at a time.}
+At a state $s_t$, the simulator renders a world $s'_t$ in which only the variable that decides the next motion has moved
+(condition (ii)):
 \begin{itemize}
-\item \emph{Retarget} (before the grasp): the target is moved to a free spot, or swaps places with another object; the
-hand stays. Label: a privileged scripted approach to above the target's new position, valid for its first $n$ steps (the
-grasp is left to the policy).
-\item \emph{Co-shift} (before the grasp): hand and target move together, so the hand--target geometry is unchanged and the
-teacher's nominal chunk remains correct up to the grasp.
-\item \emph{Relocate} (while carrying): the container, or the furniture region the object goes to, is moved; hand and object
-stay. Label: a privileged scripted placer to the new location, valid until shortly after the release.
+\item \emph{Retarget} (before the grasp): the target is moved to a free spot 8--30\,cm away, or swaps places with another
+object; the hand and the rest of the scene stay.
+\item \emph{Relocate} (while carrying): the container, or the furniture region the object goes to, is moved by 15--40\,cm;
+hand and object stay.
+\item \emph{Co-shift} (before the grasp), a control: hand and target move together, which leaves the decision unchanged and
+keeps the factual label correct up to the grasp.
 \end{itemize}
-The counterfactual observation $o'_t$ and label $A'_t$ (with a validity mask $w$ over chunk steps) enter the same loss with
+
+\paragraph{Labels: privileged, and correct in the counterfactual world.}
+The label of $s'_t$ must be $A(h,x+\Delta)$, not the base policy's output (condition (i)).
+We use privileged scripted teachers that know the moved position: an approach to above the target, valid for the steps it
+takes to get there (the grasp is left to the policy), and a placer to the new container, valid until shortly after the
+release.
+A scripted teacher is only as good as its assumptions, and a wrong label identifies a wrong use; three task-agnostic checks
+discard the pairs where the scripted notion of the decision variable does not hold:
+\begin{itemize}
+\item \emph{Uniqueness.} An object or fixture with a twin of the same class is never moved: the instruction can then only
+refer to it by where it is (``the bowl next to the plate''), and moving it would change which object is meant.
+\item \emph{Agreement.} In the factual world, the scripted teacher must head where the \pizf teacher heads (cosine at least
+0.5 between their intended displacements over 25 steps), which rejects states where the task starts with another step or
+where the scripted target or container is wrong.
+\item \emph{Phase.} Pre-grasp pairs only before the episode's first grasp; relocate pairs only while an object of the task is
+held (gripper closed, object lifted and between the fingers).
+\end{itemize}
+
+\paragraph{Objective.}
+The counterfactual observation $o'_t$ and label $A'_t$, with a validity mask $w$ over chunk steps, enter the same loss with
 the same noise and time,
 \begin{equation}
 \mathcal{L} = \mathcal{L}_{\text{fact}} + \frac{\sum w \odot \lVert v_\theta(o'_t, x'_\tau, \tau) - (\epsilon - A'_t) \rVert^2}{\sum w},
 \end{equation}
-on at most 15\% of the states of an iteration.
-A pairwise consistency term on $v_\theta(o') - v_\theta(o)$ brought no gain and is not used, in line with~\cite{chen2026ect}.
-
-\paragraph{Keeping the labels valid.}
-A scripted teacher with privileged state is only as good as the assumptions behind it, and most of the engineering of the
-method went into recognizing where they fail. Three automatic checks, all task-agnostic, decide which pairs are kept:
-\begin{itemize}
-\item \emph{Uniqueness.} An object (or furniture) with a twin of the same class in the scene is never moved: the
-instruction can then only refer to it by where it is (``the bowl next to the plate''), and moving it would change which
-object is meant.
-\item \emph{Agreement.} In the factual world, the scripted teacher must head where the \pizf teacher heads (cosine at
-least 0.5 between their intended displacements over 25 steps). This rejects states where the task starts with another
-step, or where the scripted notion of target or container is wrong.
-\item \emph{Phase.} Pre-grasp pairs are placed only before the episode's first grasp, and relocate pairs only while an
-object of the task is held (gripper closed, object lifted and between the fingers).
-\end{itemize}
-Objects are recolored at random during the rollouts (with probability 0.5 per episode) to counter a reliance on color that
-appears once the policy starts to use the image (\cref{sec:exp:limits}).
+on a share $\rho=15\%$ of the states of an iteration; \cref{prop:identified} makes $\rho\,\mathbb{E}\lVert\Delta\rVert^2$
+the quantity that sets the identification margin. A pairwise consistency term on $v_\theta(o')-v_\theta(o)$ brought no gain
+and is not used, in line with~\cite{chen2026ect}.
+Objects are recolored at random during the rollouts (probability 0.5 per episode), against a reliance on color that appears
+once the policy starts to use the image (\cref{sec:exp:limits}).
 
 \paragraph{Training budget.}
 20 iterations of 1024 states each, batch 8, learning rate $5\cdot10^{-5}$ with cosine decay, one suite at a time; every

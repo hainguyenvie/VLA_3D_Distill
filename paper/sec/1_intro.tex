@@ -23,7 +23,8 @@ the task, when the hand is still on its way to the target or carries the object 
 follows the displacement by only 3--22\%.
 \pizf \emph{knows where} the target is and does not \emph{go there}.
 
-This distinction predicts which remedies can work.
+This distinction predicts which remedies can work, and \cref{sec:theory} makes the prediction precise: on fixed layouts
+the data cannot tell a policy that uses the target's position from one that replays the memorized one.
 If the information is already present, adding more of it should not help, and it does not: re-implementing the injection
 of a privileged 3D goal point into the action expert~\cite{tsai2026point} in our setting leaves swap success at the base
 level, and the injected channel is learned as a constant offset that ignores the point.
@@ -46,8 +47,10 @@ comes from its layers 9--17.
 \begin{itemize}
 \item A decision-time intervention protocol that separates \emph{use} from \emph{encoding} in a VLA, per task phase, and
 the finding that \pizf encodes object and container displacements it does not act on (\cref{sec:probing}).
-\item Evidence that two recent remedies do not change use in a matched setting, including privileged 3D goal injection,
-whose channel collapses to a constant: geometric information is not what is missing (\cref{sec:exp:mech}).
+\item An identifiability account (\cref{sec:theory}): when layouts are fixed, the training risk is indifferent to whether
+a policy uses the positions it encodes, so adding information (\eg a 3D goal point) cannot help, while counterfactuals
+that move a single decision variable at decision states, with labels that depend on it, identify use. Five predictions of
+this account hold in our experiments, including that privileged 3D goal injection is ignored (\cref{sec:exp:mech}).
 \item A localization of the change that does fix use: the VLM's mid-to-late layers, not the action pathway
 (\cref{sec:exp:local}).
 \item Decision-time counterfactual supervision with validity-gated privileged labels, which improves LIBERO-PRO swap by
