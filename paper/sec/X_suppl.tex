@@ -104,6 +104,41 @@ with the gate, 65.5 without) and is not used.
 \paragraph{Compute.}
 One run (one suite, 20 iterations) takes 5--7 hours on one H200 GPU, of which about half is simulation and rendering.
 
+\section{Robustness of the use metric and a second policy}
+\label{sec:supp:probe}
+
+The probes of the main paper compared a state and its counterfactual in different rows of a batch, which gave them
+different flow-noise samples. We re-ran them with one noise sample shared by every row, and report the use for 10-, 25- and
+50-step horizons (\cref{tab:supp:horizon}). The values of the main paper are reproduced (25 steps), and the pattern holds
+at every horizon: swaps and renamed targets are ignored in mid-approach, moved containers are barely followed while
+carrying, small displacements near the hand are partly followed. Longer horizons give larger values throughout because the
+chunk then also contains the later part of the motion.
+
+OpenVLA-OFT~\cite{kim2025oft}, a regression-head VLA with 8-step chunks, shows the same pattern at its horizon, more
+strongly: swap 0.01, renamed target 0.00 and moved container 0.00, with small displacements near the hand followed at
+0.18 (\pizf at 10 steps: 0.02, 0.03, 0.02 and 0.36).
+
+\begin{table}[h]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccccc}
+\toprule
+& \multicolumn{2}{c}{early} & \multicolumn{3}{c}{mid-approach} & near & carrying \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-6}\cmidrule(lr){7-7}\cmidrule(lr){8-8}
+Policy, horizon & 3\,cm & swap & 3\,cm & swap & rename & 3\,cm & 3--20\,cm \\
+\midrule
+\pizf, 10 steps & .00 & .02 & .32 & .02 & .03 & .36 & .02 \\
+\pizf, 25 steps & .15 & .24 & .59 & .04 & .02 & .51 & .06--.09 \\
+\pizf, 50 steps & .37 & .33 & .55 & .07 & .01 & .44 & .10--.19 \\
+OpenVLA-OFT, 8 steps & $-$.02 & .01 & .06 & .01 & .00 & .18 & .00 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Use with a shared noise sample}, LIBERO-Object, median over states. \pending{Second noise seed and trained
+models: running.}}
+\label{tab:supp:horizon}
+\end{table}
+
 \section{Re-implemented baselines}
 \label{sec:supp:baselines}
 

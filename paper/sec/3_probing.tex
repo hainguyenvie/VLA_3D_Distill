@@ -21,7 +21,7 @@ States are binned by phase: \emph{early} (hand farther than 15\,cm from the targ
 (closer than 5\,cm) and \emph{carrying}.
 
 \paragraph{Use.}
-% TODO: numbers of Tab. 1 / 4 come from the earlier probe (row-wise noise); replace by the shared-noise probes (mech2_*).
+% Tab. 1: shared-noise probe (mech2_object_base_n0). Tab. 4 (trained models): earlier probe; shared-noise re-run pending.
 Giving a state and its counterfactual the same flow-noise sample, we roll the first 25 steps of each predicted chunk
 through a kinematic model of the controller to obtain the hand's intended displacement $m(s)$, and define
 \begin{equation}
@@ -46,25 +46,26 @@ so the probe only asks whether the stream registers where the object was moved t
 \toprule
 Phase & 3\,cm & 20\,cm & swap & rename & proprio \\
 \midrule
-early ($>$15\,cm) & 0.18 & 0.22 & 0.22 & 0.25 & 0.00 \\
-mid (5--15\,cm) & 0.61 & 0.31 & \textbf{0.03} & \textbf{0.02} & 0.00 \\
-near ($<$5\,cm) & 0.51 & 0.29 & 0.01 & $-$0.02 & 0.00 \\
+early ($>$15\,cm) & 0.15 & 0.20 & 0.24 & 0.25 & 0.01 \\
+mid (5--15\,cm) & 0.59 & 0.34 & \textbf{0.04} & \textbf{0.02} & 0.01 \\
+near ($<$5\,cm) & 0.51 & 0.28 & 0.00 & 0.00 & 0.00 \\
 carrying & \textbf{0.09} & \textbf{0.06} & -- & -- & 0.00 \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Use of a displacement by \pizf}, LIBERO-Object (median over states). Columns: target moved by 3 or
 20\,cm (container while carrying), target swapped with another object, target renamed in the instruction, proprioception
-offset by 5\,cm. At the decision moments (bold) the action barely follows the change.}
+offset by 5\,cm. 25-step horizon, one noise sample shared by a state and its counterfactuals. At the decision moments
+(bold) the action barely follows the change.}
 \label{tab:use_base}
 \end{table}
 
 \paragraph{Findings.}
 \Cref{tab:use_base} reads as follows.
 \emph{(1) At the decision moments the policy is nearly blind.}
-Early in the approach the action follows a moved target by about 20\%; mid-way it ignores a swap (0.03) or a renamed
+Early in the approach the action follows a moved target by about 20\%; mid-way it ignores a swap (0.04) or a renamed
 target (0.02) entirely, and while carrying it follows a moved container by 6--9\%: placing is a memorized motion.
 \emph{(2) Once close, it is a local tracker.}
-Small displacements near the hand are followed (0.51--0.61) more than large ones, but the choice of object is locked.
+Small displacements near the hand are followed (0.51--0.59) more than large ones, but the choice of object is locked.
 \emph{(3) Proprioception is not the shortcut.}
 Offsetting the proprioceptive input has no effect in any phase, and replacing it by a constant at test time (Object swap
 14.0, nominal 100) or during training (Spatial swap 40.5 \vs 40.0) does not change the failure.
