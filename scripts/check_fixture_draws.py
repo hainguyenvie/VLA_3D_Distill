@@ -13,6 +13,8 @@ def main():
     ap.add_argument("--suite", default="libero_goal")
     ap.add_argument("--task", type=int, default=0)
     ap.add_argument("--n", type=int, default=20)
+    ap.add_argument("--reseed", default="", help="comma-separated trial order: seed the env per (task, trial) before each reset, "
+                    "as eval_libero.py --fixture_seed does (the same trial must give the same placement in any order)")
     args = ap.parse_args()
     from src.rollout.vec_env import EnvRunner, LiberoVecEnv, world_fixed_bodies
 
@@ -20,12 +22,15 @@ def main():
     inits = vec.init_states(args.task)
     r = EnvRunner(vec._bddl(args.task), vec.cfg, contextlib.nullcontext())
     rows = []
-    for k in range(args.n):
+    order = [int(x) for x in args.reseed.split(",")] if args.reseed else list(range(args.n))
+    for k in order:
+        if args.reseed:
+            r.env.seed(1000 * args.task + k)
         r.reset(inits[k % len(inits)])
         robo = r.env.env
         m = robo.sim.model._model
         fixed = [b for b in world_fixed_bodies(robo) if not (robo.sim.model.body_id2name(b) or "").endswith("table")]
-        if k == 0:
+        if k == order[0]:
             names = [robo.sim.model.body_id2name(b) for b in fixed]
             print("episode " + "  ".join(f"{n[:22]:>22s}" for n in names))
         pos = np.array([m.body_pos[b][:2] for b in fixed])

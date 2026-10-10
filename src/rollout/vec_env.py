@@ -1447,11 +1447,16 @@ def _worker(conn, cfg: Dict[str, Any], lock) -> None:
         while True:
             cmd, arg = conn.recv()
             if cmd in ("reset", "restore"):
-                task_id, bddl, state, t0, gripper_cmd, perturb, cf = arg
+                task_id, bddl, state, t0, gripper_cmd, perturb, cf = arg[:7]
                 if task_id != cur_task:
                     if runner is not None:
                         runner.close()
                     runner, cur_task = EnvRunner(bddl, cfg, lock), task_id  # imports only the env stack, never torch
+                if cmd == "reset" and cfg.get("fixture_seed") and len(arg) > 7:
+                    # the furniture LIBERO re-places at every reset depends on the env's random stream, i.e. on how many
+                    # episodes this env ran before: seed it per (task, trial) so a trial sees the same furniture whichever
+                    # worker runs it and whatever ran there before
+                    runner.env.seed(1000 * int(task_id) + int(arg[7]))
                 conn.send(("ok", runner.reset(state, perturb, cf) if cmd == "reset" else runner.restore(state, t0, gripper_cmd)))
             elif cmd == "ect":
                 task_id, bddl, state, env_actions, query_ts, spec = arg
@@ -1481,7 +1486,7 @@ class LiberoVecEnv:
     def __init__(self, suite: str, num_envs: int, max_steps: int, num_steps_wait: int = 10, resolution: int = 256,
                  depth: bool = False, wrist: bool = False, perturb: Optional[Dict[str, Any]] = None,
                  counterfactual: Optional[Dict[str, Any]] = None, q1_offset: float = 0.0, displace_distractor: float = 0.0,
-                 obj_tint: float = 0.0, fixture_pin: bool = False, fixture_offset=None):
+                 obj_tint: float = 0.0, fixture_pin: bool = False, fixture_offset=None, fixture_seed: bool = False):
         from libero.libero import benchmark, get_libero_path
 
         self.cfg = dict(suite=suite, max_steps=max_steps, num_steps_wait=num_steps_wait, resolution=resolution,
@@ -1490,7 +1495,8 @@ class LiberoVecEnv:
                         q1_offset=q1_offset,  # diagnostic: first arm joint turned by this much at every reset (radians)
                         displace_distractor=displace_distractor,  # diagnostic: one non-target object moved this far
                         obj_tint=obj_tint,  # training: probability that a movable object is recoloured in an episode
-                        fixture_pin=fixture_pin, fixture_offset=fixture_offset)  # diagnostic: EnvRunner._pin_fixtures
+                        fixture_pin=fixture_pin, fixture_offset=fixture_offset,  # diagnostic: EnvRunner._pin_fixtures
+                        fixture_seed=fixture_seed)  # evaluation: furniture placement fixed per (task, trial), see _worker
         self.suite = benchmark.get_benchmark_dict()[suite]()
         self._bddl_root, self._init_cache = get_libero_path("bddl_files"), {}
         self.num_envs = num_envs
@@ -1512,7 +1518,7 @@ class LiberoVecEnv:
     def reset(self, i: int, task_id: int, trial_id: int, perturb: bool = False, counterfactual: bool = False) -> None:
         """Ask env i to start an episode from benchmark initial state `trial_id` of task `task_id`."""
         self.conns[i].send(("reset", (task_id, self._bddl(task_id), self.init_states(task_id)[trial_id], 0, -1.0, perturb,
-                                      counterfactual)))
+                                      counterfactual, trial_id)))
 
     def restore(self, i: int, task_id: int, sim_state: np.ndarray, t0: int, gripper_cmd: float) -> None:
         """Ask env i to continue an episode of task `task_id` from a logged simulator state at step `t0`.

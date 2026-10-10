@@ -1335,3 +1335,17 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   mà base π0.5 chịu được; so sánh giữa các phương pháp vẫn công bằng (cùng giao thức). Đang đo có kiểm soát:
   `--fixture_pin [--fixture_offset dx,dy]` (đồ cố định ở vị trí của env mới, cộng độ lệch), task 0 và 3, độ lệch 0 / ±2 cm,
   base / distill thường / ECT / v2 (`scripts/server/fixture_sweep.sh`).
+- **Quét độ lệch tủ (ghim, task 0 / 3, 20 lần thử):** base: 0 → 95 / 90; +2 cm x 100 / 95; +2 cm y 90 / 55; −2 cm y 95 / 95;
+  −1 cm x 95 / 95; −2 cm x 95 / 85. Distill thường: 95 / 95; 95 / 85; 95 / 55; 100 / 90; 95 / 95; 95 / 90. ECT: 100 / 90;
+  95 / 95; 85 / 60; 90 / 95; 90 / 80; 100 / 85. **v2:** 100 / 80; 85 / 90; 85 / 55; 85 / 85; 90 / **65**; 95 / **60**.
+  → +2 cm y (ngoài phân bố) phá task 3 của mọi model kể cả base; trong vùng các lần reset thật rơi vào (−x), v2 tụt task 3
+  (60–65, base 85–95) → **v2 nhạy hơn với vị trí tủ ở task 3**. Task 0 với độ lệch một trục không tái hiện mức 65–70 của eval
+  tuần tự (đang đo góc −2, −1.4 cm).
+- Bộ Object **không có đồ cố định** (`check_fixture_draws.py` trên libero_object, libero_object_swap: không có thân nào) → các
+  ô chính của Object không bị ảnh hưởng. Spatial có tủ + bếp (dao động 1.1–1.8 cm).
+- **Setup giữa ta và ECT:** giống nhau (teacher, 20 × 1024 state, 15% cặp, LoRA, harness) trừ **đổi màu vật khi train**
+  (ta `--obj_tint 0.5`, ECT không). Đang chạy ECT + đổi màu (`TINT=0.5 TAG=tint pi05_round20.sh`, `p05*_ecttint_s7`). Chỉ VLM
+  v2 không đổi màu: Object swap **48.5** (có đổi màu 39.5) → đổi màu không phải lợi thế của ta ở ô swap.
+- **Eval cố định đồ cố định theo trial** (`eval_libero.py --fixture_seed`: seed env = 1000 × task + trial trước mỗi reset;
+  kiểm chứng: cùng trial cho cùng vị trí ở mọi thứ tự chạy). Đang eval lại Spatial / Goal / Long (chuẩn + swap) cho mọi model
+  so sánh (`scripts/server/fs_evals.sh`, kết quả `outputs/week1/fs_*`).

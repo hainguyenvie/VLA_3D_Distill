@@ -9,9 +9,11 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 S="$1"
-# FRAC (default 0.15) changes the share of states with a pair, and TAG the run names (e.g. FRAC=0.5 TAG=50 -> p05_ect50_s7)
+# FRAC (default 0.15) changes the share of states with a pair, TINT recolours objects as our runs do, and TAG the run
+# names (e.g. FRAC=0.5 TAG=50 -> p05_ect50_s7; TINT=0.5 TAG=tint -> p05_ecttint_s7)
 FRAC="${FRAC:-0.15}"; T="${TAG:-}"
 ECT="--cf_mode ect --ect_episodes ${EPIS:-16} --cf_frac $FRAC --lambda_cf 0 --seed $S"
+[ -n "${TINT:-}" ] && ECT="$ECT --obj_tint $TINT"  # same object recolouring as our runs (round 19 / 21: TINT=0.5)
 arm() {  # arm <gpu, "-" = skip> <suite> <max steps> <run> <transforms>
   [ "$1" = - ] && return 0
   SUITE="$2" MAX_STEPS="$3" bash "$HERE/pi05_arm.sh" "$1" "$4" $ECT --ect_transforms "$5" &

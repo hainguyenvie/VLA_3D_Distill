@@ -43,6 +43,9 @@ def parse():
     ap.add_argument("--fixture_pin", action="store_true",
                     help="diagnostic: furniture where a fresh env puts it in every episode (LIBERO re-places it at each reset)")
     ap.add_argument("--fixture_offset", default="", help="with --fixture_pin: furniture shifted by dx,dy (m)")
+    ap.add_argument("--fixture_seed", action="store_true",
+                    help="furniture placement (re-drawn by LIBERO at every reset) fixed per (task, trial), independent of which "
+                         "worker runs the episode and of the episodes before it: identical across evaluated models")
     ap.add_argument("--device", default="cuda:0")
     ap.add_argument("--proprio_mode", default="normal", choices=["normal", "zero", "noise"],
                     help="diagnostic: ablate the proprio input of a standard OFT policy")
@@ -60,7 +63,8 @@ def main():
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, args.num_steps_wait, depth=args.depth,
                        wrist=args.ckpt.startswith(("oft:", "pi05:")), q1_offset=args.q1_offset,
                        displace_distractor=args.displace_distractor, fixture_pin=args.fixture_pin,
-                       fixture_offset=[float(x) for x in args.fixture_offset.split(",")] if args.fixture_offset else None)
+                       fixture_offset=[float(x) for x in args.fixture_offset.split(",")] if args.fixture_offset else None,
+                       fixture_seed=args.fixture_seed)
 
     import torch
 
