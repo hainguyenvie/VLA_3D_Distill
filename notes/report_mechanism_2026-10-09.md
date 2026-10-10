@@ -202,6 +202,20 @@ thì ô đổi màu tụt (74–85).
 → So công bằng = **cài lại đối thủ vào setup của ta.** Đối thủ có code (Spatial Forcing, ROCKET, GAM) thì theo tài liệu
 không chữa swap; ba đối thủ liên quan nhất (2606.27663, ECT, QuoVLA) **chưa công bố code**.
 
+### 3.2a Kết quả chính, 2 seed mỗi bên (cập nhật 10/10)
+
+Cấu hình chính của ta: full + không dời vật có bản sao + kiểm tra đồng thuận + đổi màu + **bỏ cổng** (train toàn bộ).
+
+| Ô | Base | 2606.27663 cài lại | ECT cài lại (s7 / s8) | **Ta (s7 / s8)** | Ta − ECT |
+|---|---|---|---|---|---|
+| Object swap | 18.7 | 18.5 | 24.0 / 23.5 (TB 23.8) | **54.0 / 58.5 (TB 56.3)** | **+32.5** |
+| Object position | 12.2 | 12.5 | 16.5 / 16.5 (TB 16.5) | **36.0 / 44.5 (TB 40.3)** | **+23.8** |
+| Spatial swap | 40.0 | 40.0 | 52.0 / 49.5 (TB 50.8) | **65.5 / 66.5 (TB 66.0)** | **+15.2** |
+| Object chuẩn | 99.3 | 98.5 | 98.0 / 100 | 98.0 / 97.5 | ≈ |
+| Spatial chuẩn | 97.5 | 99.0 | 99.0 / 98.5 | 99.0 / 98.0 | ≈ |
+
+Seed 9 của cả hai bên đang chạy. v2 + chỉ train VLM cho Spatial swap 67.5 (1 seed), nhưng Object chỉ 39.5 (đang tách nguyên nhân).
+
 ### 3.2 Bảng so sánh trong cùng setup (seed 7; trong ngoặc là seed 8)
 
 | Bộ / ô | Base | ECT 15% | ECT 50% | **Ta – v1** | **Ta – bỏ cổng** | Ta so với ECT |

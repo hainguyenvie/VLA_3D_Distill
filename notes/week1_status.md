@@ -1291,3 +1291,7 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   Long chuẩn **86.5** (toàn bộ 84.0, không đổi màu 87.0, base 95) → chỉ VLM không sửa được Long. Sau 5 biến thể (hindsight, che
   gripper, 5% cặp, không đổi màu, chỉ VLM) Long vẫn ~84–87: đề xuất báo là giới hạn chung (ECT 84.0).
 - Ô đổi màu theo phạm vi: chỉ VLM s9 66.5 (s7 70.0, s8 69.5); chỉ expert s8 90.5 → tradeoff sinh ra ở phía VLM.
+- **Bỏ cổng Object s8: swap 58.5, position 44.5, chuẩn 97.5** (s7 54.0 / 36.0 / 98.0; TB **56.3 / 40.3**). ECT s8 position 16.5
+  (TB 16.5). Kết quả chính 2 seed: ta − ECT = Object swap +32.5, position +23.8, Spatial swap +15.2. Đang chạy seed 9 cả hai bên.
+- v2 + chỉ VLM: Long swap 13.5; Goal đổi màu 80.5, lan 89.5, Plus 68 / 75; Spatial đổi màu 97.5, lan 97.5, Plus 100 / 85;
+  Object lan 96.5.
