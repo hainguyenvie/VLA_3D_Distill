@@ -67,6 +67,13 @@ def parse():
                     help="full mode: pre-grasp pairs (retarget / coshift) only in the segment in which the episode itself went "
                          "for the target (after the last gripper release before the target's grasp, up to that grasp), and the "
                          "env renders them whenever the gripper is open and the target not lifted")
+    ap.add_argument("--scene_tol", type=float, default=0.0,
+                    help="--hindsight: an approach starts only after the last query from which the rest of the scene still "
+                         "moves by at least this much (m, 0.1 m per radian) before the target's grasp; 0 = off (rounds <= 21)")
+    ap.add_argument("--no_cotarget_swap", action="store_true",
+                    help="retarget: the target never swaps places with another object the task carries (multi-object tasks)")
+    ap.add_argument("--dump_segments", action="store_true",
+                    help="--hindsight: save the first iteration's per-query phase signals to <out>/segments.npz")
     ap.add_argument("--relocate_no_grip", action="store_true",
                     help="full mode: the relocate pairs' gripper dimension is masked (they teach where to carry, not when to "
                          "release)")
@@ -120,7 +127,8 @@ def main():
                                           coshift=tuple(float(x) for x in args.cf_coshift.split(",")), p_swap=args.p_swap,
                                           p_coshift=args.p_coshift, coshift_phase=args.coshift_phase,
                                           coshift_post=tuple(float(x) for x in args.cf_coshift_post.split(",")),
-                                          unique=args.cf_unique, hindsight=args.hindsight)
+                                          unique=args.cf_unique, hindsight=args.hindsight,
+                                          no_cotarget_swap=args.no_cotarget_swap)
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg, obj_tint=args.obj_tint)
 
     import torch
@@ -212,7 +220,10 @@ def main():
     def approach_segment(r):
         """Queries of an episode in which it went for its target: from the first query after the last gripper-close
         command that precedes the target's grasp, through the query in which that grasp starts. The target's grasp is the
-        close command run just before the target first rises 2 cm. Empty if the target never rose."""
+        close command run just before the target first rises 2 cm. Empty if the target never rose. The segment also
+        starts only once the rest of the scene stops changing before that grasp (`scene_path`, the accumulated motion of
+        drawers, knobs, doors and other objects, rises by less than --scene_tol until the grasp): a first step done
+        without closing the gripper (pi0.5 pushes the top drawer of Goal task 3 open) is not an approach."""
         ar, nq = r["arrays"], r["n_queries"]
         out = np.zeros(nq, dtype=bool)
         tz = np.asarray(ar.get("target_pos", np.full((nq, 3), np.nan)))[:, 2]
@@ -230,7 +241,13 @@ def main():
         while q_gs > 0 and close[q_gs - 1]:
             q_gs -= 1
         prev = [q for q in range(q_gs) if close[q]]
-        out[(prev[-1] + 1 if prev else 0) : q_gs + 1] = True
+        start = prev[-1] + 1 if prev else 0
+        if args.scene_tol > 0 and "scene_path" in ar:
+            sp = np.asarray(ar["scene_path"], dtype=np.float64)
+            changed = [q for q in range(q_gs) if sp[q_gs] - sp[q] >= args.scene_tol]
+            if changed:
+                start = max(start, changed[-1] + 1)
+        out[start : q_gs + 1] = True
         return out
 
     def ect_pairs(recs):
@@ -487,6 +504,18 @@ def main():
             tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
             print("[hindsight] task: pre-grasp pairs kept / before", {int(t): f"{int((cf_ok & pre & appr & (tids == t)).sum())}/"
                   f"{int((cf_ok & pre & (tids == t)).sum())}" for t in np.unique(tids)}, flush=True)
+            if args.dump_segments and it == 1:  # per-query phase signals, for auditing the segmentation offline
+                np.savez_compressed(os.path.join(args.out, "segments.npz"), tids=tids, appr=appr, pre=pre, cf_ok=cf_ok,
+                                    qidx=np.concatenate([np.arange(r["n_queries"]) for r in recs]),
+                                    ep=np.concatenate([np.full(r["n_queries"], i) for i, r in enumerate(recs)]),
+                                    success=np.concatenate([np.full(r["n_queries"], r["success"]) for r in recs]),
+                                    grip=np.concatenate([r["arrays"]["actions"][:, :, -1] for r in recs]).astype(np.float32),
+                                    target_pos=np.concatenate([np.asarray(r["arrays"].get("target_pos", np.full(
+                                        (r["n_queries"], 3), np.nan))) for r in recs]).astype(np.float32),
+                                    scene_path=np.concatenate([np.asarray(r["arrays"].get("scene_path", np.zeros(
+                                        r["n_queries"]))) for r in recs]).astype(np.float32),
+                                    eef=A["eef_pos"].astype(np.float32), geo_d=np.concatenate([np.asarray(r["arrays"].get(
+                                        "geo_d", np.zeros((r["n_queries"], 3)))) for r in recs]).astype(np.float32))
             cf_ok &= ~pre | appr
         if args.cf_frac > 0 and cf_ok.sum() > args.cf_frac * n_all:  # cap the share of states that carry a pair
             on = np.flatnonzero(cf_ok)

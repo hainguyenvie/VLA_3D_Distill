@@ -139,7 +139,7 @@ ECT_TRANSFORMS = {
 # vector of this length range (metres); the simulator state itself is not changed.
 COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5,
                       p_coshift=0.5, coshift_phase="pre", coshift_post=(0.08, 0.4), unique=False,
-                      hindsight=False)
+                      hindsight=False, no_cotarget_swap=False)
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
@@ -291,6 +291,7 @@ class EnvRunner:
         self.t, self.done, self.closed = 0, False, False
         self.pert, self.cf = None, None
         self._geo_z0 = None
+        self._scene_prev = None
 
     def _cameras(self, enabled: bool) -> None:
         robo = self.env.env
@@ -340,11 +341,44 @@ class EnvRunner:
                     goal = p_t
         return (goal - eef).astype(np.float32)
 
+    def _scene_path(self) -> float:
+        """Accumulated motion of the scene other than the robot and the target object since the start of the episode
+        (or the last restore), summed over the observations: metres for object positions and slide joints (drawers),
+        0.1 m per radian for hinges (knobs, doors). Its increase between two queries says whether the episode changed
+        something else in between (opened a drawer, turned a knob, moved another object): the phase segmentation of
+        train_pi05_ocd.py --hindsight starts an approach to the target only after the last such change."""
+        import mujoco
+
+        robo = self.env.env
+        m, d = robo.sim.model._model, robo.sim.data._data
+        if getattr(self, "_scene_prev", None) is None:
+            names = getattr(robo, "obj_of_interest", None) or []
+            skip = f"{names[0]}_joint0" if names else None
+            idx, w = [], []
+            for j in range(m.njnt):
+                name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or ""
+                if name.startswith(("robot", "gripper", "mount")) or name == skip:
+                    continue
+                a, t = int(m.jnt_qposadr[j]), int(m.jnt_type[j])
+                if t == 0:  # free joint: its position
+                    idx += [a, a + 1, a + 2]
+                    w += [1.0] * 3
+                elif t in (2, 3):  # slide (m) / hinge (rad)
+                    idx.append(a)
+                    w.append(1.0 if t == 2 else 0.1)
+            self._scene_idx, self._scene_w = np.array(idx, dtype=int), np.array(w)
+            self._scene_prev, self._scene_acc = d.qpos[self._scene_idx].copy(), 0.0
+        q = d.qpos[self._scene_idx]
+        self._scene_acc += float((self._scene_w * np.abs(q - self._scene_prev)).sum())
+        self._scene_prev = q.copy()
+        return self._scene_acc
+
     def _obs(self, obs) -> Dict[str, Any]:
         """Packed observation; in a perturbed episode `rgb` (and `depth`) show the perturbed view the student is fed,
         and `rgb_clean` keeps the nominal frame for the teacher."""
         out = _pack_obs(self.env, obs, self.cfg)
         out["geo_d"] = self._geo_d()
+        out["scene_path"] = np.float32(self._scene_path())
         if self.pert:
             out["rgb_clean"] = out["rgb"]
             out.update(self._stash)
@@ -808,6 +842,9 @@ class EnvRunner:
         allxy = np.array([xy_t] + list(others.values()))
         box_lo, box_hi = allxy.min(0) - 0.05, allxy.max(0) + 0.05  # the area the objects occupy now
         movable = [n for n in others if n != self._cs_container]
+        if cfg.get("no_cotarget_swap"):  # another object the task carries is a valid next target too (Long "put both
+            # X and Y in the basket"): with it under the hand, "go to X instead" would teach hesitating over a valid grasp
+            movable = [n for n in movable if n not in self._cs_carry]
         for _ in range(40):
             if movable and _PERT_RNG.random() < cfg.get("p_swap", 0.0):
                 y = movable[int(_PERT_RNG.integers(len(movable)))]
@@ -1152,6 +1189,7 @@ class EnvRunner:
             self.env.reset()
             self.pert, self.cf = None, None
             self._geo_z0 = None
+            self._scene_prev = None
             if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
@@ -1361,6 +1399,7 @@ class EnvRunner:
             self._cameras(False)
         self.pert, self.cf = None, None
         self._geo_z0 = None
+        self._scene_prev = None
         robot = robo.robots[0]
         # PandaGripper.format_action accumulates [-1, 1] * 0.01 * sign(cmd) per substep and saturates within 4 steps
         robot.gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))
@@ -1369,7 +1408,7 @@ class EnvRunner:
         robot.controller.update(force=True)
         robot.controller.reset_goal()
         self.t, self.done, self.closed = t0, False, gripper_cmd > 0
-        return dict(_pack_obs(self.env, obs, self.cfg), geo_d=self._geo_d(), t=t0, done=False, active=True,
+        return dict(_pack_obs(self.env, obs, self.cfg), geo_d=self._geo_d(), scene_path=np.float32(self._scene_path()), t=t0, done=False, active=True,
                     closed_before=bool(self.closed))
 
     def step(self, actions) -> Dict[str, Any]:

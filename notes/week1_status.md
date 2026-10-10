@@ -1295,3 +1295,24 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   (TB 16.5). Kết quả chính 2 seed: ta − ECT = Object swap +32.5, position +23.8, Spatial swap +15.2. Đang chạy seed 9 cả hai bên.
 - v2 + chỉ VLM: Long swap 13.5; Goal đổi màu 80.5, lan 89.5, Plus 68 / 75; Spatial đổi màu 97.5, lan 97.5, Plus 100 / 85;
   Object lan 96.5.
+- v2 + chỉ VLM: Object đổi màu **85.0** (chỉ VLM dữ liệu full ~69) → với chỉ VLM, đổi màu đổi swap (49.3 → 39.5) lấy ô đổi màu
+  (69 → 85). Long đổi màu 49.0, Plus 60 / 70; Object Plus 83 / 82. ECT s8: Spatial đổi màu 97.5, Plus 97 / 82; Object Plus 87 / 77.
+
+### 10/10 — Chẩn đoán Goal task 3 và Long task 0 (theo từng task, từng bước)
+- **Theo task (chuẩn / swap, s7):** Goal task 3 ("open the top drawer and put the bowl inside"): base 100 / 100, chỉ relocate
+  95 / 90, ECT 85 / 70, **mọi bản có retarget** 45–75 / 0–5. Task 0 ("open the middle drawer") chuẩn 60–85. → Lỗi nằm ở nhãn
+  retarget, không ở relocate.
+- **Ghi từng bước** (`--dump_segments`, 1 vòng v2): π0.5 mở ngăn kéo trên **mà không đóng tay kẹp** (gạt tay nắm, q0–7), rồi
+  mới tới bát (gắp ở q11). Luật chia pha của `--hindsight` dựa vào lệnh đóng tay kẹp nên coi cả q0–10 là "đi tới bát": cặp
+  retarget dạy "tới bát" giữa lúc đang mở ngăn kéo (107/107 cặp trước-gắp của task 3 được giữ). Kiểm tra đồng thuận không bắt
+  được vì hướng tới ngăn kéo và tới bát gần trùng nhau (giữ 0.83–0.89).
+- **Sửa (tổng quát, không theo task):** env ghi `scene_path` = tổng dịch chuyển tích lũy của phần cảnh không phải robot và vật
+  đích (vị trí vật khác, khớp trượt ngăn kéo, khớp bản lề núm / cửa × 0.1 m/rad); pha "đi tới vật" chỉ bắt đầu sau lần cuối
+  cảnh còn đổi ≥ 1 cm trước cú gắp (`--scene_tol 0.01`).
+- **Long task 0** ("put both the alphabet soup and the tomato sauce in the basket"; chuẩn base-distill 95, các bản phản thực
+  35–80): chia pha đúng (cặp relocate khi mang lon thứ hai hợp lệ). Ghi từng bước bản `uni_full` (20 lần, 65%): mọi thất bại là
+  **lưỡng lự khi gắp** — lơ lửng trên lon, lệnh tay kẹp đóng/mở xen kẽ trong cùng chunk (q6–22), hoặc kẹp trượt / làm đổ lon rồi
+  lang thang tới hết giờ. Nghi phạm: retarget đổi chỗ vật đích với vật khác (p_swap 0.5), có khi là chính lon sốt (cũng là đích
+  hợp lệ) → cặp "lon dưới tay — đừng gắp, đi tới lon súp" dạy do dự đúng ở lúc gắp. **Sửa:** `--no_cotarget_swap` (không đổi
+  chỗ với vật nhiệm vụ cũng mang; không ảnh hưởng Object / Spatial / Goal vì chỉ có một vật mang).
+- Cấu hình **v3** = v2 + `--scene_tol 0.01` + `--no_cotarget_swap` (`scripts/server/pi05_round22.sh`).
