@@ -110,29 +110,30 @@ privileged placer gives swap 40.0 (= Distill), against 64.7 with the placer (3 s
 \toprule
 & Probe (LIBERO-Object) & \pizf & \pt & \ect & \ours \\
 \midrule
-\multirow{5}{*}{\rotatebox{90}{use}} & early, target moved & .13--.22 & .12--.21 & .14--.23 & .20--.30 \\
-& mid, moved 20\,cm & .31 & .32 & .37 & \textbf{.67} \\
-& mid, swap & .03 & .03 & .07 & \textbf{.53} \\
-& mid, target renamed & .02 & .02 & .01 & \textbf{.54} \\
-& carrying, cont.\ $\geq$12\,cm & .06 & .06 & .11 & \textbf{.44--.69} \\
+\multirow{5}{*}{\rotatebox{90}{use}} & early, target moved & .13--.20 & .12--.21 & .14--.23 & .23--.32 \\
+& mid, moved 20\,cm & .33 & .32 & .39 & \textbf{.67} \\
+& mid, swap & .04 & .03 & .05 & \textbf{.39} \\
+& mid, target renamed & .02 & .02 & .02 & \textbf{.49} \\
+& carrying, cont.\ $\geq$12\,cm & .06 & .06 & .09--.10 & \textbf{.38--.68} \\
 \midrule
 \multirow{3}{*}{\rotatebox{90}{enc.}} & target moved $\geq$12\,cm & .58 & -- & .62 & .65 \\
 & swap & .55 & -- & .56 & .70 \\
 & container moved $\geq$12\,cm & .80 & -- & .86 & .85 \\
 \bottomrule
 \end{tabular}
-\caption{\textbf{Use and encoding after training} (seed 7; \ours: the configuration of the last row of \cref{tab:kinds}).
-Use: median follow of the action (\cref{sec:probing}); ranges span displacement sizes. Encoding: in-state probe $R^2$ of
-the action tokens, late expert layers. Every model encodes the change; only \ours acts on it.}
+\caption{\textbf{Use and encoding after training} (seed 7; \ours as in \cref{tab:main}). Use: median follow of the action
+(\cref{sec:probing}), shared noise, averaged over two noise samples for \pizf and \ours; ranges span displacement sizes;
+\pt from an earlier probe with row-wise noise. Encoding: in-state probe $R^2$ of the action tokens, late expert layers
+(\pending{\ours: earlier configuration; re-run pending}). Every model encodes the change; only \ours acts on it.}
 \label{tab:mech}
 \end{table}
 
 \Cref{tab:mech} applies the probes of \cref{sec:probing} to the trained policies.
 The encoding is nearly the same in the three models.
-What differs is use: \ect leaves it at the level of \pizf, while \ours makes the action follow a swap (0.03 $\to$ 0.53), a
-renamed target (0.02 $\to$ 0.54) and a moved container (0.06 $\to$ 0.44--0.69).
+What differs is use: \ect leaves it at the level of \pizf, while \ours makes the action follow a swap (0.04 $\to$ 0.39), a
+renamed target (0.02 $\to$ 0.49) and a moved container (0.06 $\to$ 0.38--0.68).
 Counterfactual supervision thus does not teach the policy to see; it teaches it to act on what it sees.
-One blind spot is shared by all three models: early in the approach, the action follows a moved target by only 0.13--0.30.
+One blind spot is shared by all models: early in the approach, the action follows a moved target by only 0.13--0.32.
 
 \paragraph{Explicit geometry is ignored (P1).}
 \pt is the most direct test of whether information is missing: the policy receives the exact displacement to the
