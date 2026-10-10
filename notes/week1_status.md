@@ -1277,3 +1277,10 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
 - **Điểm 3D (oracle) + phản thực, Object: ô đổi màu 92.5** (= base; ta không điểm 3D 84–86), swap 43.0, position 41.5, Plus 90 /
   78; Spatial: swap 62.0, đổi màu 97.5. Ô đổi màu được giữ nhiều khả năng nhờ oracle chỉ đúng vật đích bất kể màu (thông tin
   đặc quyền) — muốn claim phải thay bằng nguồn không đặc quyền.
+- **Định vị nhân bản (Object, dữ liệu full):** chỉ VLM s7 / s8 / s9: swap 50.0 / 44.0 / **54.0** (TB **49.3**), position 35.5 /
+  25.5 / 28.5 (TB 29.8), chuẩn 96 / 94 / 98; chỉ action expert s7 / s8: swap 33.0 / 31.0 (TB 32.0), position 32.5 / 27.0 (TB
+  29.8), chuẩn 94.5 / 94.0; toàn bộ 53.0 / 39.0. → Ô swap: phía VLM ~90% gain, expert ~40%. Ô position: mỗi nửa ~65%, cần cả hai.
+- **v2 + chỉ VLM (`p05*_v2vlm_s7`):** Spatial swap **67.5** (cao nhất; toàn bộ 65.5 / 66.5), chuẩn 99.0; Goal chuẩn **91.5**
+  (v2 toàn bộ 94.0, base 97.5), swap 30.0 → chỉ VLM không giữ được Goal chuẩn (mức tụt Goal không đến từ việc sửa action expert);
+  Object chuẩn 92.5 (đang đo swap); Long: đánh giá giữa chừng cao hơn bản toàn bộ (vòng 4 / 8: 0.68 / 0.78 so với 0.57 / 0.68).
+- Long v2 không đổi màu: chuẩn 87.0 (có đổi màu 84.0), swap 11.0, lan 81.0, đổi màu 55.5, Plus 75 / 68.
