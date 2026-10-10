@@ -1392,3 +1392,11 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   10 / 25 / 50 giữ nguyên kết luận; OpenVLA-OFT: swap 0.01, mang vật 0.00 (8 bước); cấu hình chính s7: swap 0.44, đổi tên
   0.54, dời 20 cm 0.72, mang vật 0.20–0.68; đường học vòng 4: mang vật 0.19–0.26, swap 0.05.
 - Paper: bảng Goal / Long theo giao thức cố định với v3; phần chính vừa 8 trang.
+- **Probe nội bộ cấu hình chính (s7):** token ảnh tầng 0 của VLM: R² 0.81 (vật ≥12 cm), 0.40–0.44 (swap), ~0.92 (giỏ) — **như
+  nhau ở base / ECT / ta**; token hành động (TB tầng 12–17): base 0.58 / 0.54 / 0.78, ECT 0.62 / 0.57 / 0.85, ta 0.71 / 0.70 /
+  0.84 → ta tăng mã hoá vừa phải ở nửa sau VLM và token hành động (đúng vùng định vị), trong khi dùng tăng ~10 lần. Paper sửa
+  "mã hoá không đổi" → "mã hoá đổi ít".
+- Độ nhạy: tắt kiểm tra đồng thuận (ag0): Object swap 49.5, position 38.0 (ag 0.5: 54.0 / 36.0); không đổi màu: 48.0 / 40.5;
+  tỉ lệ cặp 5%: 38.0 / 24.0 (15%: 54.0 / 36.0; 0%: 18.7 / 12.2). Đường học (swap giữa pha): 0.04, 0.05, 0.15, 0.31, 0.38, 0.44.
+- v4 (neo đồ cố định), giao thức cố định: Goal chuẩn 91.5 (v3 92.5) → không có lợi rõ ràng; cách cũ: Goal 94.5 / 35.5, Long
+  90.0 / 14.0.

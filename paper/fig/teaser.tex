@@ -34,10 +34,10 @@
     symbolic x coords={swap,target,container},
     xticklabels={{target\\swapped},{target moved\\$\geq$12\,cm},{container moved\\$\geq$12\,cm}},
   ]
-  \addplot[fill=seriesA, draw=white, line width=0.8pt] coordinates {(swap,0.55) (target,0.58) (container,0.80)};
-  \addplot[fill=seriesB, draw=white, line width=0.8pt] coordinates {(swap,0.56) (target,0.62) (container,0.86)};
+  \addplot[fill=seriesA, draw=white, line width=0.8pt] coordinates {(swap,0.54) (target,0.58) (container,0.78)};
+  \addplot[fill=seriesB, draw=white, line width=0.8pt] coordinates {(swap,0.57) (target,0.62) (container,0.85)};
   \addplot[fill=seriesC, draw=white, line width=0.8pt, nodes near coords, nodes near coords align={vertical}]
-    coordinates {(swap,0.70) (target,0.65) (container,0.85)};
+    coordinates {(swap,0.70) (target,0.71) (container,0.84)};
 \end{groupplot}
 \end{tikzpicture}
 \captionsetup{hypcap=false}
@@ -45,7 +45,7 @@
 rollouts (\cref{sec:probing}). \emph{Right:} the displacement of the target or the container is decodable from the action
 tokens of every model. \emph{Left:} at the moments that decide the task, the action of \pizf barely follows it; neither
 equivariant counterfactual training (\ect) nor an injected oracle 3D goal point (\pt, identical to \pizf) changes that.
-Decision-time counterfactual supervision (\ours) does, without changing the encoding.}
+Decision-time counterfactual supervision (\ours) does, while changing the encoding only moderately.}
 \captionsetup{hypcap=true}
 \label{fig:teaser}
 \end{strip}

@@ -116,23 +116,27 @@ privileged placer gives swap 40.0 (= Distill), against 64.7 with the placer (3 s
 & mid, target renamed & .02 & .02 & .02 & \textbf{.49} \\
 & carrying, cont.\ $\geq$12\,cm & .06 & .06 & .09--.10 & \textbf{.38--.68} \\
 \midrule
-\multirow{3}{*}{\rotatebox{90}{enc.}} & target moved $\geq$12\,cm & .58 & -- & .62 & .65 \\
-& swap & .55 & -- & .56 & .70 \\
-& container moved $\geq$12\,cm & .80 & -- & .86 & .85 \\
+\multirow{4}{*}{\rotatebox{90}{enc.}} & VLM input, target $\geq$12\,cm & .81 & -- & .81 & .81 \\
+& target moved $\geq$12\,cm & .58 & -- & .62 & .71 \\
+& swap & .54 & -- & .57 & .70 \\
+& container moved $\geq$12\,cm & .78 & -- & .85 & .84 \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Use and encoding after training} (seed 7; \ours as in \cref{tab:main}). Use: median follow of the action
 (\cref{sec:probing}), shared noise, averaged over two noise samples for \pizf and \ours; ranges span displacement sizes;
-\pt from an earlier probe with row-wise noise. Encoding: in-state probe $R^2$ of the action tokens, late expert layers
-(\pending{\ours: earlier configuration; re-run pending}). Every model encodes the change; only \ours acts on it.}
+\pt from an earlier probe with row-wise noise. Encoding: in-state probe $R^2$ of the image tokens at the first VLM layer
+(first row) and of the action tokens, mean over expert layers 12--17. Every model encodes the change; only \ours acts on it.}
 \label{tab:mech}
 \end{table}
 
 \Cref{tab:mech} applies the probes of \cref{sec:probing} to the trained policies.
-The encoding is nearly the same in the three models.
+The displacement is equally decodable at the input of the VLM in all models ($R^2$ 0.81); in the action tokens \ours
+strengthens it moderately (0.58 $\to$ 0.71 for a moved target, 0.54 $\to$ 0.70 for a swap), in the VLM layers that
+\cref{sec:exp:local} points to.
 What differs is use: \ect leaves it at the level of \pizf, while \ours makes the action follow a swap (0.04 $\to$ 0.39), a
 renamed target (0.02 $\to$ 0.49) and a moved container (0.06 $\to$ 0.38--0.68).
-Counterfactual supervision thus does not teach the policy to see; it teaches it to act on what it sees.
+Use, meanwhile, rises about tenfold: counterfactual supervision does not teach the policy to see, it teaches it to act on
+what it sees.
 One blind spot is shared by all models: early in the approach, the action follows a moved target by only 0.13--0.32.
 \textbf{(P5)} Use grows with the counterfactual mass: over training, the mid-approach use of a swap rises through 0.04,
 0.05, 0.15, 0.31, 0.38 and 0.44 at iterations 0, 4, \ldots, 20, and Object swap success rises with the share of

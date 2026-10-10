@@ -69,13 +69,11 @@ Small displacements near the hand are followed (0.51--0.59) more than large ones
 \emph{(3) Proprioception is not the shortcut.}
 Offsetting the proprioceptive input has no effect in any phase, and replacing it by a constant at test time (Object swap
 14.0, nominal 100) or during training (Spatial swap 40.5 \vs 40.0) does not change the failure.
-The same pattern holds on LIBERO-Spatial (early 0.21--0.30, swap 0.08--0.14, carrying 0.17--0.30) and LIBERO-Goal.
+LIBERO-Spatial and LIBERO-Goal show the same pattern.
 
 At the same time, the displacement is \emph{encoded}.
 It is decodable from the image tokens at every layer ($R^2$ 0.7--0.8 for a target moved by 12\,cm or more, about 0.9 for a
 moved container) and is carried into the action tokens over the expert's layers, from 0.05--0.2 in its first layers to
 0.58 (target) and 0.74--0.82 (container) in its last ones.
-The attention of the action tokens is also nearly identical between blind and tracking phases (instruction 0.6--0.8 at a
-few layers, wrist image 0.2--0.3, agent image 0.1--0.3 in early layers), so the failure is not that the action tokens do
-not look at the image.
-\pizf knows where the target and the container are; at the moments that matter, its action does not depend on it.
+The attention of the action tokens is also nearly identical between blind and tracking phases, so the failure is not that
+they do not look at the image: \pizf knows where the target and the container are, but its action does not depend on it.
