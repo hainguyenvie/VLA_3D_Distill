@@ -1385,3 +1385,10 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   (`logs/mirror_queue.sh`, kiểm nghiệm P3).
 - Paper: phần lý thuyết (Mệnh đề 1–2, Hệ quả 1, ba điều kiện, 5 dự đoán; chứng minh ở phụ lục); phương pháp viết lại từ lý
   thuyết; hình cảnh phản thực (phụ lục); bảng chính 3 seed.
+- **v3 (giao thức cố định):** Goal 92.5 / 32.5 (ECT 92.0 / 26.0), Long 89.0 / 16.0 (ECT 83.0 / 12.5) → hai bản sửa nhãn có tác
+  dụng ở bộ nhiều bước. Đang chạy v3 trên Object / Spatial để có một cấu hình chung (v2, có hindsight, cho Object swap 40.0).
+- **Cảnh lật gương (P3):** base 11.0; ECT 63.5 / 57.0 (TB 60.3, được train trên đó); DCS 56.0 / 52.5 (TB 54.3, chưa từng thấy).
+- **Probe noise chung:** base n0 / n1 giống hệt nhau và giống probe cũ (swap giữa pha 0.04, mang vật 0.06–0.09); horizon
+  10 / 25 / 50 giữ nguyên kết luận; OpenVLA-OFT: swap 0.01, mang vật 0.00 (8 bước); cấu hình chính s7: swap 0.44, đổi tên
+  0.54, dời 20 cm 0.72, mang vật 0.20–0.68; đường học vòng 4: mang vật 0.19–0.26, swap 0.05.
+- Paper: bảng Goal / Long theo giao thức cố định với v3; phần chính vừa 8 trang.

@@ -11,7 +11,8 @@ The change it induces lives in the VLM's mid-to-late layers rather than in the a
 \paragraph{Limitations.}
 Our labels come from privileged scripted teachers in simulation; they cover reaching and placing, not articulated or
 contact-rich steps, and their validity checks were refined by per-task failure analysis on the benchmark itself.
-Results are for one policy (\pizf), one benchmark family, and per-suite adaptation with a small budget; the multi-step
-suites are not improved, and using the scene costs robustness to appearance changes.
+Results are for one policy (\pizf), one benchmark family, and per-suite adaptation with a small budget; on the multi-step
+suites the gains are small and nominal success stays below that of \pizf, and using the scene costs robustness to
+appearance changes.
 The early-approach blind spot, shared by every model we measured, remains open, as does an intervention that targets the
 localized layers directly instead of adapting them with data.

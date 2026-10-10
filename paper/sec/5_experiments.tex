@@ -196,10 +196,9 @@ the action expert the highest (87.5).
 A policy that ignores the scene is robust to recoloring for free; a policy that looks at it can start to identify objects
 by color.
 In the VLM-only configuration, the validity checks of \cref{sec:method} raise the \emph{object} cell from 69 to 83.5;
-recoloring objects during the rollouts adds only 1.5 points to it and costs 9 points of swap (48.5 $\to$ 39.5), so its
-benefit is doubtful. \pending{The main model uses recoloring at probability 0.5; \ect with the same recoloring, and the main
-model without it, are running.} With the oracle point of \pt added, the \emph{object} cell returns to 92.5, since the point identifies the
-target regardless of its color; a non-privileged grounding source would be needed to claim this.
+recoloring objects during the rollouts adds only 1.5 points to it and costs 9 points of swap (48.5 $\to$ 39.5).
+\pending{Main model without recoloring and \ect with it: running.} With the oracle point of \pt, the \emph{object} cell
+returns to 92.5, as the point identifies the target regardless of color; claiming this would need a non-privileged source.
 
 \paragraph{LIBERO-Goal and LIBERO-Long.}
 \begin{table}[t]
@@ -215,21 +214,28 @@ Method (seed 7) & nominal & swap & nominal & swap \\
 \pizf & 96.5 & 28.0 & 93.5 & 8.0 \\
 Distill & 97.0 & 27.5 & 96.0 & 8.0 \\
 \ect & 92.0 & 26.0 & 83.0 & 12.5 \\
-\ours & 89.5 & 30.5 & 83.0 & \textbf{19.5} \\
-\ours, VLM only & 90.5 & \textbf{35.5} & 84.5 & 16.0 \\
+\ours, as Tab.~\ref{tab:main} & 89.5 & 30.5 & 83.0 & \textbf{19.5} \\
+\ours + scene-change phase & \textbf{92.5} & \textbf{32.5} & \textbf{89.0} & 16.0 \\
 \bottomrule
 \end{tabular}
-\caption{\textbf{Multi-step suites}, with the furniture placement fixed per trial (\cref{sec:exp:limits}). \ours here keeps
-the execution gate of earlier versions; the VLM-only row also uses the phase rule of the supplementary material.}
+\caption{\textbf{Multi-step suites}, with the furniture placement fixed per trial (\cref{sec:exp:limits}). The last row adds
+the two phase rules found by the per-task analysis (pre-grasp pairs only once the rest of the scene stops changing; no swap
+with another object the task carries). \pending{Same configuration on Object / Spatial: running.}}
 \label{tab:goal_long}
 \end{table}
-On the multi-step suites (\cref{tab:goal_long}) \ours raises swap moderately (Goal 28.0 $\to$ 30.5--35.5, Long
-8.0 $\to$ 16.0--19.5), more than \ect (26.0, 12.5), but both counterfactual methods lose nominal success.
-Per-task analysis traced the Goal drop to the two drawer tasks, and, within them, to two causes.
+On the multi-step suites (\cref{tab:goal_long}) the gains are smaller: \ours raises swap from 28.0 to 30.5--32.5 on Goal
+and from 8.0 to 16.0--19.5 on Long, more than \ect (26.0, 12.5), and both counterfactual methods lose nominal success.
+Per-task analysis traced the losses to label errors of the scripted teacher in multi-step tasks, each a violation of
+condition (i) of \cref{sec:theory}.
 First, \pizf opens the top drawer by pushing its handle without closing the gripper, so a gripper-based phase rule took the
-drawer phase for the approach to the bowl; segmenting phases by when the rest of the scene stops changing removes these
-pairs, but does not remove the drop.
-Second, LIBERO \emph{re-draws the furniture placement at every reset}: the cabinet moves by up to 2\,cm in $x$ and 1.4\,cm in
+drawer phase for the approach to the bowl and labeled ``go to the bowl'' there; starting pre-grasp pairs only once the rest
+of the scene stops changing removes these labels.
+Second, in ``put both X and Y in the basket'', swapping the target with Y labeled ``go elsewhere'' while a valid object was
+under the hand; never swapping with another object the task carries removes them.
+With both rules, nominal success recovers to 92.5 (Goal) and 89.0 (Long), above \ect (92.0, 83.0), while staying below
+\pizf.
+A remaining cause on Goal is the furniture.
+LIBERO \emph{re-draws the furniture placement at every reset}: the cabinet moves by up to 2\,cm in $x$ and 1.4\,cm in
 $y$, and the benchmark's initial states, which store joint positions only, do not fix it.
 Pinning the cabinet at controlled offsets shows that \ours, unlike \pizf and Distill, is sensitive to it on the
 top-drawer task (\cref{tab:furniture}): having learned to act on where movable objects are, it lost part of \pizf's ability
@@ -258,13 +264,9 @@ configuration with the best Goal nominal success in \cref{tab:goal_long} (94.0).
 \end{table}
 
 \paragraph{Evaluation protocol.}
-The re-drawn furniture has a second consequence.
-The standard LIBERO loop runs the trials of a task sequentially in one seeded environment, so trial $k$ sees the furniture
-of the $k$-th draw, while evaluation scripts that spread trials over parallel workers give the same trial a different
-placement depending on scheduling.
-With one adapter, the task ``open the middle drawer'' of LIBERO-Goal scores 65--70\% when its 20 trials run sequentially
-and 95\% when they run in freshly built environments, failing on exactly the same trials in repeated sequential runs.
-All numbers in this paper use the same scheduler for every method; for strict comparability we seed the environment per
-(task, trial) before each reset, which fixes the furniture of every trial independently of scheduling, and recommend
-reporting it.
-LIBERO-Object has no furniture and is unaffected.
+The standard LIBERO loop runs the trials of a task sequentially in one seeded environment, so trial $k$ sees the $k$-th
+furniture draw; parallel evaluation gives a trial a placement that depends on scheduling.
+One adapter scores 65--70\% on ``open the middle drawer'' with sequential trials and 95\% in fresh environments, failing on
+the same trials in repeated sequential runs.
+We therefore seed the environment per (task, trial) before each reset (used for \cref{tab:goal_long,tab:furniture} and
+recommended); LIBERO-Object has no furniture and is unaffected.
