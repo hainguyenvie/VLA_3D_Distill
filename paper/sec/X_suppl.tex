@@ -146,6 +146,41 @@ OpenVLA-OFT, 8 steps & $-$.02 & .01 & .06 & .01 & .00 & .18 & .00 \\
 \label{tab:supp:horizon}
 \end{table}
 
+\section{Sensitivity}
+\label{sec:supp:sens}
+
+\begin{table}[h]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llcc}
+\toprule
+Method & Setting & Object swap & Object position \\
+\midrule
+\ours & agreement threshold 0 (off) & 49.5 & 38.0 \\
+& agreement threshold 0.5 (default) & 54.0 & 36.0 \\
+& agreement threshold 0.8 & 52.0 & 42.0 \\
+\cmidrule{2-4}
+& counterfactual share 5\% & 38.0 & 24.0 \\
+& counterfactual share 15\% (default) & 54.0 & 36.0 \\
+& counterfactual share 30\% & 53.5 & -- \\
+\cmidrule{2-4}
+& no recoloring & 48.0 & 40.5 \\
+\midrule
+\ect & shifts $\times0.5$ & 24.0 & 15.5 \\
+& shifts $\times1$ (default) & 24.0 & 16.5 \\
+& shifts $\times1.5$ & 21.5 & -- \\
+& with our recoloring & 21.0 & 15.0 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Sensitivity} (LIBERO-Object, seed 7). Seed-to-seed spread of \ours swap: 51.0--58.5.}
+\label{tab:supp:sens}
+\end{table}
+
+The agreement threshold and \ect's shift sizes (which the \ect paper does not give) change the swap cell by less than the
+seed-to-seed spread. The counterfactual share matters up to about 15\% and then saturates, as expected once use is
+identified (\cref{prop:identified}).
+
 \section{Re-implemented baselines}
 \label{sec:supp:baselines}
 
