@@ -1400,3 +1400,9 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   tỉ lệ cặp 5%: 38.0 / 24.0 (15%: 54.0 / 36.0; 0%: 18.7 / 12.2). Đường học (swap giữa pha): 0.04, 0.05, 0.15, 0.31, 0.38, 0.44.
 - v4 (neo đồ cố định), giao thức cố định: Goal chuẩn 91.5 (v3 92.5) → không có lợi rõ ràng; cách cũ: Goal 94.5 / 35.5, Long
   90.0 / 14.0.
+- **v4 (giao thức cố định):** Goal 91.5 / 38.5, Long 90.0 / 16.0 (v3 92.5 / 32.5, 89.0 / 16.0; ECT 92.0 / 26.0, 83.0 / 12.5).
+  Cặp neo đồ cố định tăng Goal swap, không tăng chuẩn. Đưa vào paper (nhãn tự sinh hợp lệ ở đây theo điều kiện (i) vì π0.5
+  bám được đồ cố định trong khoảng này).
+- Không đổi màu (s7): Object 98.0 / 48.0 / 40.5 / đổi màu 84.5 / lan 96.5; Spatial 98.5 / **71.5** / 97.0 / 98.0, Plus 100 / 92.
+  → đổi màu không cần thiết (Spatial còn tốt hơn khi bỏ); cân nhắc bỏ khi chốt cấu hình cuối (cần thêm seed).
+- Tắt kiểm tra đồng thuận (s7): Object 97.5 / 49.5 / 38.0 / đổi màu 90.5 / lan 98.0.

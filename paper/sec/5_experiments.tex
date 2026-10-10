@@ -225,7 +225,8 @@ Method (seed 7) & nominal & swap & nominal & swap \\
 Distill & 97.0 & 27.5 & 96.0 & 8.0 \\
 \ect & 92.0 & 26.0 & 83.0 & 12.5 \\
 \ours, as Tab.~\ref{tab:main} & 89.5 & 30.5 & 83.0 & \textbf{19.5} \\
-\ours + scene-change phase & \textbf{92.5} & \textbf{32.5} & \textbf{89.0} & 16.0 \\
+\ours + scene-change phase & \textbf{92.5} & 32.5 & 89.0 & 16.0 \\
+\quad + furniture nudges & 91.5 & \textbf{38.5} & \textbf{90.0} & 16.0 \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Multi-step suites}, with the furniture placement fixed per trial (\cref{sec:exp:limits}). The last row adds
@@ -233,25 +234,22 @@ the two phase rules found by the per-task analysis (pre-grasp pairs only once th
 with another object the task carries). \pending{Same configuration on Object / Spatial: running.}}
 \label{tab:goal_long}
 \end{table}
-On the multi-step suites (\cref{tab:goal_long}) the gains are smaller: \ours raises swap from 28.0 to 30.5--32.5 on Goal
+On the multi-step suites (\cref{tab:goal_long}) the gains are smaller: \ours raises swap from 28.0 to 30.5--38.5 on Goal
 and from 8.0 to 16.0--19.5 on Long, more than \ect (26.0, 12.5), and both counterfactual methods lose nominal success.
-Per-task analysis traced the losses to label errors of the scripted teacher in multi-step tasks, each a violation of
-condition (i) of \cref{sec:theory}.
-First, \pizf opens the top drawer by pushing its handle without closing the gripper, so a gripper-based phase rule took the
-drawer phase for the approach to the bowl and labeled ``go to the bowl'' there; starting pre-grasp pairs only once the rest
-of the scene stops changing removes these labels.
-Second, in ``put both X and Y in the basket'', swapping the target with Y labeled ``go elsewhere'' while a valid object was
-under the hand; never swapping with another object the task carries removes them.
-With both rules, nominal success recovers to 92.5 (Goal) and 89.0 (Long), above \ect (92.0, 83.0), while staying below
-\pizf.
+Per-task analysis traced the losses to scripted labels that violate condition (i) of \cref{sec:theory}: \pizf opens the
+top drawer by pushing its handle without closing the gripper, so a gripper-based phase rule labeled ``go to the bowl''
+during the drawer phase; and in ``put both X and Y in the basket'', swapping the target with Y labeled ``go elsewhere'' over
+a valid object. Starting pre-grasp pairs only once the rest of the scene stops changing, and never swapping with another
+carried object, recovers nominal success to 92.5 (Goal) and 89.0 (Long), above \ect (92.0, 83.0) but below \pizf.
 A remaining cause on Goal is the furniture.
 LIBERO \emph{re-draws the furniture placement at every reset}: the cabinet moves by up to 2\,cm in $x$ and 1.4\,cm in
 $y$, and the benchmark's initial states, which store joint positions only, do not fix it.
 Pinning the cabinet at controlled offsets shows that \ours, unlike \pizf and Distill, is sensitive to it on the
 top-drawer task (\cref{tab:furniture}): having learned to act on where movable objects are, it lost part of \pizf's ability
 to follow the furniture.
-\pending{Counterfactuals that nudge the furniture and keep the teacher's own response there, which \pizf handles reliably
-within this range, are running.}
+Counterfactuals that nudge the furniture by 1--3\,cm, labeled by the teacher's own response, raise Goal swap to 38.5 but not
+nominal success (\cref{tab:goal_long}); unlike the self-labels of (P2), these satisfy condition (i), because \pizf does
+follow the furniture within this range.
 
 \begin{table}[t]
 \centering
