@@ -36,23 +36,23 @@ Method & seeds & nominal & swap & position & object & language & & nominal & swa
 \midrule
 Distill (no counterfactual) & 3 / 2 & 99.3 & 18.7\,{\scriptsize$\pm$2.8} & 12.2\,{\scriptsize$\pm$1.3} & 92.5 & 99.2 & & 97.5 & 40.0\,{\scriptsize$\pm$2.8} & 98.5 & 96.5 \\
 \pt~\cite{tsai2026point} (oracle point) & 1 & 98.5 & 18.5 & 12.5 & 93.0 & 100.0 & & 99.0 & 40.0 & 98.0 & 97.0 \\
-\ect~\cite{chen2026ect} & 2\pending{+1} & 99.0 & 23.8\,{\scriptsize$\pm$0.4} & 16.5\,{\scriptsize$\pm$0.0} & 93.3 & 98.5 & & 98.8 & 50.8\,{\scriptsize$\pm$1.8} & 98.0 & 96.8 \\
-\ours (ours) & 3 & 97.3 & \textbf{54.5}\,{\scriptsize$\pm$3.8} & \textbf{38.2}\,{\scriptsize$\pm$5.6} & 81.8\pending{$^\dagger$} & 98.0\pending{$^\dagger$} & & 98.8 & \textbf{65.0}\,{\scriptsize$\pm$1.8} & 98.8\pending{$^\dagger$} & 96.8\pending{$^\dagger$} \\
+\ect~\cite{chen2026ect} & 3 & 99.0 & 23.2\,{\scriptsize$\pm$1.0} & 17.0\,{\scriptsize$\pm$0.9} & 93.3\pending{$^\dagger$} & 98.5\pending{$^\dagger$} & & 98.5 & 50.2\,{\scriptsize$\pm$1.6} & 98.0\pending{$^\dagger$} & 96.8\pending{$^\dagger$} \\
+\ours (ours) & 3 & 97.3 & \textbf{54.5}\,{\scriptsize$\pm$3.8} & \textbf{38.2}\,{\scriptsize$\pm$5.6} & 83.2 & 97.3 & & 98.8 & \textbf{65.0}\,{\scriptsize$\pm$1.8} & 98.3 & 96.5 \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{LIBERO-PRO success (\%) after per-suite adaptation of \pizf}, mean $\pm$ std over seeds (200 episodes per
 cell and seed). All methods share the teacher, rollouts, budget and optimizer. The untrained \pizf scores 99 / 18.5 on
-Object nominal / swap. Distill has 3 seeds on Object and 2 on Spatial. \pending{$^\dagger$: 2 seeds, third running.}}
+Object nominal / swap. Distill has 3 seeds on Object and 2 on Spatial. \pending{$^\dagger$: 2 seeds, third being evaluated.}}
 \label{tab:main}
 \end{table*}
 
 \Cref{tab:main} shows the outcome on the two suites where the swap failure is largest.
 \ours raises Object swap from 18.7 to 54.5 and Object position from 12.2 to 38.2, and Spatial swap from 40.0 to 65.0,
 keeping nominal success at 97--99.
-Under the same teacher and budget, \ect gains 5.1 and 10.8 points on the swap cells, \ours 35.8 and 25.0;
-the difference to \ect is 30.8 points on Object swap, 21.7 on Object position and 14.3 on Spatial swap.
+Under the same teacher and budget, \ect gains 4.5 and 10.2 points on the swap cells, \ours 35.8 and 25.0;
+the difference to \ect is 31.3 points on Object swap, 21.2 on Object position and 14.8 on Spatial swap (three seeds each).
 \pt does not move any cell.
-The cost is on the \emph{object} cell of LIBERO-Object, where recolored or re-textured objects drop from 92.5 to 81.8;
+The cost is on the \emph{object} cell of LIBERO-Object, where recolored or re-textured objects drop from 92.5 to 83.2;
 we analyze this trade-off in \cref{sec:exp:limits}.
 
 \begin{table}[t]

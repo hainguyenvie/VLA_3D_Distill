@@ -1,8 +1,8 @@
 p05_ect50_s7                       it 20  std 100.0  swap 25.0 temp 19.0 object 94.0 lan 98.0 task 0.0  plus {'Object': 87, 'Robot ': 85}
 p05_ect_s7                         it 20  std 98.0  swap 24.0 temp 16.5 object 92.5 lan 98.0 task 0.0  plus {'Object': 83, 'Robot ': 78}
 p05_ect_s8                         it 20  std 100.0  swap 23.5 temp 16.5 object 94.0 lan 99.0 task 0.0  plus {'Object': 87, 'Robot ': 77}
-p05_ect_s9                         it 20  std None    plus None
-p05_ecttint_s7                     it  3  std None    plus None
+p05_ect_s9                         it 20  std 99.0  swap 22.0 temp 18.0  plus None
+p05_ecttint_s7                     it  7  std None    plus None
 p05_geo1_s7                        it 20  std 98.5  swap 18.5 temp 12.5 object 93.0 lan 100.0 task 0.0  plus {'Object': 87, 'Robot ': 83}
 p05_geocf01_s7                     it 20  std 99.5  swap 43.0 temp 41.5 object 92.5 lan 99.0 task 0.5  plus {'Object': 90, 'Robot ': 78}
 p05_ocd_coreloc3_s7                it  1  std None    plus None
@@ -66,8 +66,10 @@ p05_uni_full_s7                    it 20  std 99.0  swap 44.5 temp 38.5 object 8
 p05_uni_full_s8                    it 20  std 95.5  swap 54.0 temp 38.0 object 85.5 lan 96.0 task 0.0  plus {'Object': 85, 'Robot ': 80}
 p05_uninogate_full_s7              it 20  std 98.0  swap 54.0 temp 36.0 object 86.0 lan 99.5 task 0.0  plus {'Object': 88, 'Robot ': 77}
 p05_uninogate_full_s8              it 20  std 97.5  swap 58.5 temp 44.5 object 77.5 lan 96.5 task 0.0  plus {'Object': 83, 'Robot ': 80}
-p05_uninogate_full_s9              it 20  std 96.5  swap 51.0 temp 34.0  plus None
-p05_v2_s7                          it 20  std 98.5  swap 40.0  plus None
+p05_uninogate_full_s9              it 20  std 96.5  swap 51.0 temp 34.0 object 86.0 lan 96.0 task 0.0  plus {'Object': 83, 'Robot ': 77}
+p05_uninogatef05_full_s7           it  0  std None    plus None
+p05_uninogatenotint_full_s7        it  3  std None    plus None
+p05_v2_s7                          it 20  std 98.5  swap 40.0 temp 23.5 lan 98.0 task 0.0  plus None
 p05_v2vlm_s7                       it 20  std 92.5  swap 39.5 temp 27.5 object 85.0 lan 96.5 task 0.0  plus {'Object': 83, 'Robot ': 82}
 p05_v2vlmnotint_s7                 it 20  std 97.0  swap 48.5 temp 34.0 object 83.5 lan 95.5 task 0.0  plus {'Object': 83, 'Robot ': 75}
 p05gl_ect_s7                       it 20  std 96.5  swap 24.5 object 81.0 lan 94.5 task 10.5  plus {'Object': 67, 'Robot ': 72}
@@ -80,7 +82,8 @@ p05gl_opd_base_s7                  it 20  std 97.5  swap 29.0 object 87.5 lan 96
 p05gl_uni_full_s7                  it 20  std 89.5  swap 28.5 object 74.5 lan 86.0 task 13.5  plus {'Object': 67, 'Robot ': 82}
 p05gl_v2_s7                        it 20  std 94.0  swap 31.0 object 76.5 lan 90.0 task 13.0  plus {'Object': 63, 'Robot ': 68}
 p05gl_v2vlm_s7                     it 20  std 91.5  swap 30.0 object 80.5 lan 89.5 task 11.0  plus {'Object': 68, 'Robot ': 75}
-p05gl_v3_s7                        it 17  std None    plus None
+p05gl_v3_s7                        it 20  std 91.0  swap 32.5  plus None
+p05gl_v4_s7                        it  2  std None    plus None
 p05lg_ect_s7                       it 20  std 84.0  swap 14.0 object 59.0 lan 81.5 task 7.0  plus {'Object': 73, 'Robot ': 60}
 p05lg_ocd_relocate2_s7             it  3  std None    plus None
 p05lg_ocd_relocate3_s7             it  2  std None    plus None
@@ -93,12 +96,13 @@ p05lg_v2frac5_s7                   it 20  std 84.5  swap 11.0 object 48.0 lan 82
 p05lg_v2nogrip_s7                  it 20  std 84.0  swap 12.5 object 58.0 lan 88.0 task 5.5  plus {'Object': 70, 'Robot ': 62}
 p05lg_v2notint_s7                  it 20  std 87.0  swap 11.0 object 55.5 lan 81.0 task 4.0  plus {'Object': 75, 'Robot ': 68}
 p05lg_v2vlm_s7                     it 20  std 86.5  swap 13.5 object 49.0 lan 81.5 task 6.0  plus {'Object': 60, 'Robot ': 70}
-p05lg_v3_s7                        it 16  std None    plus None
+p05lg_v3_s7                        it 20  std None    plus None
+p05lg_v4_s7                        it  3  std None    plus None
 p05sp_ect50_s7                     it 20  std 98.0  swap 48.0 object 98.0 lan 96.5 task 0.5  plus {'Object': 100, 'Robot ': 88}
 p05sp_ect_s7                       it 20  std 99.0  swap 52.0 object 98.5 lan 96.0 task 0.0  plus {'Object': 98, 'Robot ': 83}
 p05sp_ect_s8                       it 20  std 98.5  swap 49.5 object 97.5 lan 97.5 task 0.5  plus {'Object': 97, 'Robot ': 82}
-p05sp_ect_s9                       it 19  std None    plus None
-p05sp_ecttint_s7                   it  3  std None    plus None
+p05sp_ect_s9                       it 20  std 98.0  swap 49.0  plus None
+p05sp_ecttint_s7                   it  7  std None    plus None
 p05sp_geo1_s7                      it 20  std 99.0  swap 40.0 object 98.0 lan 97.0 task 0.5  plus {'Object': 100, 'Robot ': 87}
 p05sp_geocf01_s7                   it 20  std 98.5  swap 62.0 object 97.5 lan 96.5 task 0.5  plus {'Object': 97, 'Robot ': 87}
 p05sp_ocd_coshift_post_s7          it 20  std 98.0  swap 40.0 object 97.0 lan 95.5 task 0.0  plus {'Object': 97, 'Robot ': 88}
@@ -116,6 +120,7 @@ p05sp_uni_full_s7                  it 20  std 98.5  swap 55.0 object 98.0 lan 96
 p05sp_uni_full_s8                  it 20  std 97.5  swap 53.5 object 96.0 lan 97.0 task 0.5  plus {'Object': 100, 'Robot ': 87}
 p05sp_uninogate_full_s7            it 20  std 99.0  swap 65.5 object 99.0 lan 96.0 task 0.5  plus {'Object': 95, 'Robot ': 85}
 p05sp_uninogate_full_s8            it 20  std 98.0  swap 66.5 object 98.5 lan 97.5 task 0.5  plus {'Object': 100, 'Robot ': 88}
-p05sp_uninogate_full_s9            it 20  std 99.5  swap 63.0  plus None
-p05sp_v2_s7                        it 19  std None    plus None
+p05sp_uninogate_full_s9            it 20  std 99.5  swap 63.0 object 97.5 lan 96.0 task 0.5  plus {'Object': 100, 'Robot ': 87}
+p05sp_uninogatenotint_full_s7      it  2  std None    plus None
+p05sp_v2_s7                        it 20  std 99.5  swap 66.5  plus None
 p05sp_v2vlm_s7                     it 20  std 99.0  swap 67.5 object 97.5 lan 97.5 task 0.5  plus {'Object': 100, 'Robot ': 85}

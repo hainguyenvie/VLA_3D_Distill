@@ -1374,3 +1374,14 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   (`scripts/server/probe_queue.sh`, `outputs/week1/mech2_object_*`).
 - Độ nhạy theo review (Object s7, xếp hàng chờ CPU, `launch_when_free.sh`): tỉ lệ cặp 5% / 30%, ngưỡng đồng thuận 0 / 0.8
   (`pi05_round19.sh` FRAC / AGREE), ECT dịch chuyển ×0.5 / ×1.5 (`--ect_shift_scale`, `pi05_round20.sh` SHIFT).
+- **Kết quả chính 3 seed:** ta Object swap 54.0 / 58.5 / 51.0 (TB 54.5), position 36.0 / 44.5 / 34.0 (38.2), đổi màu 86.0 / 77.5 /
+  86.0 (83.2); Spatial swap 65.5 / 66.5 / 63.0 (65.0). ECT: Object swap 24.0 / 23.5 / 22.0 (23.2), position 16.5 / 16.5 / 18.0
+  (17.0); Spatial swap 52.0 / 49.5 / 49.0 (50.2). **Ta − ECT: +31.3 / +21.2 / +14.8.**
+- Eval cố định đồ cố định (`fs_*`): Spatial base 97.0 / 40.5, ECT s7 98.5 / 49.5, ECT s8 97.5 / 49.0, ta s7 98.5 / 63.5; Goal base
+  96.5 / 28.0, distill 97.0 / 27.5, ECT 92.0 / 26.0, ta (uni_full) 89.5 / 30.5; Long base 93.5 / 8.0, distill 96.0 / 8.0, ECT std
+  83.0, ta uni_full 83.0 / 19.5, v2nogrip std 89.0.
+- v3 Goal: chuẩn 91.0, swap 32.5 (v2 94.0 / 31.0) → sửa tách pha không cứu Goal chuẩn.
+- Cảnh lật gương (`--scene_transform ymirror`) chạy đúng; eval base / ECT s7, s8 / ta s7, s8 trên Object đang xếp hàng
+  (`logs/mirror_queue.sh`, kiểm nghiệm P3).
+- Paper: phần lý thuyết (Mệnh đề 1–2, Hệ quả 1, ba điều kiện, 5 dự đoán; chứng minh ở phụ lục); phương pháp viết lại từ lý
+  thuyết; hình cảnh phản thực (phụ lục); bảng chính 3 seed.
