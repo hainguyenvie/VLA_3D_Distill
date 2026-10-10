@@ -59,6 +59,26 @@ parallel environments) until at least 1024 queried states are available, samples
 steps). 20 iterations, i.e.\ 2560 optimizer steps. Every 4 iterations the adapter is evaluated on 10 trials per task (used
 only for monitoring). Rendering at $256\times256$ for both cameras.
 
+\begin{figure}[t]
+\centering
+\setlength{\tabcolsep}{1pt}
+\begin{tabular}{@{}r@{\hspace{3pt}}ccc@{}}
+& \footnotesize retarget & \footnotesize co-shift (control) & \footnotesize relocate \\
+\rotatebox{90}{\footnotesize\hspace{3pt}factual} &
+\includegraphics[width=0.31\linewidth]{fig/cf_retarget_fact.png} &
+\includegraphics[width=0.31\linewidth]{fig/cf_coshift_fact.png} &
+\includegraphics[width=0.31\linewidth]{fig/cf_relocate_fact.png} \\
+\rotatebox{90}{\footnotesize\hspace{-3pt}counterfactual} &
+\includegraphics[width=0.31\linewidth]{fig/cf_retarget_cf.png} &
+\includegraphics[width=0.31\linewidth]{fig/cf_coshift_cf.png} &
+\includegraphics[width=0.31\linewidth]{fig/cf_relocate_cf.png} \\
+\end{tabular}
+\caption{\textbf{Decision-time counterfactuals} at states of \pizf's own LIBERO-Object rollouts (agent view, as the policy
+sees it). \emph{Retarget}: before the grasp, the target moves and the hand stays. \emph{Co-shift}: hand and target move
+together, the decision is unchanged. \emph{Relocate}: while carrying, the basket moves and hand and object stay.}
+\label{fig:cf_examples}
+\end{figure}
+
 \paragraph{Scripted teachers.}
 The \emph{approach} teacher moves the hand to a pre-grasp pose above the target (height from the target's bounding box)
 with the controller's maximal translation and the gripper open; its chunk is valid for the steps it takes to get there.
