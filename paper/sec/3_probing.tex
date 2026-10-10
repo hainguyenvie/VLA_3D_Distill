@@ -8,7 +8,7 @@ At every layer the action tokens attend to the VLM's prefix: 512 image tokens fr
 instruction, and the proprioceptive state, which the LIBERO checkpoint writes into the prompt as about 120 digit tokens.
 The time step of the flow conditions the expert through adaptive RMS normalization.
 We use the public LIBERO checkpoint in its LeRobot port; on LIBERO-PRO it matches the numbers reported for the official
-model (swap: Object 18.7 \vs 18.2, Long 8.5 \vs 9.4~\cite{chen2026ect}).
+model (swap: Object 18.5 \vs 18.2, Long 8.0 \vs 9.4~\cite{chen2026ect}).
 
 \paragraph{Decision-time interventions.}
 We take states $s_t$ from successful rollouts of the policy and build a counterfactual state $s'_t$ that differs in one
@@ -21,13 +21,15 @@ States are binned by phase: \emph{early} (hand farther than 15\,cm from the targ
 (closer than 5\,cm) and \emph{carrying}.
 
 \paragraph{Use.}
-With the flow noise held fixed, we roll the first 25 steps of each predicted chunk through a kinematic model of the
-controller to obtain the hand's intended displacement $m(s)$, and define
+% TODO: numbers of Tab. 1 / 4 come from the earlier probe (row-wise noise); replace by the shared-noise probes (mech2_*).
+Giving a state and its counterfactual the same flow-noise sample, we roll the first 25 steps of each predicted chunk
+through a kinematic model of the controller to obtain the hand's intended displacement $m(s)$, and define
 \begin{equation}
 \mathrm{use} = \frac{\langle m(s'_t) - m(s_t),\, \mathbf{d} \rangle}{\lVert \mathbf{d} \rVert^2},
 \end{equation}
 where $\mathbf{d}$ is the displacement of what moved (for (iv), from the target to the newly named object).
-A value of 1 means the motion follows the change fully, 0 that it ignores it.
+A value of 1 means the motion follows the change fully, 0 that it ignores it. The supplementary material reports the
+metric for 10- and 50-step horizons and for several noise samples.
 
 \paragraph{Encoding.}
 For every layer we pool the hidden states of four streams (image tokens, instruction tokens, the last prefix token and the
@@ -70,7 +72,7 @@ The same pattern holds on LIBERO-Spatial (early 0.21--0.30, swap 0.08--0.14, car
 
 At the same time, the displacement is \emph{encoded}.
 It is decodable from the image tokens at every layer ($R^2$ 0.7--0.8 for a target moved by 12\,cm or more, about 0.9 for a
-moved container) and is carried into the action tokens over the expert's layers, from about 0.05 in its first layers to
+moved container) and is carried into the action tokens over the expert's layers, from 0.05--0.2 in its first layers to
 0.58 (target) and 0.74--0.82 (container) in its last ones.
 The attention of the action tokens is also nearly identical between blind and tracking phases (instruction 0.6--0.8 at a
 few layers, wrist image 0.2--0.3, agent image 0.1--0.3 in early layers), so the failure is not that the action tokens do

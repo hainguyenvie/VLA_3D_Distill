@@ -7,7 +7,8 @@ and one input of the policy is changed at a time; the change of its action chunk
   swap       before the grasp, the target and another movable object exchange their places.
   state      only the proprio given to the policy is offset by 5 cm (the images are those of the true state).
   lang       before the grasp, the instruction names another object of the scene instead of the target.
-The motion of a chunk is where the hand would go in its first 25 steps (kinematic model of src/rollout/scripted.py).
+The motion of a chunk is where the hand would go in its first 25 steps (kinematic model of src/rollout/scripted.py);
+--horizons also reports 10 and 50 steps, --noise_seed gives a state and its variants the same flow noise.
   follow   = <motion(variant) - motion(base), d> / |d|^2 with d the displacement of the thing that moved (1: the motion
              follows it fully, 0: it ignores it); for "state" d is minus the proprio offset (1: the policy believes the
              proprio over the images and corrects for a hand that is not where it sees it); for "lang" d goes from the
@@ -109,6 +110,10 @@ def main():
     ap.add_argument("--deltas", default="0.03,0.06,0.12,0.2")
     ap.add_argument("--num_envs", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--horizons", default="10,25,50", help="steps of the chunk whose motion is compared (follow per horizon; "
+                    "the summary's main numbers use 25)")
+    ap.add_argument("--noise_seed", type=int, default=-1, help="flow policies: one noise sample, from this seed, shared by every "
+                    "row of every batch (a state and its variants see the same noise); -1 = the policy's default (row-wise)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     from src.rollout.scripted import TRACK_GAIN
@@ -131,8 +136,21 @@ def main():
         if args.geo:
             policy.load_geo(args.lora)
 
-    def motion(chunk):  # where the first 25 steps of a chunk (env units) would bring the hand, horizontally (m)
-        return (TRACK_GAIN[:2] * chunk[:25, :2] * 0.05).sum(0)
+    horizons = [int(h) for h in args.horizons.split(",")]
+    main_h = 25 if 25 in horizons else horizons[0]
+
+    def motion(chunk, h):  # where the first h steps of a chunk (env units) would bring the hand, horizontally (m)
+        return (TRACK_GAIN[:2] * chunk[:h, :2] * 0.05).sum(0)
+
+    if args.noise_seed >= 0 and hasattr(policy, "_noise"):  # the same noise for every row: only the observation differs
+        g = torch.Generator(device="cpu").manual_seed(args.noise_seed)
+        one = torch.randn((1, policy.chunk, policy.vla.config.max_action_dim), generator=g)
+        policy._noise = lambda b: one.repeat(b, 1, 1).to(policy.device, dtype=torch.float32)
+
+    def chunks_env(images, langs, obs):  # (B, T, 7) commands in env units, whatever the policy family
+        if hasattr(policy, "chunk_env"):
+            return policy.chunk_env(images, langs, obs)
+        return np.asarray(policy.act(images, langs, obs=obs)["actions"])  # OpenVLA-OFT: 8 steps, deterministic head
 
     rows, pending = [], []
     for k, job in enumerate(jobs):
@@ -143,13 +161,15 @@ def main():
             for o, j in zip(obs, pending):
                 if j["obs_offset"] is not None:
                     o["eef_pos"] = (o["eef_pos"] + j["obs_offset"]).astype(np.float32)
-            chunks = policy.chunk_env([o["rgb"] for o in obs], [j["lang"] for j in pending], obs)
+            chunks = chunks_env([o["rgb"] for o in obs], [j["lang"] for j in pending], obs)
             for j, c in zip(pending, chunks):
-                mv = motion(c)
+                mv = {h: motion(c, h) for h in horizons}
                 rows.append({kk: vv for kk, vv in j.items() if kk not in ("state", "obs_offset", "d", "lang", "a_tgt", "a_con", "eef_xy")}
                             | {"dx": round(float(j["d"][0]), 3), "dy": round(float(j["d"][1]), 3),
-                               "move_x": round(float(mv[0]), 4), "move_y": round(float(mv[1]), 4),
-                               "close_in_chunk": int((c[:25, -1] > 0).any())})
+                               "move_x": round(float(mv[main_h][0]), 4), "move_y": round(float(mv[main_h][1]), 4),
+                               **{f"move_x_{h}": round(float(mv[h][0]), 4) for h in horizons},
+                               **{f"move_y_{h}": round(float(mv[h][1]), 4) for h in horizons},
+                               "chunk_len": int(len(c)), "close_in_chunk": int((c[:main_h, -1] > 0).any())})
             pending = []
         if (k + 1) % 200 == 0:
             print(f"{k + 1}/{len(jobs)} queries", flush=True)
@@ -163,13 +183,20 @@ def main():
             continue
         dm = np.array([r["move_x"] - b["move_x"], r["move_y"] - b["move_y"]])
         r["follow"] = round(float(dm @ d / (d @ d)), 3)
+        for h in horizons:
+            dmh = np.array([r[f"move_x_{h}"] - b[f"move_x_{h}"], r[f"move_y_{h}"] - b[f"move_y_{h}"]])
+            r[f"follow_{h}"] = round(float(dmh @ d / (d @ d)), 3)
+    for r in rows:
+        if r["follow"] == "":
+            for h in horizons:
+                r[f"follow_{h}"] = ""
     with open(os.path.join(args.out, "states.csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
 
-    def stat(sel):
-        v = np.array([r["follow"] for r in rows if r["follow"] != "" and sel(r)], dtype=float)
+    def stat(sel, key="follow"):
+        v = np.array([r[key] for r in rows if r[key] != "" and sel(r)], dtype=float)
         return {"n": int(len(v)), "median": round(float(np.median(v)), 2), "mean": round(float(v.mean()), 2)} if len(v) else None
 
     bins = {"far (>15 cm)": lambda r: r["dist_target_cm"] > 15, "mid (5-15 cm)": lambda r: 5 <= r["dist_target_cm"] <= 15,
@@ -178,6 +205,11 @@ def main():
     summary = {"pre-grasp, by distance hand-target": {b: {v: stat(lambda r, b=b, v=v: r["phase"] == "pre" and bins[b](r) and r["variant"] == v)
                                                           for v in variants} for b in bins},
                "carrying": {v: stat(lambda r, v=v: r["phase"] == "post" and r["variant"] == v) for v in variants},
+               "by_horizon": {str(h): {
+                   "pre-grasp, by distance hand-target": {b: {v: stat(lambda r, b=b, v=v: r["phase"] == "pre" and bins[b](r) and r["variant"] == v, f"follow_{h}")
+                                                              for v in variants} for b in bins},
+                   "carrying": {v: stat(lambda r, v=v: r["phase"] == "post" and r["variant"] == v, f"follow_{h}") for v in variants}}
+                   for h in horizons},
                "config": vars(args)}
     json.dump(summary, open(os.path.join(args.out, "summary.json"), "w"), indent=1)
     for part in ("pre-grasp, by distance hand-target", "carrying"):

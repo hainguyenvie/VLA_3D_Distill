@@ -4,9 +4,8 @@
 Generalist vision-language-action (VLA) policies~\cite{brohan2023rt2,kim2024openvla,black2024pi0,pi2025pi05} now solve
 the standard LIBERO suites~\cite{liu2023libero} almost perfectly.
 The same policies fail in a strikingly simple way when the scene is rearranged.
-LIBERO-PRO~\cite{zhou2025liberopro} keeps every task and only moves the objects; under its \emph{swap} perturbation,
-where the target trades places with another object, \pizf drops from 99\% to 19\% on LIBERO-Object and from 98\% to 40\% on
-LIBERO-Spatial.
+The \emph{swap} perturbation of LIBERO-PRO~\cite{zhou2025liberopro} keeps every task and only lets the target trade places
+with another object; under it, \pizf drops from 99\% to 19\% on LIBERO-Object and from 97.5\% to 40\% on LIBERO-Spatial.
 Watching the rollouts shows why: the arm drives to where the target used to be.
 The policy behaves as if the instruction retrieved a memorized trajectory~\cite{chen2026ect}.
 

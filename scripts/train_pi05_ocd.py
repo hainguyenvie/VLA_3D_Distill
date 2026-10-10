@@ -54,6 +54,7 @@ def parse():
     ap.add_argument("--ect_transforms", default="ymirror",
                     help="ect mode (baseline, arXiv 2609.39971): scene transforms drawn per replayed episode, names of "
                          "src.rollout.vec_env.ECT_TRANSFORMS")
+    ap.add_argument("--ect_shift_scale", type=float, default=1.0, help="ect: multiply the shifts of the transforms")
     ap.add_argument("--ect_episodes", type=int, default=16,
                     help="ect mode: successful episodes of each iteration replayed in a transformed scene")
     ap.add_argument("--state_blind", action="store_true",
@@ -273,6 +274,11 @@ def main():
             ar["cf_mask"] = np.zeros(ar["actions_teacher"].shape[:2], dtype=np.float32)
             ar["cf_valid"] = np.zeros(nq, dtype=bool)
         names = args.ect_transforms.split(",")
+
+        def scaled(spec):  # --ect_shift_scale: sensitivity of the baseline to the shift sizes (not given in the paper)
+            if "shift" not in spec or args.ect_shift_scale == 1.0:
+                return spec
+            return dict(spec, shift=tuple(args.ect_shift_scale * float(x) for x in spec["shift"]))
         jobs = [int(i) for i in rng.permutation([i for i, r in enumerate(recs) if r["success"]])[: args.ect_episodes]]
         busy, n_ok, n_try = {}, 0, len(jobs)
         while jobs or busy:
@@ -281,7 +287,7 @@ def main():
                     i = jobs.pop()
                     r = recs[i]
                     vec.ect(w, r["task_id"], r["trial_id"], postprocess_actions(r["arrays"]["actions"]).reshape(-1, 7),
-                            r["arrays"]["t"], ECT_TRANSFORMS[names[int(rng.integers(len(names)))]])
+                            r["arrays"]["t"], scaled(ECT_TRANSFORMS[names[int(rng.integers(len(names)))]]))
                     busy[w] = i
             for w in list(busy):
                 if not vec.ready(w):

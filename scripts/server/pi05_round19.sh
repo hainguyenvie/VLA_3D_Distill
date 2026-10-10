@@ -15,7 +15,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MODE="$1"; S="$2"
 T="${TAG:-}"  # suffix of the run names, for variants (e.g. TAG=nogate)
-UNI="--cf_mode $MODE --cf_frac 0.15 --cf_unique --cf_agree 0.5 --obj_tint ${TINT:-0.5} --lambda_cf 0 --cf_coshift_post 0.15,0.4 --seed $S"
+UNI="--cf_mode $MODE --cf_frac ${FRAC:-0.15} --cf_unique --cf_agree ${AGREE:-0.5} --obj_tint ${TINT:-0.5} --lambda_cf 0 --cf_coshift_post 0.15,0.4 --seed $S"
 arm() {  # arm <gpu, "-" = skip> <suite> <max steps> <run> <relocate tasks>
   [ "$1" = - ] && return 0
   SUITE="$2" MAX_STEPS="$3" bash "$HERE/pi05_arm.sh" "$1" "$4" $UNI --relocate_tasks "${5:?gate list missing}" &

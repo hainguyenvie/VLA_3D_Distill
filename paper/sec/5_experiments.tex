@@ -243,7 +243,8 @@ $(-2, -1.4)$\,cm & 95 & 90 & 85 & 55 \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Furniture sensitivity}, Goal task ``open the top drawer and put the bowl inside'' (20 trials, furniture
-pinned at the placement of a fresh environment plus the offset; offsets within the range LIBERO itself draws).}
+pinned at the placement of a fresh environment plus the offset; offsets within the range LIBERO itself draws). \ours: the
+configuration with the best Goal nominal success in \cref{tab:goal_long} (94.0).}
 \label{tab:furniture}
 \end{table}
 
@@ -252,8 +253,8 @@ The re-drawn furniture has a second consequence.
 The standard LIBERO loop runs the trials of a task sequentially in one seeded environment, so trial $k$ sees the furniture
 of the $k$-th draw, while evaluation scripts that spread trials over parallel workers give the same trial a different
 placement depending on scheduling.
-With one adapter, the drawer task of LIBERO-Goal scores 70\% when its 20 trials run sequentially and 95\% when they run in
-freshly built environments, failing on exactly the same trials in repeated sequential runs.
+With one adapter, the task ``open the middle drawer'' of LIBERO-Goal scores 65--70\% when its 20 trials run sequentially
+and 95\% when they run in freshly built environments, failing on exactly the same trials in repeated sequential runs.
 All numbers in this paper use the same scheduler for every method; for strict comparability we seed the environment per
 (task, trial) before each reset, which fixes the furniture of every trial independently of scheduling, and recommend
 reporting it.

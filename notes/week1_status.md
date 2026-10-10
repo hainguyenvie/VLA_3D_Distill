@@ -1360,3 +1360,17 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   `--cf_fixture_frac 0.05`, ngoài 15% của các cặp chính; thử 1 vòng: chung ngân sách thì cặp đồ cố định chiếm 92 / 185 nên
   đã tách). `scripts/check_fixture_view.py`: ảnh đúng (đồ cố định dời, robot và vật trên bàn giữ nguyên). Đang chạy Goal, Long
   (`pi05_round23.sh`, `p05gl_v4_s7`, `p05lg_v4_s7`).
+
+### 10/10 — Bản nháp paper (template CVPR 2026, `paper/`) và review thử
+- Review thử: Weak Accept (5). Đánh giá từng điểm và việc đã làm: xem tin nhắn trả lời / phần dưới.
+- Xác minh 9 bài reviewer gợi ý: **cả 9 có thật** (When Vision Overrides Language 2602.17659; Flatness 2606.23641; CofactVLA
+  2608.04396; VLA-Trace 2605.30117; Stable Language Guidance ACL 2026 / 2601.04052; AFI CVPR 2026 / 2512.07472, LIBERO-Pro
+  +20.2%; CounterAlign 2608.21740, offline RL với phần thưởng từ bộ phân biệt phản thực; Imagining Recovery / CoRe 2608.14822;
+  Feasible-Future Decoding 2610.05166 — an toàn, ít liên quan, không trích). Đã thêm 8 bài vào related work.
+- **Lỗi của mình trong probe:** `fixed_noise` cho noise theo **chỉ số hàng** trong batch, nên state gốc và biến thể ở hai hàng
+  khác nhau nhận noise khác nhau (không thiên lệch, chỉ thêm nhiễu; paper ghi "noise cố định" là chưa đúng). Sửa:
+  `probe_mechanism.py --noise_seed` (một mẫu noise chung cho mọi hàng) + `--horizons 10,25,50`; hỗ trợ OpenVLA-OFT
+  (`act`, 8 bước). Đang chạy lại: base (noise 0, 1), cấu hình chính s7 (noise 0, 1), s8, ECT s7, OpenVLA-OFT Object
+  (`scripts/server/probe_queue.sh`, `outputs/week1/mech2_object_*`).
+- Độ nhạy theo review (Object s7, xếp hàng chờ CPU, `launch_when_free.sh`): tỉ lệ cặp 5% / 30%, ngưỡng đồng thuận 0 / 0.8
+  (`pi05_round19.sh` FRAC / AGREE), ECT dịch chuyển ×0.5 / ×1.5 (`--ect_shift_scale`, `pi05_round20.sh` SHIFT).

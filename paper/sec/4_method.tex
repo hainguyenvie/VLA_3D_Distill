@@ -12,7 +12,8 @@ The student is \pizf with LoRA adapters~\cite{hu2022lora} (rank 32) on the linea
 the teacher is the same checkpoint with the adapters disabled.
 Each iteration, the student drives fresh rollouts, and at every queried state $s_t$ the teacher labels the 50-step chunk
 $A_t$ (DAgger-style~\cite{ross2011dagger}).
-The student is trained with the flow-matching loss of \pizf on these labels,
+The student is trained with the flow-matching loss of \pizf on these labels, with $\epsilon\sim\mathcal{N}(0,I)$ and the
+flow time $\tau\in(0,1]$ drawn from the Beta-shaped distribution of \pizf ($\tau=1$ is pure noise),
 \begin{equation}
 \mathcal{L}_{\text{fact}} = \lVert v_\theta(o_t, x_\tau, \tau) - (\epsilon - A_t) \rVert^2,\quad x_\tau = \tau\epsilon + (1-\tau)A_t .
 \end{equation}
@@ -55,5 +56,6 @@ appears once the policy starts to use the image (\cref{sec:exp:limits}).
 
 \paragraph{Training budget.}
 20 iterations of 1024 states each, batch 8, learning rate $5\cdot10^{-5}$ with cosine decay, one suite at a time; every
-compared method uses the same teacher, rollouts, budget and optimizer.
+compared method uses the same teacher, rollouts, budget and optimizer. A run takes 5--7 hours on one H200 GPU, about half
+of it simulation and rendering; the counterfactual views add one render per queried state.
 Details and the scripted teachers are given in the supplementary material.
