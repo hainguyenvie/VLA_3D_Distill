@@ -1284,3 +1284,10 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
   (v2 toàn bộ 94.0, base 97.5), swap 30.0 → chỉ VLM không giữ được Goal chuẩn (mức tụt Goal không đến từ việc sửa action expert);
   Object chuẩn 92.5 (đang đo swap); Long: đánh giá giữa chừng cao hơn bản toàn bộ (vòng 4 / 8: 0.68 / 0.78 so với 0.57 / 0.68).
 - Long v2 không đổi màu: chuẩn 87.0 (có đổi màu 84.0), swap 11.0, lan 81.0, đổi màu 55.5, Plus 75 / 68.
+- **ECT s8:** Object swap 23.5 (s7 24.0; TB **23.8**), Spatial swap 49.5 (s7 52.0; TB **50.8**); chuẩn 100 / 98.5. → Ta hơn
+  ECT ~30 điểm ở Object (54.0) và ~15 ở Spatial (66.0), 2 seed mỗi bên.
+- v2 + chỉ VLM: Object swap **39.5**, position 27.5, chuẩn 92.5 (chỉ VLM với dữ liệu full đơn giản: 49.3 / 29.8) → một thành phần
+  của v2 làm giảm Object khi chỉ train VLM; nghi đổi màu (VLM nhạy ngoại hình nhất) — đang chạy v2 + chỉ VLM không đổi màu.
+  Long chuẩn **86.5** (toàn bộ 84.0, không đổi màu 87.0, base 95) → chỉ VLM không sửa được Long. Sau 5 biến thể (hindsight, che
+  gripper, 5% cặp, không đổi màu, chỉ VLM) Long vẫn ~84–87: đề xuất báo là giới hạn chung (ECT 84.0).
+- Ô đổi màu theo phạm vi: chỉ VLM s9 66.5 (s7 70.0, s8 69.5); chỉ expert s8 90.5 → tradeoff sinh ra ở phía VLM.
