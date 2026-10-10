@@ -213,16 +213,19 @@ target regardless of its color; a non-privileged grounding source would be neede
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 Method (seed 7) & nominal & swap & nominal & swap \\
 \midrule
-Distill & 97.5 & 29.0 & 95.0 & 8.5 \\
-\ect & 96.5 & 24.5 & 84.0 & 14.0 \\
-\ours & 89.5--94.0 & 28.5--31.0 & 84.0--87.0 & 11.0--17.0 \\
+\pizf & 96.5 & 28.0 & 93.5 & 8.0 \\
+Distill & 97.0 & 27.5 & 96.0 & 8.0 \\
+\ect & 92.0 & 26.0 & 83.0 & 12.5 \\
+\ours & 89.5 & 30.5 & 83.0 & \textbf{19.5} \\
+\ours, VLM only & 90.5 & \textbf{35.5} & 84.5 & 16.0 \\
 \bottomrule
 \end{tabular}
-\caption{\textbf{Multi-step suites.} Ranges over the \ours configurations we tried. \pending{Re-evaluation with fixed
-furniture placement running.}}
+\caption{\textbf{Multi-step suites}, with the furniture placement fixed per trial (\cref{sec:exp:limits}). \ours here keeps
+the execution gate of earlier versions; the VLM-only row also uses the phase rule of the supplementary material.}
 \label{tab:goal_long}
 \end{table}
-On the multi-step suites (\cref{tab:goal_long}) neither method improves swap much, and both lose nominal success on Long.
+On the multi-step suites (\cref{tab:goal_long}) \ours raises swap moderately (Goal 28.0 $\to$ 30.5--35.5, Long
+8.0 $\to$ 16.0--19.5), more than \ect (26.0, 12.5), but both counterfactual methods lose nominal success.
 Per-task analysis traced the Goal drop to the two drawer tasks, and, within them, to two causes.
 First, \pizf opens the top drawer by pushing its handle without closing the gripper, so a gripper-based phase rule took the
 drawer phase for the approach to the bowl; segmenting phases by when the rest of the scene stops changing removes these
