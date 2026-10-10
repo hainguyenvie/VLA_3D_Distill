@@ -86,6 +86,10 @@ labeled by the privileged teacher, raise the cells: retargeting fixes \emph{whic
 \Cref{tab:kinds} varies the counterfactual and keeps everything else fixed.
 Transforming the whole scene, by mirroring with the equivariantly mapped action or by rotating the world about the robot,
 changes little, consistent with the per-suite ablations of \ect itself~\cite{chen2026ect}.
+A direct test of (P3) evaluates the policies in mirrored LIBERO-Object scenes of the kind \ect trains on: \pizf succeeds in
+11.0\% of the episodes, \ect in 63.5\%. \ect has learned the transformed scenes, which also confirms that our
+re-implementation works, yet its swap success stays at 23.2: it has learned to respond to the transform, not to the position
+of the target. \pending{\ours in mirrored scenes: running.}
 Co-shifting hand and target, which preserves the geometry the memorized action relies on, does not help either.
 What helps is a counterfactual that changes the decision: moving the target before the grasp fixes the choice of object
 (swap 53.0) but not the placement, and moving the container while carrying fixes the placement (position 32.8) but not the
