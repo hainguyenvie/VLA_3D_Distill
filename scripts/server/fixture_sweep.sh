@@ -16,7 +16,7 @@ for off in "${LIST[@]}"; do
   out="outputs/week1/fix_${TAG}_$(echo "$off" | tr ',.-' '_pm')"
   [ -f "$out/summary.json" ] && continue
   bash "$HERE/run_py.sh" "$G" scripts/eval_libero.py --ckpt "pi05:$CK" $LA --suite "$SUITE" --tasks "$TASKS" --trials 20 \
-    --num_envs 8 --max_steps "$MS" --no_steps --fixture_pin --fixture_offset "$off" --out "$out" > "logs/fix_${TAG}.log" 2>&1 \
+    --num_envs 8 --max_steps "$MS" --no_steps --fixture_pin --fixture_offset="$off" --out "$out" > "logs/fix_${TAG}.log" 2>&1 \
     || log "FAILED fixture sweep $TAG $off"
   log "FIXSWEEP $TAG $off $(python3 -c "import json;s=json.load(open('$out/summary.json'));print(s['success_rate'], {k: v['success_rate'] for k, v in s['per_task'].items()})" 2>/dev/null)"
 done
