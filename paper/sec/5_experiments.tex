@@ -134,9 +134,8 @@ The displacement is equally decodable at the input of the VLM in all models ($R^
 strengthens it moderately (0.58 $\to$ 0.71 for a moved target, 0.54 $\to$ 0.70 for a swap), in the VLM layers that
 \cref{sec:exp:local} points to.
 What differs is use: \ect leaves it at the level of \pizf, while \ours makes the action follow a swap (0.04 $\to$ 0.39), a
-renamed target (0.02 $\to$ 0.49) and a moved container (0.06 $\to$ 0.38--0.68).
-Use, meanwhile, rises about tenfold: counterfactual supervision does not teach the policy to see, it teaches it to act on
-what it sees.
+renamed target (0.02 $\to$ 0.49) and a moved container (0.06 $\to$ 0.38--0.68), roughly tenfold: counterfactual
+supervision does not teach the policy to see, it teaches it to act on what it sees.
 One blind spot is shared by all models: early in the approach, the action follows a moved target by only 0.13--0.32.
 \textbf{(P5)} Use grows with the counterfactual mass: over training, the mid-approach use of a swap rises through 0.04,
 0.05, 0.15, 0.31, 0.38 and 0.44 at iterations 0, 4, \ldots, 20, and Object swap success rises with the share of

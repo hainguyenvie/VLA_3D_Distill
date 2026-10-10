@@ -18,7 +18,8 @@ re-render, and ask the policy again.
 Comparing the two predictions measures how much the action \emph{uses} the change; probing the hidden states before and
 after the change measures how well the change is \emph{encoded}.
 The two disagree (\cref{fig:teaser}).
-The displacement is linearly decodable from the action tokens of \pizf ($R^2$ 0.55--0.86), but at the moments that decide
+The displacement is linearly decodable from the hidden states of \pizf ($R^2$ 0.81--0.92 at the input of its VLM,
+0.54--0.78 in its action tokens), but at the moments that decide
 the task, when the hand is still on its way to the target or carries the object to the container, the predicted action
 follows the displacement by only 2--25\%.
 \pizf \emph{knows where} the target is and does not \emph{go there}.
