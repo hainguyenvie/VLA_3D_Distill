@@ -114,6 +114,8 @@ at every horizon: swaps and renamed targets are ignored in mid-approach, moved c
 carrying, small displacements near the hand are partly followed. Longer horizons give larger values throughout because the
 chunk then also contains the later part of the motion.
 
+A second noise sample reproduces every value of \pizf, and \ours reproduces across seeds (mid-approach swap 0.39 and 0.56
+for seeds 7 and 8, averaged over noise samples for seed 7).
 OpenVLA-OFT~\cite{kim2025oft}, a regression-head VLA with 8-step chunks, shows the same pattern at its horizon, more
 strongly: swap 0.01, renamed target 0.00 and moved container 0.00, with small displacements near the hand followed at
 0.18 (\pizf at 10 steps: 0.02, 0.03, 0.02 and 0.36).
@@ -132,10 +134,15 @@ Policy, horizon & 3\,cm & swap & 3\,cm & swap & rename & 3\,cm & 3--20\,cm \\
 \pizf, 25 steps & .15 & .24 & .59 & .04 & .02 & .51 & .06--.09 \\
 \pizf, 50 steps & .37 & .33 & .55 & .07 & .01 & .44 & .10--.19 \\
 OpenVLA-OFT, 8 steps & $-$.02 & .01 & .06 & .01 & .00 & .18 & .00 \\
+\midrule
+\pizf, 2nd noise sample & .15 & .24 & .58 & .04 & .02 & .51 & .06--.09 \\
+\ect s7 & .20 & .27 & .59 & .05 & .02 & .47 & .08--.11 \\
+\ours s7 & .25 & .36 & .69 & .44 & .54 & .55 & .20--.68 \\
+\ours s7, 2nd noise sample & .27 & .36 & .69 & .33 & .43 & .60 & .20--.68 \\
+\ours s8 & .23 & .38 & .69 & .56 & .56 & .52 & .23--.71 \\
 \bottomrule
 \end{tabular}
-\caption{\textbf{Use with a shared noise sample}, LIBERO-Object, median over states. \pending{Second noise seed and trained
-models: running.}}
+\caption{\textbf{Use with a shared noise sample}, LIBERO-Object, median over states. Lower block: 25-step horizon.}
 \label{tab:supp:horizon}
 \end{table}
 

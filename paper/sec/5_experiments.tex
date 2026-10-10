@@ -202,7 +202,8 @@ by color.
 In the VLM-only configuration, the validity checks of \cref{sec:method} raise the \emph{object} cell from 69 to 83.5;
 recoloring objects during the rollouts adds only 1.5 points to it and costs 9 points of swap (48.5 $\to$ 39.5).
 Recoloring does not explain the gap to \ect: with the same recoloring, \ect scores 21.0 / 15.0 on Object swap /
-position and 50.0 on Spatial swap (seed 7; without: 24.0 / 16.5 and 52.0). \pending{Main model without recoloring: running.} With the oracle point of \pt, the \emph{object} cell
+position and 50.0 on Spatial swap (seed 7; without: 24.0 / 16.5 and 52.0), and \ours without it still scores 48.0 on
+Object swap (54.0 with it). With the oracle point of \pt, the \emph{object} cell
 returns to 92.5, as the point identifies the target regardless of color; claiming this would need a non-privileged source.
 
 \paragraph{LIBERO-Goal and LIBERO-Long.}
