@@ -72,6 +72,12 @@ def parse():
                          "moves by at least this much (m, 0.1 m per radian) before the target's grasp; 0 = off (rounds <= 21)")
     ap.add_argument("--no_cotarget_swap", action="store_true",
                     help="retarget: the target never swaps places with another object the task carries (multi-object tasks)")
+    ap.add_argument("--cf_fixture", type=float, default=0.0,
+                    help="full mode: probability that a query renders the furniture nudged by --cf_fixture_jitter (any phase), "
+                         "labelled by the teacher's own chunk in that world (kind 3; keeps the furniture-relative skills)")
+    ap.add_argument("--cf_fixture_jitter", default="0.01,0.03", help="--cf_fixture: shift of the furniture, m (min,max)")
+    ap.add_argument("--cf_fixture_frac", type=float, default=0.05,
+                    help="--cf_fixture: furniture pairs on at most this share of the states, outside the --cf_frac budget")
     ap.add_argument("--dump_segments", action="store_true",
                     help="--hindsight: save the first iteration's per-query phase signals to <out>/segments.npz")
     ap.add_argument("--relocate_no_grip", action="store_true",
@@ -128,7 +134,8 @@ def main():
                                           p_coshift=args.p_coshift, coshift_phase=args.coshift_phase,
                                           coshift_post=tuple(float(x) for x in args.cf_coshift_post.split(",")),
                                           unique=args.cf_unique, hindsight=args.hindsight,
-                                          no_cotarget_swap=args.no_cotarget_swap)
+                                          no_cotarget_swap=args.no_cotarget_swap, p_fixture=args.cf_fixture,
+                                          fixture_jitter=tuple(float(x) for x in args.cf_fixture_jitter.split(",")))
     vec = LiberoVecEnv(args.suite, args.num_envs, args.max_steps, wrist=True, counterfactual=cf_cfg, obj_tint=args.obj_tint)
 
     import torch
@@ -352,7 +359,7 @@ def main():
                 teacher_gap = float((np.abs(A["cf_teacher"][ok] - exact[ok]) * mask[ok][..., None]).sum()
                                     / max(mask[ok].sum() * 7, 1))
                 A["cf_teacher"] = exact
-            elif args.cf_mode == "full":  # kind 0 retarget, 1 coshift (before the grasp), 2 relocate (while carrying)
+            elif args.cf_mode == "full":  # kind 0 retarget, 1 coshift (before the grasp), 2 relocate (while carrying), 3 furniture
                 kind = cat("cf_kind").astype(int)
                 cf_ok[:] = cat("cf_valid").astype(bool)
                 eef_p, eef_q = cat("cf_eef_pos"), cat("cf_eef_quat")
@@ -361,14 +368,16 @@ def main():
                 lab = cat("cf_label").astype(np.float64)
                 norm = ((lab - student.act_mean) / (student.act_std + 1e-8)).astype(np.float32)
                 exact = np.where((kind == 1)[:, None, None], A["actions_teacher"], norm).astype(np.float32)
+                # furniture nudged: the teacher's own chunk in that world (pi0.5 follows the furniture within its range)
+                exact = np.where((kind == 3)[:, None, None], A["cf_teacher"], exact).astype(np.float32)
                 n = cat("cf_len").astype(int)
                 rel = lab[..., 6] < 0
                 rel_first = np.where(rel.any(1), rel.argmax(1), lab.shape[1])
                 g = A["actions_teacher"][..., 6] * (student.act_std[6] + 1e-8) + student.act_mean[6]
                 close_first = np.where((g > 0).any(1), (g > 0).argmax(1), g.shape[1])
                 steps = np.arange(lab.shape[1])[None]
-                mask = np.select([(kind == 0)[:, None], (kind == 1)[:, None]],
-                                 [steps < n[:, None], steps <= close_first[:, None] + args.coshift_margin],
+                mask = np.select([(kind == 0)[:, None], (kind == 1)[:, None], (kind == 3)[:, None]],
+                                 [steps < n[:, None], steps <= close_first[:, None] + args.coshift_margin, steps >= 0],
                                  steps <= rel_first[:, None] + 5).astype(np.float32)
                 A["cf_mask"] = mask
                 if args.relocate_no_grip:  # relocate pairs teach where to carry, not when to let go
@@ -500,7 +509,7 @@ def main():
             cf_ok &= ~is_post | np.isin(tids, list(allowed))
         if args.hindsight and args.cf_mode == "full":  # pre-grasp pairs only where the episode itself went for the target
             appr = np.concatenate([approach_segment(r) for r in recs])
-            pre = cat("cf_kind") != 2
+            pre = np.isin(cat("cf_kind"), (0, 1))  # retarget / coshift (relocate and furniture pairs are not approach pairs)
             tids = np.concatenate([np.full(r["n_queries"], r["task_id"]) for r in recs])
             print("[hindsight] task: pre-grasp pairs kept / before", {int(t): f"{int((cf_ok & pre & appr & (tids == t)).sum())}/"
                   f"{int((cf_ok & pre & (tids == t)).sum())}" for t in np.unique(tids)}, flush=True)
@@ -517,10 +526,23 @@ def main():
                                     eef=A["eef_pos"].astype(np.float32), geo_d=np.concatenate([np.asarray(r["arrays"].get(
                                         "geo_d", np.zeros((r["n_queries"], 3)))) for r in recs]).astype(np.float32))
             cf_ok &= ~pre | appr
-        if args.cf_frac > 0 and cf_ok.sum() > args.cf_frac * n_all:  # cap the share of states that carry a pair
-            on = np.flatnonzero(cf_ok)
-            cf_ok[:] = False
-            cf_ok[rng.choice(on, size=int(args.cf_frac * n_all), replace=False)] = True
+        # furniture pairs (kind 3) have their own budget, so that they do not crowd out the pairs the method is about
+        fx = (cat("cf_kind").astype(int) == 3) if (args.cf_mode == "full" and not args.no_cf) else np.zeros(n_all, dtype=bool)
+        main = cf_ok & ~fx
+        if args.cf_frac > 0 and main.sum() > args.cf_frac * n_all:  # cap the share of states that carry a pair
+            on = np.flatnonzero(main)
+            main[:] = False
+            main[rng.choice(on, size=int(args.cf_frac * n_all), replace=False)] = True
+        fxok = cf_ok & fx
+        if fxok.sum() > args.cf_fixture_frac * n_all:
+            on = np.flatnonzero(fxok)
+            fxok[:] = False
+            fxok[rng.choice(on, size=int(args.cf_fixture_frac * n_all), replace=False)] = True
+        cf_ok = main | fxok
+        if args.cf_mode == "full" and not args.no_cf:
+            kind_all = cat("cf_kind").astype(int)
+            print("[full] pairs by kind (retarget, coshift, relocate, furniture):",
+                  [int((cf_ok & (kind_all == k)).sum()) for k in range(4)], flush=True)
         keep = np.sort(rng.choice(n_all, size=min(args.states_per_iter, n_all), replace=False))
         t_collect = time.time() - t0
 

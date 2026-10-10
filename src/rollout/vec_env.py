@@ -139,7 +139,8 @@ ECT_TRANSFORMS = {
 # vector of this length range (metres); the simulator state itself is not changed.
 COUNTERFACTUAL = dict(mode="shift", delta=(0.02, 0.08), theta=(0.1, 0.35), coshift=(0.08, 0.3), p_swap=0.5,
                       p_coshift=0.5, coshift_phase="pre", coshift_post=(0.08, 0.4), unique=False,
-                      hindsight=False, no_cotarget_swap=False)
+                      hindsight=False, no_cotarget_swap=False,
+                      p_fixture=0.0, fixture_jitter=(0.01, 0.03))
 # mode "mirror": the whole scene is reflected through the vertical plane of the robot base (object positions and
 # orientations, arm joints q1 q3 q5 negated and q7 reflected about `c7`); the correct action is the nominal one
 # reflected (dy, rx, rz negated), so the label is exact and the target sits at a different place.
@@ -292,6 +293,7 @@ class EnvRunner:
         self.pert, self.cf = None, None
         self._geo_z0 = None
         self._scene_prev = None
+        self._fx_bodies = None
 
     def _cameras(self, enabled: bool) -> None:
         robo = self.env.env
@@ -646,6 +648,10 @@ class EnvRunner:
         if self.cfg["counterfactual"].get("mode") == "retarget":
             return self._retarget_view(robo, res, conv)
         if self.cfg["counterfactual"].get("mode") == "full":  # before the grasp retarget or coshift, while carrying relocate
+            if self.cfg["counterfactual"].get("p_fixture", 0.0) > 0 and _PERT_RNG.random() < self.cfg["counterfactual"]["p_fixture"]:
+                out = self._fixture_view(robo, res, conv)  # any phase: furniture nudged, the teacher labels it (kind 3)
+                if out is not None:
+                    return out
             if not self._pre_grasp(d):
                 return dict(self._relocate_view(robo, res, conv), cf_len=np.int16(0), cf_target_name=np.array(""),
                             cf_kind=np.int8(2), cf_eef_pos=np.zeros(3, dtype=np.float32), cf_eef_quat=np.zeros(4, dtype=np.float32),
@@ -1000,6 +1006,50 @@ class EnvRunner:
         out["cf_target_name"] = np.array((place[1] or "") if place is not None else "")
         return out
 
+    def _fixture_view(self, robo, res, conv) -> Optional[Dict[str, Any]]:
+        """Frames with the furniture (bodies fixed to the world: cabinet, stove, rack; not the tables) shifted together by a
+        small random vector (`fixture_jitter`, m; render only), the free objects touching it riding along; None when the
+        scene has no furniture. LIBERO itself re-places the furniture within ~2 cm at every reset and base pi0.5 follows it
+        there, so the label is the teacher's own chunk in this world (train_pi05_ocd.py, kind 3): it keeps the furniture-
+        relative skills (drawer handles, knobs) while the other pairs teach the use of the objects' positions."""
+        import mujoco
+
+        m, d = robo.sim.model._model, robo.sim.data._data
+        if getattr(self, "_fx_bodies", None) is None:
+            self._fx_bodies = [b for b in world_fixed_bodies(robo) if not (robo.sim.model.body_id2name(b) or "").endswith("table")]
+        if not self._fx_bodies:
+            return None
+        lo, hi = self.cfg["counterfactual"].get("fixture_jitter", COUNTERFACTUAL["fixture_jitter"])
+        ang, mag = _PERT_RNG.uniform(0, 2 * np.pi), _PERT_RNG.uniform(lo, hi)
+        shift = mag * np.array([np.cos(ang), np.sin(ang)])
+        # free objects lying on / in the furniture (a contact with one of its geoms) move with it
+        free_adr = {int(m.jnt_bodyid[j]): int(m.jnt_qposadr[j]) for j in range(m.njnt) if m.jnt_type[j] == 0}
+        riders = set()
+        for c in d.contact[: d.ncon]:
+            b1, b2 = int(m.body_rootid[m.geom_bodyid[c.geom1]]), int(m.body_rootid[m.geom_bodyid[c.geom2]])
+            for a, b in ((b1, b2), (b2, b1)):
+                if a in self._fx_bodies and b in free_adr:
+                    riders.add(free_adr[b])
+        saved = {k: getattr(d, k).copy() for k in self._KIN}
+        saved_pos = [m.body_pos[b].copy() for b in self._fx_bodies]
+        out = {}
+        try:
+            for b in self._fx_bodies:
+                m.body_pos[b][:2] += shift
+            for a in riders:
+                d.qpos[a : a + 2] += shift
+            mujoco.mj_kinematics(m, d)
+            mujoco.mj_camlight(m, d)
+            self._render_cf(robo, res, conv, out)
+        finally:
+            for b, p in zip(self._fx_bodies, saved_pos):
+                m.body_pos[b] = p
+            for k, v in saved.items():
+                getattr(d, k)[:] = v
+        return dict(out, cf_label=np.zeros((50, 7), dtype=np.float32), cf_delta=shift.astype(np.float32), cf_valid=True,
+                    cf_len=np.int16(0), cf_target_name=np.array(""), cf_kind=np.int8(3), cf_post=False,
+                    target_pos_cf=_target_pos(robo))
+
     def _relocate_view(self, robo, res, conv) -> Dict[str, Any]:
         """Frames with the container moved to a free spot (hand and held target unchanged), and the scripted placer's
         chunk in that world; outside the carrying phase the nominal world is rendered and the query is invalid."""
@@ -1190,6 +1240,7 @@ class EnvRunner:
             self.pert, self.cf = None, None
             self._geo_z0 = None
             self._scene_prev = None
+            self._fx_bodies = None
             if self.cfg.get("perturb") or self.cfg.get("counterfactual"):
                 self._hook_camera()
             self.env.set_init_state(init_state)
@@ -1418,6 +1469,7 @@ class EnvRunner:
         self.pert, self.cf = None, None
         self._geo_z0 = None
         self._scene_prev = None
+        self._fx_bodies = None
         robot = robo.robots[0]
         # PandaGripper.format_action accumulates [-1, 1] * 0.01 * sign(cmd) per substep and saturates within 4 steps
         robot.gripper.current_action = np.array([-1.0, 1.0]) * float(np.sign(gripper_cmd))

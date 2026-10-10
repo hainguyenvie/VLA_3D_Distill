@@ -1,0 +1,49 @@
+% CVPR 2026 Paper Template (cvpr-org/author-kit, main branch of 2026-05-27; no CVPR 2027 kit had been released when this
+% draft was started). Build: latexmk -pdf main.tex
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+%%%%%%%%% PAPER TYPE  - PLEASE UPDATE FOR FINAL VERSION
+% \usepackage{cvpr}              % To produce the CAMERA-READY version
+\usepackage[review]{cvpr}      % To produce the REVIEW version
+% \usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+
+% Import additional packages in the preamble file, before hyperref
+\input{preamble}
+
+\definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
+\usepackage[pagebackref,breaklinks,colorlinks,allcolors=cvprblue]{hyperref}
+
+%%%%%%%%% PAPER ID  - PLEASE UPDATE
+\def\paperID{*****} % *** Enter the Paper ID here
+\def\confName{CVPR}
+\def\confYear{2026}
+
+%%%%%%%%% TITLE
+\title{Knowing Where, Not Going There:\\Vision-Language-Action Policies Encode Displacements They Do Not Act On}
+
+%%%%%%%%% AUTHORS - anonymous for review
+\author{Anonymous Authors\\
+Anonymous Institution\\
+}
+
+\begin{document}
+\maketitle
+\input{fig/teaser}
+\input{sec/0_abstract}
+\input{sec/1_intro}
+\input{sec/2_related}
+\input{sec/3_probing}
+\input{sec/4_method}
+\input{sec/5_experiments}
+\input{sec/6_conclusion}
+{
+    \small
+    \bibliographystyle{ieeenat_fullname}
+    \bibliography{main}
+}
+
+% Supplementary material: compile separately for submission (delete from the main PDF).
+\input{sec/X_suppl}
+
+\end{document}

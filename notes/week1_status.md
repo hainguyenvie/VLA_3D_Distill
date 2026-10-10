@@ -1349,3 +1349,14 @@ Thí nghiệm tự nhiên tiếp theo: điểm 3D + dữ liệu phản thực c�
 - **Eval cố định đồ cố định theo trial** (`eval_libero.py --fixture_seed`: seed env = 1000 × task + trial trước mỗi reset;
   kiểm chứng: cùng trial cho cùng vị trí ở mọi thứ tự chạy). Đang eval lại Spatial / Goal / Long (chuẩn + swap) cho mọi model
   so sánh (`scripts/server/fs_evals.sh`, kết quả `outputs/week1/fs_*`).
+- **Seed 9 của ta (bỏ cổng):** Object swap 51.0, position 34.0, chuẩn 96.5; Spatial swap 63.0, chuẩn 99.5. **3 seed:** Object swap
+  54.0 / 58.5 / 51.0 (TB **54.5**), position 36.0 / 44.5 / 34.0 (TB **38.2**), Spatial swap 65.5 / 66.5 / 63.0 (TB **65.0**).
+- v2 train toàn bộ, Object: swap **40.0** (bỏ cổng không hindsight: 54.5 TB) → hindsight làm giảm Object; cấu hình chính giữ bản bỏ
+  cổng. v2 chỉ VLM không đổi màu: swap 48.5, position 34.0, đổi màu 83.5, lan 95.5.
+- Task 3 khi tủ lệch −2 cm (v2, ghi bước, 65%): 2 / 4 lần hỏng là mở ngăn kéo trượt (không bao giờ đóng tay kẹp), 1 / 4 bỏ qua
+  ngăn kéo gắp bát trước (đóng tay ở q2), 1 / 4 mở xong rồi đứng yên. Base mở được ở cùng độ lệch (85–95).
+- **v4 = v3 + cặp "đồ cố định dời nhẹ"** (`--cf_fixture 0.25`, kind 3: ở mọi pha, tủ / bếp / giá dời 1–3 cm khi render, vật chạm
+  vào chúng dời theo; nhãn = chunk của chính teacher π0.5 trong cảnh đó — base chịu được mức lệch này; ngân sách riêng
+  `--cf_fixture_frac 0.05`, ngoài 15% của các cặp chính; thử 1 vòng: chung ngân sách thì cặp đồ cố định chiếm 92 / 185 nên
+  đã tách). `scripts/check_fixture_view.py`: ảnh đúng (đồ cố định dời, robot và vật trên bàn giữ nguyên). Đang chạy Goal, Long
+  (`pi05_round23.sh`, `p05gl_v4_s7`, `p05lg_v4_s7`).
